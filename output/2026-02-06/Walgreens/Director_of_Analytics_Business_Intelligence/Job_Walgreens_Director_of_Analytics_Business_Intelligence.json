@@ -1,0 +1,49 @@
+{
+  "job_id": 4140002004,
+  "company": "Walgreens",
+  "title": "Director of Analytics & Business Intelligence",
+  "total_score": 64,
+  "contacts": [
+    {
+      "title": "VP of Analytics",
+      "rationale": "Likely oversees the analytics function and would be involved in hiring for this role."
+    },
+    {
+      "title": "Director of Business Intelligence",
+      "rationale": "Directly relevant to the role and may be the hiring manager."
+    },
+    {
+      "title": "Head of Data Science",
+      "rationale": "May collaborate closely with the analytics and BI teams."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Responsible for overall data strategy and likely involved in senior-level hiring."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles talent acquisition and can provide insights into the hiring process."
+    },
+    {
+      "title": "HR Business Partner",
+      "rationale": "Supports hiring managers and can provide information about the role."
+    },
+    {
+      "title": "Manager of Analytics",
+      "rationale": "May report to this role or collaborate closely with the Director of Analytics."
+    },
+    {
+      "title": "Director of Data Governance",
+      "rationale": "Relevant to the data governance aspects of the role."
+    },
+    {
+      "title": "Senior Manager of BI Tools",
+      "rationale": "Likely involved in the technical aspects of the role."
+    },
+    {
+      "title": "Director of Retail Analytics",
+      "rationale": "Relevant to Walgreens' focus on retail analytics."
+    }
+  ],
+  "truth_pass": true
+}

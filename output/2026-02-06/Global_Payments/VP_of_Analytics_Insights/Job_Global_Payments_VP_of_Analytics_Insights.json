@@ -1,0 +1,45 @@
+{
+  "job_id": 4140003001,
+  "company": "Global Payments",
+  "title": "VP of Analytics & Insights",
+  "total_score": 70,
+  "contacts": [
+    {
+      "title": "VP of Analytics",
+      "rationale": "Likely to oversee the department or role directly related to analytics and insights."
+    },
+    {
+      "title": "Head of Data Science",
+      "rationale": "May be involved in strategic decisions or hiring for analytics leadership roles."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Responsible for overall data strategy and likely to be involved in hiring senior analytics leaders."
+    },
+    {
+      "title": "Director of Analytics",
+      "rationale": "Could be a peer or report to the VP role, and may have insights into the team structure."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles hiring processes and can provide information about the role."
+    },
+    {
+      "title": "VP of Insights",
+      "rationale": "Directly related to the job title and may be involved in the hiring process."
+    },
+    {
+      "title": "Senior Manager, Analytics",
+      "rationale": "May report to the VP role and have knowledge of team dynamics."
+    },
+    {
+      "title": "VP of Strategy",
+      "rationale": "May collaborate closely with analytics leadership on business insights."
+    },
+    {
+      "title": "HR Business Partner",
+      "rationale": "Supports hiring for senior leadership roles and can provide context on the position."
+    }
+  ],
+  "truth_pass": true
+}

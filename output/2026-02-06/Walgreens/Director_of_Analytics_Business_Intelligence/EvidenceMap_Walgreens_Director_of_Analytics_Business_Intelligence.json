@@ -1,0 +1,122 @@
+[
+  {
+    "claim_text": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+    "evidence_quote": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+    "evidence_source_key": "exp-001-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
+    "evidence_quote": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
+    "evidence_source_key": "exp-001-b2",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Established data governance framework with 200+ data quality rules, improving data trust score from 62% to 94%",
+    "evidence_quote": "Established data governance framework with 200+ data quality rules, improving data trust score from 62% to 94%",
+    "evidence_source_key": "exp-001-b4",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Built executive analytics dashboard suite adopted by C-suite and board, enabling data-driven quarterly strategic planning",
+    "evidence_quote": "Built executive analytics dashboard suite adopted by C-suite and board, enabling data-driven quarterly strategic planning",
+    "evidence_source_key": "exp-001-b5",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
+    "evidence_quote": "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
+    "evidence_source_key": "exp-002-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "evidence_quote": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "evidence_source_key": "exp-002-b3",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Designed and implemented A/B testing framework adopted across 5 product teams, increasing experiment velocity by 3x",
+    "evidence_quote": "Designed and implemented A/B testing framework adopted across 5 product teams, increasing experiment velocity by 3x",
+    "evidence_source_key": "exp-002-b4",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Partnered with Chief Medical Officer to develop clinical analytics program, resulting in 15% improvement in care quality metrics",
+    "evidence_quote": "Partnered with Chief Medical Officer to develop clinical analytics program, resulting in 15% improvement in care quality metrics",
+    "evidence_source_key": "exp-002-b5",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Built and led a 15-person analytics team from scratch, establishing the company's first centralized analytics function",
+    "evidence_quote": "Built and led a 15-person analytics team from scratch, establishing the company's first centralized analytics function",
+    "evidence_source_key": "exp-003-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Created customer segmentation model driving $18M incremental revenue through personalized marketing campaigns",
+    "evidence_quote": "Created customer segmentation model driving $18M incremental revenue through personalized marketing campaigns",
+    "evidence_source_key": "exp-003-b2",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Implemented demand forecasting system reducing inventory carrying costs by $6.5M annually using time-series models",
+    "evidence_quote": "Implemented demand forecasting system reducing inventory carrying costs by $6.5M annually using time-series models",
+    "evidence_source_key": "exp-003-b3",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Built self-service BI platform serving 500+ business users with automated reporting, reducing ad-hoc request volume by 65%",
+    "evidence_quote": "Built self-service BI platform serving 500+ business users with automated reporting, reducing ad-hoc request volume by 65%",
+    "evidence_source_key": "exp-003-b4",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I lead a 45-person team across analytics engineering, data science, and business intelligence.",
+    "evidence_quote": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+    "evidence_source_key": "exp-001-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I spearheaded the development of a unified data platform on Snowflake, consolidating seven legacy data warehouses and achieving $12M in annual cost savings.",
+    "evidence_quote": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
+    "evidence_source_key": "exp-001-b2",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I established a data governance framework with over 200 quality rules, improving our data trust score from 62% to 94%.",
+    "evidence_quote": "Established data governance framework with 200+ data quality rules, improving data trust score from 62% to 94%",
+    "evidence_source_key": "exp-001-b4",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I managed a team of 28 professionals to deliver predictive analytics for population health management.",
+    "evidence_quote": "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
+    "evidence_source_key": "exp-002-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I successfully migrated analytics infrastructure to AWS, reducing total cost of ownership by 40%.",
+    "evidence_quote": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "evidence_source_key": "exp-002-b3",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I implemented an A/B testing framework that increased experiment velocity by 3x across five product teams.",
+    "evidence_quote": "Designed and implemented A/B testing framework adopted across 5 product teams, increasing experiment velocity by 3x",
+    "evidence_source_key": "exp-002-b4",
+    "confidence": 1
+  },
+  {
+    "claim_text": "My experience in healthcare analytics aligns closely with Walgreens' focus on improving care quality and operational efficiency.",
+    "evidence_quote": "Partnered with Chief Medical Officer to develop clinical analytics program, resulting in 15% improvement in care quality metrics",
+    "evidence_source_key": "exp-002-b5",
+    "confidence": 1
+  },
+  {
+    "claim_text": "My expertise in Tableau, Power BI, and SQL, combined with my leadership skills, positions me to effectively oversee analytics and BI functions to support strategic goals.",
+    "evidence_quote": "Built executive analytics dashboard suite adopted by C-suite and board, enabling data-driven quarterly strategic planning",
+    "evidence_source_key": "exp-001-b5",
+    "confidence": 1
+  }
+]

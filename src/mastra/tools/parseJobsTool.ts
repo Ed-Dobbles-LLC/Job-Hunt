@@ -82,7 +82,12 @@ export const parseJobsTool = createTool({
         title: z.string(),
         location: z.string(),
         posting_url: z.string().optional(),
-        jd_text: z.string(),
+        jd_text: z
+          .string()
+          .optional()
+          .describe(
+            "Full job description text if available. LinkedIn alerts typically only have title/company/location, so this may be empty.",
+          ),
         compensation: z.string().optional(),
         source: z.string().optional(),
         source_message_id: z.string().optional(),
@@ -104,15 +109,16 @@ export const parseJobsTool = createTool({
     let duplicateCount = 0;
 
     for (const job of context.jobs) {
-      const jdHash = hashJD(job.jd_text);
+      const jdText = job.jd_text || "";
+      const jdHash = hashJD(jdText || `${job.company}|${job.title}|${job.location}|${job.posting_url || ""}`);
       const canonicalUrl = job.posting_url
         ? normalizeUrl(job.posting_url)
         : null;
       const remoteHybrid = detectRemoteHybrid(
-        `${job.location} ${job.jd_text}`,
+        `${job.location} ${jdText}`,
       );
       const compensation =
-        job.compensation || extractCompensation(job.jd_text);
+        job.compensation || extractCompensation(jdText);
 
       const existingByHash = await query(
         "SELECT job_id FROM jobs WHERE jd_hash = $1",
@@ -176,7 +182,7 @@ export const parseJobsTool = createTool({
           remoteHybrid,
           job.posting_url || "",
           new Date().toISOString().split("T")[0],
-          job.jd_text,
+          jdText,
           jdHash,
           canonicalUrl,
         ],

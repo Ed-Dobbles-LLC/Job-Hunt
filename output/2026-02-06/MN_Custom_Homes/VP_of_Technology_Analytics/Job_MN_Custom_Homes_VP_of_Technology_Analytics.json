@@ -1,0 +1,41 @@
+{
+  "job_id": 64,
+  "company": "MN Custom Homes",
+  "title": "VP of Technology & Analytics",
+  "total_score": 64,
+  "contacts": [
+    {
+      "title": "VP of Technology",
+      "rationale": "Likely to oversee the hiring process for this role or be a peer to the position."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "May be directly involved in analytics strategy and hiring decisions."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "Likely to be the top executive overseeing technology and analytics functions."
+    },
+    {
+      "title": "Director of Data Analytics",
+      "rationale": "Could be a key stakeholder or decision-maker for this role."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Responsible for managing the hiring process and candidate outreach."
+    },
+    {
+      "title": "HR Manager",
+      "rationale": "Involved in recruitment and onboarding for senior leadership roles."
+    },
+    {
+      "title": "Chief Operating Officer",
+      "rationale": "May oversee operational aspects tied to technology and analytics."
+    },
+    {
+      "title": "VP of Operations",
+      "rationale": "Likely to collaborate with the VP of Technology & Analytics on strategic initiatives."
+    }
+  ],
+  "truth_pass": true
+}

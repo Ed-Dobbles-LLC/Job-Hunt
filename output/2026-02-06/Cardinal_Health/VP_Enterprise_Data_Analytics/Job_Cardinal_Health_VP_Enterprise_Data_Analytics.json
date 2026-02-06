@@ -1,0 +1,41 @@
+{
+  "job_id": 4140002002,
+  "company": "Cardinal Health",
+  "title": "VP, Enterprise Data & Analytics",
+  "total_score": 68,
+  "contacts": [
+    {
+      "title": "VP of Data",
+      "rationale": "Likely to oversee enterprise data strategy and analytics initiatives."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "Responsible for analytics leadership and strategic alignment."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "May be the hiring manager or closely involved in the role's scope."
+    },
+    {
+      "title": "Director of Data Governance",
+      "rationale": "Relevant to the data governance aspects of the role."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles hiring for executive-level positions."
+    },
+    {
+      "title": "VP of IT",
+      "rationale": "May collaborate on data platform and cloud technology initiatives."
+    },
+    {
+      "title": "VP of Business Intelligence",
+      "rationale": "Focuses on analytics and insights, closely tied to the role."
+    },
+    {
+      "title": "VP of Machine Learning",
+      "rationale": "Relevant to the machine learning expertise required for the role."
+    }
+  ],
+  "truth_pass": true
+}

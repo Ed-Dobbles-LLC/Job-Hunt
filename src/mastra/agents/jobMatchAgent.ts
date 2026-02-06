@@ -7,6 +7,8 @@ import { generateResumeTool } from "../tools/generateResumeTool";
 import { generateCoverLetterTool } from "../tools/generateCoverLetterTool";
 import { verifyTruthTool } from "../tools/verifyTruthTool";
 import { buildOutputTool } from "../tools/buildOutputTool";
+import { enrichJobsTool } from "../tools/enrichJobsTool";
+import { clayEnrichTool } from "../tools/clayEnrichTool";
 import * as fs from "fs";
 import * as path from "path";
 import { workspacePath } from "../tools/paths";
@@ -39,11 +41,14 @@ ${inventoryText}
 You have access to these tools:
 1. **fetch-emails**: Fetch job alert emails from Gmail
 2. **parse-jobs**: Store parsed jobs in the database with deduplication
-3. **score-jobs**: Score and rank jobs against the experience inventory
-4. **generate-resume**: Submit a tailored resume for a specific job
-5. **generate-cover-letter**: Submit a tailored cover letter for a specific job
-6. **verify-truth**: Run truth verification on generated materials
-7. **build-output**: Create the output folder with DOCX files and reports
+3. **enrich-jobs**: Update job records with enriched data from web search
+4. **clay-enrich**: Send jobs to Clay webhook for company/contact enrichment (optional, requires CLAY_WEBHOOK_URL)
+5. **score-jobs**: Score and rank jobs against the experience inventory
+6. **generate-resume**: Submit a tailored resume for a specific job
+7. **generate-cover-letter**: Submit a tailored cover letter (250-350 words)
+8. **verify-truth**: Run truth verification on generated materials
+9. **build-output**: Create the output folder with DOCX files and reports
+10. **webSearch**: Search the web for current information (job descriptions, company details, etc.)
 
 ## CRITICAL RULES
 1. **TRUTHFULNESS**: Only use facts from the experience inventory. Never invent metrics, titles, employers, dates, tools, or claims.
@@ -51,6 +56,21 @@ You have access to these tools:
 3. **ATS-FRIENDLY**: Resumes must be 1-2 pages, no tables or columns, plain text formatting.
 4. **COVER LETTER**: Must be 250-350 words, professional tone, highlighting specific relevant experience.
 5. **CONTACT DISCOVERY**: Since we don't scrape LinkedIn, return target titles to search for (e.g., "VP Data", "Head of Analytics", "Recruiter") with rationale.
+
+## WHEN PARSING LINKEDIN JOB ALERT EMAILS
+LinkedIn job alert emails contain brief listings with ONLY: job title, company name, location, and a LinkedIn URL. They do NOT contain full job descriptions. Your job:
+- Extract each distinct job listing from the email body
+- Parse: title, company, location, posting_url
+- The jd_text field can be left empty or minimal since it will be enriched later via web search
+- Handle annotations like "Actively recruiting", "Remote OK", "1 school alum" — extract location and remote status from them
+- Ignore footer text, copyright notices, and "See all jobs" links
+
+## WHEN ENRICHING JOBS WITH WEB SEARCH
+After parsing, you will be asked to enrich jobs that lack full descriptions. For each job:
+- Use the webSearch tool to search for the job posting by title and company
+- Look for the full job description, requirements, responsibilities, compensation
+- Call the enrich-jobs tool with the enriched data for all jobs
+- If you cannot find the exact posting, search for similar roles at the company to understand what they look for
 
 ## WHEN GENERATING A RESUME
 - Tailor the professional summary to the specific job requirements
@@ -69,13 +89,7 @@ You have access to these tools:
 - Act as verifier (A): Review ALL generated content against the inventory
 - Flag any claim that cannot be traced to a specific inventory entry
 - Check all numbers, dates, tool names, employer names, and titles
-- Report issues clearly
-
-## WHEN PARSING EMAILS
-- Extract each distinct job posting from the email body
-- Identify: company, title, location, posting URL, job description text
-- Handle multiple jobs per email
-- Return structured JSON for each job found`,
+- Report issues clearly`,
 
   model: openai("gpt-4o"),
   tools: {
@@ -86,5 +100,8 @@ You have access to these tools:
     generateCoverLetterTool,
     verifyTruthTool,
     buildOutputTool,
+    enrichJobsTool,
+    clayEnrichTool,
+    webSearch: openai.tools.webSearchPreview(),
   },
 });

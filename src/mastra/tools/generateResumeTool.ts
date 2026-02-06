@@ -29,7 +29,19 @@ export const generateResumeTool = createTool({
           year: z.string(),
         }),
       ),
-      certifications: z.array(z.string()).optional(),
+      certifications: z
+        .array(
+          z.union([
+            z.string(),
+            z.object({
+              id: z.string().optional(),
+              name: z.string(),
+              year: z.string().optional(),
+              issuer: z.string().optional(),
+            }),
+          ]),
+        )
+        .optional(),
     }),
     evidenceMapping: z.array(
       z.object({

@@ -1,0 +1,116 @@
+[
+  {
+    "claim_text": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+    "evidence_quote": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+    "evidence_source_key": "exp-001-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
+    "evidence_quote": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
+    "evidence_source_key": "exp-001-b2",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Launched enterprise ML ops pipeline processing 2B+ daily events for real-time fraud detection, reducing false positive rate by 38%",
+    "evidence_quote": "Launched enterprise ML ops pipeline processing 2B+ daily events for real-time fraud detection, reducing false positive rate by 38%",
+    "evidence_source_key": "exp-001-b3",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Built executive analytics dashboard suite adopted by C-suite and board, enabling data-driven quarterly strategic planning",
+    "evidence_quote": "Built executive analytics dashboard suite adopted by C-suite and board, enabling data-driven quarterly strategic planning",
+    "evidence_source_key": "exp-001-b5",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Presented data strategy roadmap to board of directors, securing $8M multi-year investment in data infrastructure modernization",
+    "evidence_quote": "Presented data strategy roadmap to board of directors, securing $8M multi-year investment in data infrastructure modernization",
+    "evidence_source_key": "exp-001-b6",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
+    "evidence_quote": "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
+    "evidence_source_key": "exp-002-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M",
+    "evidence_quote": "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M",
+    "evidence_source_key": "exp-002-b2",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "evidence_quote": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "evidence_source_key": "exp-002-b3",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Designed and implemented A/B testing framework adopted across 5 product teams, increasing experiment velocity by 3x",
+    "evidence_quote": "Designed and implemented A/B testing framework adopted across 5 product teams, increasing experiment velocity by 3x",
+    "evidence_source_key": "exp-002-b4",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Built and led a 15-person analytics team from scratch, establishing the company's first centralized analytics function",
+    "evidence_quote": "Built and led a 15-person analytics team from scratch, establishing the company's first centralized analytics function",
+    "evidence_source_key": "exp-003-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Created customer segmentation model driving $18M incremental revenue through personalized marketing campaigns",
+    "evidence_quote": "Created customer segmentation model driving $18M incremental revenue through personalized marketing campaigns",
+    "evidence_source_key": "exp-003-b2",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Implemented demand forecasting system reducing inventory carrying costs by $6.5M annually using time-series models",
+    "evidence_quote": "Implemented demand forecasting system reducing inventory carrying costs by $6.5M annually using time-series models",
+    "evidence_source_key": "exp-003-b3",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Built self-service BI platform serving 500+ business users with automated reporting, reducing ad-hoc request volume by 65%",
+    "evidence_quote": "Built self-service BI platform serving 500+ business users with automated reporting, reducing ad-hoc request volume by 65%",
+    "evidence_source_key": "exp-003-b4",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I lead a 45-person team across analytics engineering, data science, and business intelligence.",
+    "evidence_quote": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+    "evidence_source_key": "exp-001-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I spearheaded the consolidation of seven legacy data warehouses into a unified Snowflake platform, achieving $12M in annual cost savings.",
+    "evidence_quote": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
+    "evidence_source_key": "exp-001-b2",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I launched an enterprise ML ops pipeline processing over 2 billion daily events for real-time fraud detection, reducing false positives by 38%.",
+    "evidence_quote": "Launched enterprise ML ops pipeline processing 2B+ daily events for real-time fraud detection, reducing false positive rate by 38%",
+    "evidence_source_key": "exp-001-b3",
+    "confidence": 1
+  },
+  {
+    "claim_text": "My team developed a patient readmission prediction model with a 0.89 AUC, preventing 4,200 unnecessary readmissions annually and saving $31M.",
+    "evidence_quote": "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M",
+    "evidence_source_key": "exp-002-b2",
+    "confidence": 1
+  },
+  {
+    "claim_text": "I also led the migration of analytics infrastructure to AWS, reducing total cost of ownership by 40%.",
+    "evidence_quote": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "evidence_source_key": "exp-002-b3",
+    "confidence": 1
+  },
+  {
+    "claim_text": "My expertise in tools like Tableau, Python, and SQL, combined with certifications such as AWS Certified Solutions Architect and Google Cloud Professional Data Engineer, align with the technical and leadership requirements of this role.",
+    "evidence_quote": "Technical skills include Tableau, Python, SQL, and certifications such as AWS Certified Solutions Architect and Google Cloud Professional Data Engineer.",
+    "evidence_source_key": "skills.technical",
+    "confidence": 1
+  }
+]

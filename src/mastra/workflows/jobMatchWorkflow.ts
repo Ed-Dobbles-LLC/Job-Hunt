@@ -76,9 +76,20 @@ const fetchAndParseStep = createStep({
       [
         {
           role: "user",
-          content: `Parse the following job alert emails and extract EACH individual job posting. For each job found, call the parse-jobs tool with a JSON array of all jobs.
+          content: `Parse the following LinkedIn job alert emails and extract EACH individual job listing. These are LinkedIn job alert emails that contain brief listings with ONLY: title, company, location, and a LinkedIn URL. They do NOT contain full job descriptions.
 
-Each job object should have: company, title, location, posting_url (if found), jd_text (the full job description text), compensation (if mentioned), source (email sender), source_message_id (email ID).
+For each job found, call the parse-jobs tool with a JSON array of all jobs.
+
+Each job object should have:
+- company: the company name (strip any separator like "·")
+- title: the job title
+- location: the location text
+- posting_url: the LinkedIn URL (https://www.linkedin.com/jobs/view/...)
+- jd_text: leave empty string "" (will be enriched via web search later)
+- source: "linkedin"
+- source_message_id: the email ID
+
+IMPORTANT: Ignore footer text, copyright notices, "See all jobs" links, and "This email was intended for..." text. Also ignore annotations like "Actively recruiting", "1 school alum", "Remote OK" but DO extract location and remote status from them.
 
 Here are the emails:
 
@@ -114,11 +125,148 @@ ${allEmailBodies}`,
   },
 });
 
+const enrichJobsStep = createStep({
+  id: "enrich-jobs-web-search",
+  description:
+    "Enriches parsed jobs with full descriptions via web search and optionally sends to Clay for company/contact enrichment",
+  inputSchema: z.object({
+    newJobIds: z.array(z.number()),
+    totalEmails: z.number(),
+    totalParsed: z.number(),
+    duplicateCount: z.number(),
+    runId: z.string(),
+  }),
+  outputSchema: z.object({
+    enrichedJobIds: z.array(z.number()),
+    totalEmails: z.number(),
+    totalParsed: z.number(),
+    duplicateCount: z.number(),
+    runId: z.string(),
+  }),
+  execute: async ({ inputData, mastra }) => {
+    const logger = mastra?.getLogger();
+    logger?.info(
+      `🔍 [Step 1.5] Enriching ${inputData.newJobIds.length} jobs with web search`,
+    );
+
+    if (inputData.newJobIds.length === 0) {
+      logger?.info("🔍 [Step 1.5] No new jobs to enrich");
+      return {
+        enrichedJobIds: [],
+        totalEmails: inputData.totalEmails,
+        totalParsed: inputData.totalParsed,
+        duplicateCount: inputData.duplicateCount,
+        runId: inputData.runId,
+      };
+    }
+
+    const jobsToEnrich = await query(
+      `SELECT job_id, company, title, location, posting_url, jd_raw_text
+       FROM jobs WHERE job_id = ANY($1)`,
+      [inputData.newJobIds],
+    );
+
+    const needsEnrichment = jobsToEnrich.rows.filter(
+      (j: any) => !j.jd_raw_text || j.jd_raw_text.length < 200,
+    );
+
+    logger?.info(
+      `🔍 [Step 1.5] ${needsEnrichment.length} of ${jobsToEnrich.rows.length} jobs need enrichment`,
+    );
+
+    if (needsEnrichment.length > 0) {
+      const batchSize = 3;
+      let totalEnriched = 0;
+
+      for (let i = 0; i < needsEnrichment.length; i += batchSize) {
+        const batch = needsEnrichment.slice(i, i + batchSize);
+        const jobSummaries = batch
+          .map(
+            (j: any) =>
+              `- Job ID ${j.job_id}: "${j.title}" at ${j.company} (${j.location})${j.posting_url ? ` — URL: ${j.posting_url}` : ""}`,
+          )
+          .join("\n");
+
+        logger?.info(
+          `🔍 [Step 1.5] Enriching batch ${Math.floor(i / batchSize) + 1}: ${batch.length} jobs`,
+        );
+
+        const enrichResponse = await jobMatchAgent.generateLegacy(
+          [
+            {
+              role: "user",
+              content: `I need you to find full job descriptions for these ${batch.length} jobs. They were parsed from LinkedIn alerts and only have title, company, and location — no job description.
+
+YOUR PROCESS (follow this EXACTLY):
+1. For EACH job below, use the webSearch tool to search for: "[job title] [company name] job description responsibilities requirements"
+2. From the search results, extract: full responsibilities, requirements, qualifications, preferred skills, compensation/salary, and remote/hybrid status
+3. Write a comprehensive job description summary (at least 300 words) for each job based on what you find
+4. After searching ALL jobs, call the enrich-jobs tool ONCE with ALL enrichments
+
+Jobs to search:
+${jobSummaries}
+
+CRITICAL INSTRUCTIONS:
+- You MUST call webSearch BEFORE calling enrich-jobs
+- Each enrichment jd_text MUST be at least 300 characters
+- Include specific requirements, responsibilities, tools/technologies mentioned
+- If you can't find the exact posting, search for the company + role type to understand what they look for
+- ONLY use webSearch and enrich-jobs tools in this step. Do NOT call fetch-emails, parse-jobs, score-jobs, generate-resume, generate-cover-letter, verify-truth, or build-output.`,
+            },
+          ],
+          { maxSteps: 10 },
+        );
+
+        const allToolResults =
+          enrichResponse.steps?.flatMap((s: any) => s.toolResults || []) || [];
+        const allResults = allToolResults.map((r: any) => r.result || r);
+        const enrichResult = allResults.find((r: any) => r.enrichedJobIds);
+        totalEnriched += enrichResult?.enrichedCount || 0;
+      }
+
+      logger?.info(
+        `✅ [Step 1.5] Web search enrichment complete: ${totalEnriched} enriched`,
+      );
+    }
+
+    if (process.env.CLAY_WEBHOOK_URL) {
+      logger?.info("🏺 [Step 1.5] Sending jobs to Clay for enrichment");
+      const jobsForClay = jobsToEnrich.rows.map((j: any) => ({
+        job_id: j.job_id,
+        company: j.company,
+        title: j.title,
+        location: j.location,
+        posting_url: j.posting_url || "",
+      }));
+
+      const clayResponse = await jobMatchAgent.generateLegacy(
+        [
+          {
+            role: "user",
+            content: `Send these jobs to Clay for company and contact enrichment. Call the clay-enrich tool with the following jobs:\n${JSON.stringify(jobsForClay, null, 2)}`,
+          },
+        ],
+        { maxSteps: 3 },
+      );
+
+      logger?.info("✅ [Step 1.5] Clay enrichment request sent");
+    }
+
+    return {
+      enrichedJobIds: inputData.newJobIds,
+      totalEmails: inputData.totalEmails,
+      totalParsed: inputData.totalParsed,
+      duplicateCount: inputData.duplicateCount,
+      runId: inputData.runId,
+    };
+  },
+});
+
 const scoreAndShortlistStep = createStep({
   id: "score-and-shortlist",
   description: "Scores all new jobs and selects the top 10 for packet generation",
   inputSchema: z.object({
-    newJobIds: z.array(z.number()),
+    enrichedJobIds: z.array(z.number()),
     totalEmails: z.number(),
     totalParsed: z.number(),
     duplicateCount: z.number(),
@@ -146,10 +294,10 @@ const scoreAndShortlistStep = createStep({
   execute: async ({ inputData, mastra }) => {
     const logger = mastra?.getLogger();
     logger?.info(
-      `📊 [Step 2] Scoring ${inputData.newJobIds.length} new jobs`,
+      `📊 [Step 2] Scoring ${inputData.enrichedJobIds.length} enriched jobs`,
     );
 
-    if (inputData.newJobIds.length === 0) {
+    if (inputData.enrichedJobIds.length === 0) {
       logger?.info("📊 [Step 2] No new jobs to score");
       return {
         shortlistedJobs: [],
@@ -164,7 +312,7 @@ const scoreAndShortlistStep = createStep({
       [
         {
           role: "user",
-          content: `Score the following job IDs against my experience inventory and return the top 10: [${inputData.newJobIds.join(", ")}]. Call the score-jobs tool with these job IDs.`,
+          content: `Score the following job IDs against my experience inventory and return the top 10: [${inputData.enrichedJobIds.join(", ")}]. Call the score-jobs tool with these job IDs.`,
         },
       ],
       { maxSteps: 3 },
@@ -457,6 +605,7 @@ export const jobMatchWorkflow = createWorkflow({
   }),
 })
   .then(fetchAndParseStep as any)
+  .then(enrichJobsStep as any)
   .then(scoreAndShortlistStep as any)
   .then(generatePacketsStep as any)
   .then(sendDigestStep as any)

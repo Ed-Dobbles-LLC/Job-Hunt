@@ -1,0 +1,41 @@
+{
+  "job_id": 4140001003,
+  "company": "OU Health",
+  "title": "Vice President - VP Analytics and Artificial Intelligence (AI) Data",
+  "total_score": 65,
+  "contacts": [
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Likely oversees data and analytics strategy, relevant to the VP role."
+    },
+    {
+      "title": "VP of Analytics",
+      "rationale": "Directly related to the role being applied for, may be a peer or hiring manager."
+    },
+    {
+      "title": "VP of Artificial Intelligence",
+      "rationale": "Relevant to the AI focus of the role, may be a peer or collaborator."
+    },
+    {
+      "title": "Chief Analytics Officer",
+      "rationale": "Likely responsible for analytics strategy, relevant to the role."
+    },
+    {
+      "title": "Director of Data Science",
+      "rationale": "May report to or collaborate with the VP role."
+    },
+    {
+      "title": "Director of Analytics",
+      "rationale": "May report to or collaborate with the VP role."
+    },
+    {
+      "title": "Chief Information Officer",
+      "rationale": "Oversees IT and data infrastructure, relevant to the role."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "Oversees technology strategy, relevant to the AI and data aspects of the role."
+    }
+  ],
+  "truth_pass": true
+}
