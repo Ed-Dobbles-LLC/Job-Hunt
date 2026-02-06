@@ -22,7 +22,7 @@ async function getAccessToken() {
     throw new Error("X_REPLIT_TOKEN not found for repl/depl");
   }
 
-  connectionSettings = await fetch(
+  const rawResponse = await fetch(
     "https://" +
       hostname +
       "/api/v2/connection?include_secrets=true&connector_names=google-mail",
@@ -32,9 +32,11 @@ async function getAccessToken() {
         X_REPLIT_TOKEN: xReplitToken,
       },
     },
-  )
-    .then((res) => res.json())
-    .then((data) => data.items?.[0]);
+  );
+  const data = await rawResponse.json();
+  connectionSettings = data.items?.[0];
+
+  console.log("📧 [Gmail] Connection scopes:", connectionSettings?.settings?.scope || connectionSettings?.settings?.oauth?.credentials?.scope || "unknown");
 
   const accessToken =
     connectionSettings?.settings?.access_token ||
