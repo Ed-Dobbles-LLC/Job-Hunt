@@ -1,0 +1,123 @@
+You are an expert Python automation engineer. Build a production-grade, no-touch daily job-matching + truthful application-packet generator in THIS Replit project.
+
+GOAL (No-touch, daily):
+Every morning at 6:30am America/Chicago, the system:
+1) Pulls new job alert emails from Gmail label "JOB_ALERTS" (LinkedIn saved search alerts + other job board alerts).
+2) Extracts job postings into a database, dedupes them, scores them, shortlists top 10.
+3) For each shortlisted job, generates:
+   - ATS-friendly tailored resume DOCX (1–2 pages, no tables/columns)
+   - tailored cover letter DOCX (250–350 words)
+   - Evidence Map JSON that maps every bullet/claim to exact evidence from my resume inventory
+   - Verifier JSON report
+   - Outreach targets list (3–10 people) OR "NONE FOUND" + recommended titles to search
+4) Produces one daily digest email summarizing the top jobs + links/paths to the packet folder + outreach drafts.
+5) Creates a per-job folder with all files under /output/YYYY-MM-DD/<Company>/<Role>/.
+
+HARD CONSTRAINTS (non-negotiable):
+- Compliance: Do NOT scrape LinkedIn pages. LinkedIn jobs MUST be ingested via email alerts only.
+- Truthfulness: Do NOT invent metrics, titles, employers, dates, tools, or claims. ONLY use facts from `experience_inventory.json`.
+- Auditability: Every bullet/claim in resume and every claim in cover letter must have an Evidence Map line:
+  [claim_text] -> [exact short quote from inventory] -> [inventory id or role/section]
+- Truth Gate: No packet is generated unless truth checks pass.
+  Implement TWO verifiers:
+   (A) LLM verifier (flags unsupported claims)
+   (B) Deterministic validator: extract all numbers, dates, tool names, employer names, titles from generated docs and hard-check they exist in inventory. Any mismatch => fail.
+- Reliability: The run must never crash because a JD URL fetch fails. The primary JD source is the EMAIL BODY. URL fetch is optional fallback only.
+- No-touch: Do NOT require daily manual copy/paste.
+
+INPUTS ALREADY IN PROJECT:
+- `experience_inventory.json` (single source of truth)
+- (Optional) my resume DOCX exists but DO NOT use it for facts; use only the inventory JSON for claims.
+
+TECH STACK REQUIREMENTS:
+- Python 3.11
+- SQLite DB to start (jobs.db) with schema below
+- Gmail API for reading + sending email (OAuth, token stored locally; include setup instructions)
+- LLM API support for either Anthropic or OpenAI (make it provider-pluggable via env vars)
+- `python-docx` for DOCX generation (no Google Docs templates)
+- Clean code organization + tests + dry-run fixtures
+
+DATABASE (SQLite) REQUIRED TABLES:
+runs(run_id, start_ts, end_ts, status, errors_json)
+jobs(job_id, source, source_message_id, company, title, location, remote_hybrid, posting_url, date_posted, date_ingested, jd_raw_text, jd_hash, url_canonical, status)
+scores(job_id, total_score, breakdown_json)
+artifacts(job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, created_ts, truth_pass)
+evidence_map(job_id, claim_id, claim_text, evidence_quote, evidence_source_key, confidence)
+contacts(job_id, person_name, title, linkedin_url, email, rank, rationale, message_draft)
+
+SCORING RUBRIC (implement):
+Score 0–100 using weighted features:
+- Role level match 25
+- Leadership scope 15
+- Domain relevance 10
+- Data/AI stack match 15
+- Location/remote fit 10
+- Compensation 10 (if present)
+- Transformation mandate signals 10
+- Company preference heuristics 5
+Include hard filters only where explicit; unknown should not hard-fail.
+
+DEDUPE (must handle reposts):
+- Canonical URL (strip tracking params)
+- Secondary key: normalized (company, title, location) within 14 days
+- JD fingerprint hash of normalized JD text (jd_hash). If same hash, treat as duplicate.
+
+CONTACT DISCOVERY:
+- Do NOT depend on Clay.
+- Implement as:
+  - Phase 1: return "NONE FOUND" plus a ranked list of target titles inferred from JD (e.g., VP Data, Head of Analytics, Recruiter, TA Partner, CFO/CPO/CTO depending on JD language).
+  - Phase 2 (optional, behind env flag): Apollo/PDL integration placeholders with interfaces but safe defaults.
+
+RUNNER:
+- Implement a scheduled runner. In Replit, provide:
+  - `python main.py run` to execute once
+  - `python main.py dry-run` using fixtures (no Gmail needed)
+  - Instructions for setting up Replit Scheduled Deployments / cron equivalent
+
+OUTPUT STRUCTURE:
+Write to: /output/YYYY-MM-DD/<Company>/<Role>/
+Files:
+- Resume_<Company>_<Role>.docx
+- CoverLetter_<Company>_<Role>.docx
+- EvidenceMap_<Company>_<Role>.json
+- Verifier_<Company>_<Role>.json
+- Job_<Company>_<Role>.json (structured JD + scoring breakdown)
+
+DAILY DIGEST EMAIL:
+Subject: "Daily Job Brief — YYYY-MM-DD (Top 10 + Packets)"
+Body sections:
+1) Top matches (score, 3 reasons, posting link, packet path)
+2) Outreach targets/drafts per job (or NONE FOUND + title targets)
+3) Blocked jobs (verifier failures)
+4) Questions for Ed (missing preferences / missing evidence)
+
+PROJECT DELIVERABLES (must create now):
+1) Full working codebase (not snippets)
+2) `.env.example` with required vars (GMAIL creds, LLM provider keys, timezone, email addresses)
+3) `README.md` with step-by-step setup including Gmail OAuth
+4) `requirements.txt`
+5) `migrations.py` or `db.py` that initializes schema
+6) Unit tests for dedupe, parsing, deterministic validator
+7) Fixtures: sample job alert email bodies under `/fixtures/emails/`
+
+CODE ORGANIZATION (required):
+/app
+  /core (config, logging, utils)
+  /ingest (gmail_client, email_parser)
+  /jobs (normalize, dedupe, scoring, jd_structurer)
+  /tailor (resume_writer, cover_writer, prompts)
+  /verify (llm_verifier, deterministic_validator)
+  /output (docx_writer, folder_builder)
+  /digest (digest_builder, email_sender)
+  /db (models, sqlite)
+main.py (CLI entry)
+tests/
+
+BUILD IT INCREMENTALLY:
+- First: dry-run mode from fixtures end-to-end generating outputs.
+- Second: Gmail ingestion live.
+- Third: scheduled daily run + digest email.
+
+Start now: create the full file tree, implement dry-run end-to-end, then wire Gmail API and env setup.
+
+Do NOT ask me questions unless absolutely blocked; make reasonable assumptions and document them in README.
