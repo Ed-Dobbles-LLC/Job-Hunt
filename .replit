@@ -8,7 +8,7 @@ integrations = ["javascript_openai_ai_integrations:2.0.0", "google-mail:1.0.0"]
 
 [nix]
 channel = "stable-24_11"
-packages = ["jq"]
+packages = ["jq", "poppler_utils"]
 
 [env]
 MASTRA_HIDE_CLOUD_CTA = "true"
