@@ -1,0 +1,33 @@
+{
+  "job_id": 4361710138,
+  "company": "Ladders",
+  "title": "VP, Data Strategy & Analytics",
+  "total_score": 63,
+  "contacts": [
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Likely oversees data strategy and analytics at Ladders, making them a key decision-maker for this role."
+    },
+    {
+      "title": "VP of Analytics",
+      "rationale": "Directly relevant to the role and likely involved in hiring for analytics leadership positions."
+    },
+    {
+      "title": "Head of Data Strategy",
+      "rationale": "Responsible for data strategy initiatives, aligning closely with the job's focus."
+    },
+    {
+      "title": "Director of Data Engineering",
+      "rationale": "May collaborate with the VP of Data Strategy & Analytics on platform development and scalability."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles hiring processes and can provide insights into the application process."
+    },
+    {
+      "title": "HR Business Partner",
+      "rationale": "Supports leadership hiring and organizational strategy, relevant to this executive role."
+    }
+  ],
+  "truth_pass": true
+}

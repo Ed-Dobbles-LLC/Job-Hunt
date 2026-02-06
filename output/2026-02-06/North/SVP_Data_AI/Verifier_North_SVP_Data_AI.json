@@ -1,0 +1,13 @@
+{
+  "job_id": 0,
+  "overallPass": true,
+  "llmVerification": {
+    "passed": true,
+    "issues": []
+  },
+  "deterministicVerification": {
+    "passed": true,
+    "failures": []
+  },
+  "evidenceMapValid": true
+}

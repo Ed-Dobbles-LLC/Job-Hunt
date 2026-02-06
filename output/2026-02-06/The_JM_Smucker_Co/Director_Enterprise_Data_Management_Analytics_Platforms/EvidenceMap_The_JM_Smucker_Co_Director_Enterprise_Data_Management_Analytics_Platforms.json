@@ -1,0 +1,50 @@
+[
+  {
+    "claim_text": "Led a 45-person team across analytics engineering, data science, and business intelligence",
+    "evidence_quote": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+    "evidence_source_key": "exp-001-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Spearheaded the consolidation of seven legacy data warehouses into a unified Snowflake platform, achieving $12M in annual cost savings",
+    "evidence_quote": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
+    "evidence_source_key": "exp-001-b2",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Established a data governance framework with over 200 quality rules, improving our data trust score from 62% to 94%",
+    "evidence_quote": "Established data governance framework with 200+ data quality rules, improving data trust score from 62% to 94%",
+    "evidence_source_key": "exp-001-b4",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Migrated analytics infrastructure to AWS, reducing total cost of ownership by 40%",
+    "evidence_quote": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "evidence_source_key": "exp-002-b3",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Partnered with the Chief Medical Officer to develop a clinical analytics program that improved care quality metrics by 15%",
+    "evidence_quote": "Partnered with Chief Medical Officer to develop clinical analytics program, resulting in 15% improvement in care quality metrics",
+    "evidence_source_key": "exp-002-b5",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Built centralized analytics functions from scratch, including leading a 15-person team",
+    "evidence_quote": "Built and led a 15-person analytics team from scratch, establishing the company's first centralized analytics function",
+    "evidence_source_key": "exp-003-b1",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Implemented a self-service BI platform serving over 500 users",
+    "evidence_quote": "Built self-service BI platform serving 500+ business users with automated reporting, reducing ad-hoc request volume by 65%",
+    "evidence_source_key": "exp-003-b4",
+    "confidence": 1
+  },
+  {
+    "claim_text": "Expertise in cloud platforms like Azure and AWS, and tools such as Tableau and Power BI",
+    "evidence_quote": "Proven expertise in data governance, cloud platforms, and analytics tools",
+    "evidence_source_key": "profile.summary",
+    "confidence": 1
+  }
+]

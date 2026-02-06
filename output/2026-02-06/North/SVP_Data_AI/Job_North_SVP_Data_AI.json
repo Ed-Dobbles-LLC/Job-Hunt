@@ -1,0 +1,45 @@
+{
+  "job_id": 0,
+  "company": "North",
+  "title": "SVP, Data & AI",
+  "total_score": 63,
+  "contacts": [
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Likely oversees data strategy and AI initiatives at North, relevant to the SVP role."
+    },
+    {
+      "title": "VP of Analytics",
+      "rationale": "May be a peer or direct report to the SVP, Data & AI role."
+    },
+    {
+      "title": "Head of AI/ML",
+      "rationale": "Directly involved in AI/ML initiatives, relevant to the role's focus."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles hiring for executive roles, including SVP positions."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "Likely collaborates with the SVP on technology and AI strategy."
+    },
+    {
+      "title": "Director of Data Governance",
+      "rationale": "May report to the SVP or collaborate on governance frameworks."
+    },
+    {
+      "title": "VP of Cloud Platforms",
+      "rationale": "Relevant to the role's focus on cloud technologies like AWS and Azure."
+    },
+    {
+      "title": "SVP of Operations",
+      "rationale": "May work closely with the SVP, Data & AI on operational excellence."
+    },
+    {
+      "title": "Executive Recruiter",
+      "rationale": "Specializes in placing senior-level candidates like SVPs."
+    }
+  ],
+  "truth_pass": true
+}

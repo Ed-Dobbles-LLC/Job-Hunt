@@ -1,0 +1,36 @@
+{
+  "job_id": 4368368740,
+  "company": "Merlin Group",
+  "title": "Chief Data & AI Officer (CDAO)",
+  "contacts": [
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Likely to oversee or collaborate with the CDAO role."
+    },
+    {
+      "title": "VP of Data & Analytics",
+      "rationale": "May be a peer or report to the CDAO."
+    },
+    {
+      "title": "Head of Artificial Intelligence",
+      "rationale": "Directly relevant to AI leadership and strategy."
+    },
+    {
+      "title": "Director of Data Science",
+      "rationale": "May report to or work closely with the CDAO."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles hiring for executive roles like CDAO."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "Likely to collaborate with the CDAO on technology strategy."
+    },
+    {
+      "title": "VP of Engineering",
+      "rationale": "May work closely with the CDAO on data and AI initiatives."
+    }
+  ],
+  "truth_pass": true
+}

@@ -1,0 +1,28 @@
+{
+  "job_id": 4368547464,
+  "company": "Uber Freight",
+  "title": "Head of Applied Science and Data Science",
+  "contacts": [
+    {
+      "title": "VP of Data Science",
+      "rationale": "Likely oversees the data science function and would be a key decision-maker for this role."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "May be directly involved in hiring for leadership roles in applied science and data science."
+    },
+    {
+      "title": "Director of Machine Learning",
+      "rationale": "Could be a peer or stakeholder for the Head of Applied Science and Data Science role."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Responsible for overall data strategy and likely involved in senior-level hiring."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles the hiring process and can provide insights into the role and team."
+    }
+  ],
+  "truth_pass": true
+}

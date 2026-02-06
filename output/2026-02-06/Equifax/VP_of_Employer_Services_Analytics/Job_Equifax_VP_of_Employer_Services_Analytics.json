@@ -1,0 +1,41 @@
+{
+  "job_id": 4368903236,
+  "company": "Equifax",
+  "title": "VP of Employer Services Analytics",
+  "total_score": 60,
+  "contacts": [
+    {
+      "title": "VP of Analytics",
+      "rationale": "Likely to oversee the Employer Services Analytics division and be involved in hiring decisions."
+    },
+    {
+      "title": "Head of Data Science",
+      "rationale": "May be directly involved in the technical aspects of the role and hiring process."
+    },
+    {
+      "title": "Director of Analytics",
+      "rationale": "Could be a peer or report to the VP role, providing insights into team dynamics."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Responsible for managing the hiring process and candidate communication."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Likely to have strategic oversight of analytics initiatives and hiring for senior roles."
+    },
+    {
+      "title": "VP of Employer Services",
+      "rationale": "Directly connected to the Employer Services division and strategic goals."
+    },
+    {
+      "title": "Senior Manager, Analytics",
+      "rationale": "May provide insights into team structure and expectations for the role."
+    },
+    {
+      "title": "HR Business Partner",
+      "rationale": "Involved in senior-level hiring and organizational alignment."
+    }
+  ],
+  "truth_pass": true
+}

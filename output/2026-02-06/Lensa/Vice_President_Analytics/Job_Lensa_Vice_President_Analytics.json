@@ -1,0 +1,37 @@
+{
+  "job_id": 1,
+  "company": "Lensa",
+  "title": "Vice President, Analytics",
+  "total_score": 71,
+  "contacts": [
+    {
+      "title": "VP of Data",
+      "rationale": "Likely to oversee or collaborate with the Vice President of Analytics role."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "Directly relevant to the analytics leadership position."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Responsible for data strategy and would be a key stakeholder for this role."
+    },
+    {
+      "title": "Director of Data Science",
+      "rationale": "Potential peer or subordinate to the VP of Analytics."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Responsible for hiring and initial screening for the role."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "May oversee the analytics function and be involved in strategic decisions."
+    },
+    {
+      "title": "Head of Business Intelligence",
+      "rationale": "Likely to collaborate with the VP of Analytics on data-driven initiatives."
+    }
+  ],
+  "truth_pass": true
+}

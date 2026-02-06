@@ -1,0 +1,41 @@
+{
+  "job_id": 4367678406,
+  "company": "Ignite Reading",
+  "title": "VP, Data & Analytics",
+  "total_score": 62,
+  "contacts": [
+    {
+      "title": "VP of Data",
+      "rationale": "Likely to oversee the data strategy and analytics initiatives at Ignite Reading."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "Directly relevant to the role and may be involved in hiring decisions."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Responsible for data governance and strategy, closely aligned with the VP role."
+    },
+    {
+      "title": "Director of Data Science",
+      "rationale": "May collaborate with or report to the VP of Data & Analytics."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles hiring for executive-level positions."
+    },
+    {
+      "title": "HR Manager",
+      "rationale": "Involved in the recruitment process for leadership roles."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "Likely to oversee the technical aspects of data and analytics initiatives."
+    },
+    {
+      "title": "Data Governance Lead",
+      "rationale": "Relevant to the role’s focus on data governance and quality."
+    }
+  ],
+  "truth_pass": true
+}

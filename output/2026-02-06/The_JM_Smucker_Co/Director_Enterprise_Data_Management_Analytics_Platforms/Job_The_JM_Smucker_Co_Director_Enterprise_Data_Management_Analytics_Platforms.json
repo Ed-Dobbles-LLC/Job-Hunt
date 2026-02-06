@@ -1,0 +1,32 @@
+{
+  "job_id": 58,
+  "company": "The J.M. Smucker Co.",
+  "title": "Director, Enterprise Data Management & Analytics Platforms",
+  "contacts": [
+    {
+      "title": "VP of Data",
+      "rationale": "Likely oversees data strategy and would be a key stakeholder for this role."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "Directly relevant to the analytics platform responsibilities of the role."
+    },
+    {
+      "title": "Director of Data Governance",
+      "rationale": "Would align with the data governance aspects of the position."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Likely the top executive for data strategy and governance."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles hiring for this position and can provide application updates."
+    },
+    {
+      "title": "HR Business Partner",
+      "rationale": "Supports hiring managers and can provide insights into the role."
+    }
+  ],
+  "truth_pass": true
+}

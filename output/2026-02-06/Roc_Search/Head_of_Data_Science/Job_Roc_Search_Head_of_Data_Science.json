@@ -1,0 +1,36 @@
+{
+  "job_id": 59,
+  "company": "Roc Search",
+  "title": "Head of Data Science",
+  "contacts": [
+    {
+      "title": "VP of Data Science",
+      "rationale": "Likely oversees the data science function and would be a key decision-maker for this role."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "May be involved in hiring or collaborating with the Head of Data Science."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Responsible for overall data strategy and likely involved in senior-level hiring."
+    },
+    {
+      "title": "Director of Data Science",
+      "rationale": "Could be a peer or report to the Head of Data Science, providing insights into the team structure."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles the hiring process and can provide application updates."
+    },
+    {
+      "title": "HR Manager",
+      "rationale": "Involved in the recruitment process and can provide details about the role."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "May oversee the technical teams, including data science, and be involved in strategic hiring decisions."
+    }
+  ],
+  "truth_pass": true
+}
