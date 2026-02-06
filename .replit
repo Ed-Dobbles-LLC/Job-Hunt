@@ -78,3 +78,4 @@ USE_FIXTURES = "false"
 [userenv.shared]
 CLAY_WEBHOOK_URL = "https://api.clay.com/v3/sources/webhook/pull-in-data-from-a-webhook-63d46a35-c3e8-4c82-82de-523c9718d608"
 GMAIL_LABEL = "Job Alerts"
+IMPORT_API_KEY = "4c6e4189a06b0f4996307c6d97d5a44370fcca788aab73416bd80e781c1ea589"

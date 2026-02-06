@@ -119,8 +119,84 @@ export const mastra = new Mastra({
         createHandler: async ({ mastra }) => inngestServe({ mastra, inngest }),
       },
 
-      // Add webhook triggers here (see Option 2 above)
-      // Example: ...registerSlackTrigger({ ... })
+      {
+        path: "/api/import-emails",
+        method: "POST",
+        createHandler: async ({ mastra }) => async (c: any) => {
+          const logger = mastra.getLogger();
+          const apiKey = process.env.IMPORT_API_KEY;
+          const authHeader = c.req.header("x-api-key") || c.req.header("authorization")?.replace("Bearer ", "");
+          if (apiKey && authHeader !== apiKey) {
+            return c.json({ success: false, error: "Unauthorized" }, 401);
+          }
+
+          const { Pool } = await import("pg");
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          try {
+            const body = await c.req.json();
+            const emails = Array.isArray(body) ? body : [body];
+            logger?.info(`📥 [importEmails] Importing ${emails.length} emails`);
+
+            let imported = 0;
+            for (const email of emails) {
+              const subject = email.subject || "Imported Job Alert";
+              const from = email.from || "imported";
+              const emailBody = email.body || email.text || email.content || "";
+              const date = email.date || new Date().toISOString();
+
+              if (!emailBody || emailBody.trim().length < 10) {
+                logger?.warn(`⚠️ [importEmails] Skipping email with empty body: ${subject}`);
+                continue;
+              }
+
+              const dupeCheck = await pool.query(
+                `SELECT id FROM imported_emails WHERE subject = $1 AND body = $2 LIMIT 1`,
+                [subject, emailBody]
+              );
+              if (dupeCheck.rows.length > 0) {
+                logger?.info(`⏭️ [importEmails] Duplicate skipped: ${subject}`);
+                continue;
+              }
+
+              await pool.query(
+                `INSERT INTO imported_emails (subject, from_address, date_received, body) VALUES ($1, $2, $3, $4)`,
+                [subject, from, date, emailBody]
+              );
+              imported++;
+              logger?.info(`✅ [importEmails] Imported: ${subject}`);
+            }
+
+            return c.json({ success: true, imported, message: `Imported ${imported} email(s). Run the workflow to process them.` });
+          } catch (err: any) {
+            logger?.error(`❌ [importEmails] Error: ${err.message}`);
+            return c.json({ success: false, error: err.message }, 500);
+          } finally {
+            await pool.end();
+          }
+        },
+      },
+      {
+        path: "/api/import-emails",
+        method: "GET",
+        createHandler: async ({ mastra }) => async (c: any) => {
+          const apiKey = process.env.IMPORT_API_KEY;
+          const authHeader = c.req.header("x-api-key") || c.req.header("authorization")?.replace("Bearer ", "");
+          if (apiKey && authHeader !== apiKey) {
+            return c.json({ success: false, error: "Unauthorized" }, 401);
+          }
+
+          const { Pool } = await import("pg");
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          try {
+            const result = await pool.query(
+              `SELECT id, subject, from_address, date_received, processed, LENGTH(body) as body_length FROM imported_emails ORDER BY created_at DESC`
+            );
+            return c.json({ emails: result.rows, count: result.rows.length });
+          } finally {
+            await pool.end();
+          }
+        },
+      },
     ],
   },
   logger:
