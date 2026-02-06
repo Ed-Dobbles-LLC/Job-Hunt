@@ -38,6 +38,7 @@
     "googleapis": "^148.0.0",
     "inngest": "^3.40.2",
     "inngest-cli": "^1.11.5",
+    "mammoth": "^1.11.0",
     "openai": "^6.18.0",
     "p-limit": "^7.3.0",
     "p-retry": "^7.1.1",
