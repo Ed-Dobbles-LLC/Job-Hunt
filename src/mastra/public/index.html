@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Match Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242734;
+      --border: #2e3140;
+      --text: #e4e6ef;
+      --text-dim: #8b8fa3;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --blue: #3b82f6;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    header h1 span { font-size: 24px; }
+
+    .header-actions { display: flex; gap: 12px; align-items: center; }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+
+    .btn:hover { border-color: var(--accent); background: var(--surface); }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .stat-card .label {
+      font-size: 13px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-card .value {
+      font-size: 32px;
+      font-weight: 700;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      background: var(--surface);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      width: fit-content;
+    }
+
+    .tab {
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+
+    .tab.active { background: var(--accent); color: white; }
+    .tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    td {
+      padding: 12px 16px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(99, 102, 241, 0.05); }
+
+    .score-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .score-high { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+    .score-mid { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+    .score-low { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-new { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
+    .status-scored { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+    .status-generated { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+    .status-running { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+    .status-completed { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+    .status-failed { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+
+    .clickable { cursor: pointer; }
+    .clickable:hover td { background: rgba(99, 102, 241, 0.08); }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 100;
+      justify-content: center;
+      align-items: flex-start;
+      padding-top: 60px;
+      overflow-y: auto;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 900px;
+      margin-bottom: 60px;
+      overflow: hidden;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-header h2 { font-size: 20px; font-weight: 600; }
+    .modal-header .sub { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    .close-btn:hover { color: var(--text); }
+
+    .modal-body { padding: 24px; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .detail-item .label {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .detail-item .value { font-size: 14px; }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 24px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .breakdown-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+    }
+
+    .breakdown-bar .name {
+      width: 200px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    .breakdown-bar .bar-bg {
+      flex: 1;
+      height: 8px;
+      background: var(--surface2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .breakdown-bar .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent);
+      transition: width 0.3s;
+    }
+
+    .breakdown-bar .score-val {
+      width: 40px;
+      text-align: right;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .download-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .download-card:hover { border-color: var(--accent); }
+    .download-card .icon { font-size: 28px; margin-bottom: 8px; }
+    .download-card .name { font-size: 13px; font-weight: 500; }
+
+    .download-card.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .contact-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 8px;
+    }
+
+    .contact-card .name { font-weight: 600; font-size: 14px; }
+    .contact-card .title { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+    .contact-card .links { margin-top: 8px; display: flex; gap: 12px; }
+    .contact-card .links a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    .contact-card .links a:hover { text-decoration: underline; }
+
+    .evidence-row {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .evidence-row:last-child { border-bottom: none; }
+    .evidence-row .claim { font-size: 14px; margin-bottom: 4px; }
+    .evidence-row .quote {
+      font-size: 13px;
+      color: var(--text-dim);
+      font-style: italic;
+      margin-top: 4px;
+    }
+
+    .evidence-row .conf {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 8px;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--accent);
+    }
+
+    .jd-text {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.6;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-dim);
+    }
+
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 14px;
+      z-index: 200;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s;
+    }
+
+    .toast.visible { opacity: 1; transform: translateY(0); }
+    .toast.success { border-color: var(--green); }
+    .toast.error { border-color: var(--red); }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--text-dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 768px) {
+      .container { padding: 16px; }
+      header { padding: 12px 16px; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .modal { width: 95%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span>&#x1F3AF;</span> Job Match Dashboard</h1>
+    <div class="header-actions">
+      <button class="btn" onclick="refreshData()">Refresh</button>
+      <button class="btn btn-primary" id="triggerBtn" onclick="triggerWorkflow()">Run Workflow</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('jobs')">Jobs</button>
+      <button class="tab" onclick="switchTab('runs')">Run History</button>
+    </div>
+
+    <div class="panel active" id="panel-jobs">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Title</th>
+              <th>Location</th>
+              <th>Score</th>
+              <th>Status</th>
+              <th>Artifacts</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="jobsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-runs">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Run ID</th>
+              <th>Started</th>
+              <th>Ended</th>
+              <th>Status</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody id="runsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h2 id="modalTitle"></h2>
+          <div class="sub" id="modalSub"></div>
+        </div>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API = '/api/dashboard';
+
+    async function api(path, opts) {
+      const res = await fetch(API + path, opts);
+      return res.json();
+    }
+
+    function formatDate(d) {
+      if (!d) return '-';
+      const dt = new Date(d);
+      return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+             dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function scoreBadge(score) {
+      if (score === null || score === undefined) return '<span class="score-badge score-low">-</span>';
+      const cls = score >= 60 ? 'score-high' : score >= 40 ? 'score-mid' : 'score-low';
+      return `<span class="score-badge ${cls}">${Math.round(score)}</span>`;
+    }
+
+    function statusBadge(status) {
+      const cls = 'status-' + (status || 'new').toLowerCase().replace(/\s+/g, '-');
+      return `<span class="status-badge ${cls}">${status || 'new'}</span>`;
+    }
+
+    function showToast(msg, type = 'success') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast visible ' + type;
+      setTimeout(() => el.className = 'toast', 3000);
+    }
+
+    async function loadDashboard() {
+      try {
+        const data = await api('');
+        const grid = document.getElementById('statsGrid');
+        grid.innerHTML = `
+          <div class="stat-card">
+            <div class="label">Total Jobs</div>
+            <div class="value">${data.stats.totalJobs}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Scored</div>
+            <div class="value">${data.stats.scoredJobs}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Packets Generated</div>
+            <div class="value">${data.stats.packetsGenerated}</div>
+          </div>
+        `;
+      } catch (e) {
+        console.error('Dashboard load error:', e);
+      }
+    }
+
+    async function loadJobs() {
+      try {
+        const data = await api('/jobs');
+        const tbody = document.getElementById('jobsBody');
+        if (data.jobs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="icon">&#x1F4ED;</div><div>No jobs found. Run the workflow to fetch and process job alerts.</div></div></td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.jobs.map(j => `
+          <tr class="clickable" onclick="openJobDetail(${j.job_id})">
+            <td><strong>${esc(j.company || '-')}</strong></td>
+            <td>${esc(j.title || '-')}</td>
+            <td>${esc(j.location || '-')}</td>
+            <td>${scoreBadge(j.total_score)}</td>
+            <td>${statusBadge(j.status)}</td>
+            <td>${j.has_artifacts ? (j.truth_pass ? '&#x2705;' : '&#x26A0;&#xFE0F;') : '-'}</td>
+            <td>${formatDate(j.date_ingested)}</td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error('Jobs load error:', e);
+      }
+    }
+
+    async function loadRuns() {
+      try {
+        const data = await api('/runs');
+        const tbody = document.getElementById('runsBody');
+        if (data.runs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="icon">&#x23F3;</div><div>No workflow runs yet.</div></div></td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.runs.map(r => {
+          let duration = '-';
+          if (r.start_ts && r.end_ts) {
+            const ms = new Date(r.end_ts) - new Date(r.start_ts);
+            const mins = Math.floor(ms / 60000);
+            const secs = Math.floor((ms % 60000) / 1000);
+            duration = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+          }
+          return `
+            <tr>
+              <td><code>${esc(r.run_id?.substring(0, 12) || '-')}...</code></td>
+              <td>${formatDate(r.start_ts)}</td>
+              <td>${formatDate(r.end_ts)}</td>
+              <td>${statusBadge(r.status)}</td>
+              <td>${duration}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error('Runs load error:', e);
+      }
+    }
+
+    async function openJobDetail(jobId) {
+      try {
+        const data = await api('/jobs/' + jobId);
+        const j = data.job;
+        const s = data.score;
+        const a = data.artifact;
+
+        document.getElementById('modalTitle').textContent = `${j.title || 'Unknown'}`;
+        document.getElementById('modalSub').textContent = `${j.company || ''} - ${j.location || ''}`;
+
+        let html = `<div class="detail-grid">
+          <div class="detail-item">
+            <div class="label">Score</div>
+            <div class="value">${s ? scoreBadge(s.total_score) : 'Not scored'}</div>
+          </div>
+          <div class="detail-item">
+            <div class="label">Status</div>
+            <div class="value">${statusBadge(j.status)}</div>
+          </div>
+          <div class="detail-item">
+            <div class="label">Compensation</div>
+            <div class="value">${esc(j.compensation || 'Not available')}</div>
+          </div>
+          <div class="detail-item">
+            <div class="label">Remote/Hybrid</div>
+            <div class="value">${esc(j.remote_hybrid || 'Not specified')}</div>
+          </div>
+        </div>`;
+
+        if (j.posting_url) {
+          html += `<div style="margin-bottom:20px"><a href="${esc(j.posting_url)}" target="_blank" class="btn" style="text-decoration:none;display:inline-block">View Original Posting &#x2197;</a></div>`;
+        }
+
+        if (s && s.breakdown_json) {
+          html += `<div class="section-title">Score Breakdown</div>`;
+          const breakdown = typeof s.breakdown_json === 'string' ? JSON.parse(s.breakdown_json) : s.breakdown_json;
+          if (Array.isArray(breakdown)) {
+            breakdown.forEach(b => {
+              const pct = (b.score / (b.maxScore || 10)) * 100;
+              html += `<div class="breakdown-bar">
+                <div class="name">${esc(b.category || b.name || 'Category')}</div>
+                <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
+                <div class="score-val">${b.score}/${b.maxScore || 10}</div>
+              </div>`;
+            });
+          } else if (typeof breakdown === 'object') {
+            Object.entries(breakdown).forEach(([key, val]) => {
+              const score = typeof val === 'object' ? val.score : val;
+              const max = typeof val === 'object' ? (val.maxScore || val.max || 10) : 10;
+              const pct = (score / max) * 100;
+              html += `<div class="breakdown-bar">
+                <div class="name">${esc(key)}</div>
+                <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
+                <div class="score-val">${score}/${max}</div>
+              </div>`;
+            });
+          }
+        }
+
+        if (a) {
+          html += `<div class="section-title">Application Packet ${a.truth_pass ? '&#x2705; Verified' : '&#x26A0;&#xFE0F; Unverified'}</div>`;
+          html += `<div class="download-grid">
+            <a class="download-card ${a.resume_docx_path ? '' : 'disabled'}" href="/api/dashboard/download/${jobId}/resume" target="_blank">
+              <div class="icon">&#x1F4C4;</div>
+              <div class="name">Resume</div>
+            </a>
+            <a class="download-card ${a.cover_docx_path ? '' : 'disabled'}" href="/api/dashboard/download/${jobId}/cover" target="_blank">
+              <div class="icon">&#x1F4DD;</div>
+              <div class="name">Cover Letter</div>
+            </a>
+            <a class="download-card ${a.evidence_map_path ? '' : 'disabled'}" href="/api/dashboard/download/${jobId}/evidence" target="_blank">
+              <div class="icon">&#x1F4CA;</div>
+              <div class="name">Evidence Map</div>
+            </a>
+            <a class="download-card ${a.verifier_json_path ? '' : 'disabled'}" href="/api/dashboard/download/${jobId}/verifier" target="_blank">
+              <div class="icon">&#x2705;</div>
+              <div class="name">Verifier Report</div>
+            </a>
+          </div>`;
+        }
+
+        if (data.contacts && data.contacts.length > 0) {
+          html += `<div class="section-title">Contacts (${data.contacts.length})</div>`;
+          data.contacts.forEach(c => {
+            html += `<div class="contact-card">
+              <div class="name">${esc(c.person_name || 'Unknown')}</div>
+              <div class="title">${esc(c.title || '')}</div>
+              <div class="links">
+                ${c.linkedin_url ? `<a href="${esc(c.linkedin_url)}" target="_blank">LinkedIn</a>` : ''}
+                ${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''}
+              </div>
+              ${c.rationale ? `<div style="margin-top:8px;font-size:13px;color:var(--text-dim)">${esc(c.rationale)}</div>` : ''}
+            </div>`;
+          });
+        }
+
+        if (data.evidence && data.evidence.length > 0) {
+          html += `<div class="section-title">Evidence Map (${data.evidence.length} claims)</div>`;
+          data.evidence.forEach(e => {
+            html += `<div class="evidence-row">
+              <div class="claim">${esc(e.claim_text || '')}</div>
+              <div class="quote">"${esc(e.evidence_quote || '')}"</div>
+              <span class="conf">${Math.round((e.confidence || 0) * 100)}% confidence</span>
+            </div>`;
+          });
+        }
+
+        if (j.jd_raw_text) {
+          html += `<div class="section-title">Job Description</div>`;
+          html += `<div class="jd-text">${esc(j.jd_raw_text)}</div>`;
+        }
+
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('modalOverlay').classList.add('active');
+      } catch (e) {
+        console.error('Job detail error:', e);
+        showToast('Failed to load job details', 'error');
+      }
+    }
+
+    function closeModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('modalOverlay').classList.remove('active');
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
+      document.getElementById('panel-' + tab).classList.add('active');
+      if (tab === 'runs') loadRuns();
+    }
+
+    async function triggerWorkflow() {
+      const btn = document.getElementById('triggerBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Running...';
+      showToast('Workflow started...', 'success');
+
+      try {
+        const data = await api('/trigger', { method: 'POST' });
+        showToast('Workflow triggered successfully!', 'success');
+        setTimeout(() => {
+          refreshData();
+        }, 5000);
+      } catch (e) {
+        showToast('Failed to trigger workflow', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Workflow';
+      }
+    }
+
+    function refreshData() {
+      loadDashboard();
+      loadJobs();
+    }
+
+    function esc(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = String(str);
+      return d.innerHTML;
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    refreshData();
+  </script>
+</body>
+</html>

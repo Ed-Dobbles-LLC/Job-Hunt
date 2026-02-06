@@ -12,6 +12,7 @@ import { inngest, inngestServe } from "./inngest";
 import { registerCronTrigger } from "../triggers/cronTriggers";
 import { jobMatchWorkflow } from "./workflows/jobMatchWorkflow";
 import { jobMatchAgent } from "./agents/jobMatchAgent";
+import { getDashboardRoutes } from "./dashboardRoutes";
 
 registerCronTrigger({
   cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "30 12 * * *",
@@ -109,10 +110,7 @@ export const mastra = new Mastra({
       },
     ],
     apiRoutes: [
-      // ======================================================================
-      // Inngest Integration Endpoint
-      // ======================================================================
-      // Integrates Mastra workflows with Inngest for event-driven execution via inngest functions.
+      ...getDashboardRoutes(),
       {
         path: "/api/inngest",
         method: "ALL",
