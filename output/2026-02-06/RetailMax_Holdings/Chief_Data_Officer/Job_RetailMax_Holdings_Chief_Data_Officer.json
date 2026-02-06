@@ -1,0 +1,49 @@
+{
+  "job_id": 2026,
+  "company": "RetailMax Holdings",
+  "title": "Chief Data Officer",
+  "total_score": 73,
+  "contacts": [
+    {
+      "title": "Chief Human Resources Officer",
+      "rationale": "Likely involved in hiring for executive roles like Chief Data Officer."
+    },
+    {
+      "title": "VP of Talent Acquisition",
+      "rationale": "Responsible for sourcing and recruiting senior leadership roles."
+    },
+    {
+      "title": "CEO",
+      "rationale": "Direct report for the Chief Data Officer role, may be involved in the selection process."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "May have insights into the data strategy and hiring needs for the CDO role."
+    },
+    {
+      "title": "VP of Data Strategy",
+      "rationale": "Relevant to the role and may be involved in defining the data organization."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles executive-level hiring processes."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "Likely to collaborate closely with the Chief Data Officer on technology initiatives."
+    },
+    {
+      "title": "VP of AI/ML",
+      "rationale": "May be involved in AI/ML adoption across the organization."
+    },
+    {
+      "title": "Director of Data Governance",
+      "rationale": "Relevant to the data governance aspect of the CDO role."
+    },
+    {
+      "title": "VP of Supply Chain Analytics",
+      "rationale": "May collaborate with the CDO on supply chain data initiatives."
+    }
+  ],
+  "truth_pass": true
+}

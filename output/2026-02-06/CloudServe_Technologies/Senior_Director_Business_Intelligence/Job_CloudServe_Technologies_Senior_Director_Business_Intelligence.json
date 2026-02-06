@@ -1,0 +1,49 @@
+{
+  "job_id": 1,
+  "company": "CloudServe Technologies",
+  "title": "Senior Director, Business Intelligence",
+  "total_score": 69,
+  "contacts": [
+    {
+      "title": "VP of Business Intelligence",
+      "rationale": "Likely oversees BI strategy and would be involved in hiring for this role."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "May be directly responsible for analytics and BI teams."
+    },
+    {
+      "title": "Director of Talent Acquisition",
+      "rationale": "Responsible for recruiting senior-level positions."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Likely involved in strategic decisions for BI and analytics roles."
+    },
+    {
+      "title": "Senior Recruiter",
+      "rationale": "Handles recruitment for senior positions like this one."
+    },
+    {
+      "title": "VP of Data & Analytics",
+      "rationale": "May have oversight of BI and analytics functions."
+    },
+    {
+      "title": "Director of BI",
+      "rationale": "Directly relevant to the role and may be a peer or hiring manager."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "May be involved in decisions related to BI infrastructure modernization."
+    },
+    {
+      "title": "VP of Product Analytics",
+      "rationale": "Could be a stakeholder for BI initiatives related to product teams."
+    },
+    {
+      "title": "HR Business Partner",
+      "rationale": "Supports hiring managers in recruitment for senior roles."
+    }
+  ],
+  "truth_pass": true
+}

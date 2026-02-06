@@ -1,0 +1,49 @@
+{
+  "job_id": 1,
+  "company": "MedCore Health Systems",
+  "title": "Director of Data Engineering & Analytics",
+  "total_score": 66,
+  "contacts": [
+    {
+      "title": "VP of Data",
+      "rationale": "Likely oversees data engineering and analytics functions, relevant to the role."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "Directly involved in analytics strategy and execution, relevant to the role."
+    },
+    {
+      "title": "Director of Data Engineering",
+      "rationale": "Peer or hiring manager for the position, directly relevant."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Executive responsible for data strategy, likely involved in hiring decisions."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles talent acquisition for MedCore Health Systems."
+    },
+    {
+      "title": "HR Manager",
+      "rationale": "Coordinates hiring processes and may provide insights into the role."
+    },
+    {
+      "title": "VP of Engineering",
+      "rationale": "May oversee technical teams including data engineering."
+    },
+    {
+      "title": "Director of Population Health Analytics",
+      "rationale": "Relevant to the healthcare analytics focus of the role."
+    },
+    {
+      "title": "Data Platform Architect",
+      "rationale": "Involved in designing next-generation data platforms, relevant to the role."
+    },
+    {
+      "title": "Clinical Analytics Manager",
+      "rationale": "Collaborates on population health analytics, relevant to the role."
+    }
+  ],
+  "truth_pass": true
+}

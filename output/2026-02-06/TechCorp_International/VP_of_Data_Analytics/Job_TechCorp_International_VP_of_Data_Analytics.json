@@ -1,0 +1,29 @@
+{
+  "job_id": 12345,
+  "company": "TechCorp International",
+  "title": "VP of Data & Analytics",
+  "total_score": 75,
+  "contacts": [
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Likely oversees the data strategy and would be a key stakeholder for this role."
+    },
+    {
+      "title": "VP of Analytics",
+      "rationale": "Directly relevant to the role and may be a peer or hiring manager."
+    },
+    {
+      "title": "Head of Data Science",
+      "rationale": "May lead a sub-function under the VP of Data & Analytics."
+    },
+    {
+      "title": "Recruiter - Data & Analytics",
+      "rationale": "Responsible for sourcing candidates for this role."
+    },
+    {
+      "title": "Director of Data Engineering",
+      "rationale": "May report to the VP of Data & Analytics and have insights into the team structure."
+    }
+  ],
+  "truth_pass": true
+}

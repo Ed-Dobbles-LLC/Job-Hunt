@@ -1,0 +1,94 @@
+import pg from "pg";
+
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export async function initDatabase(): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS runs (
+        run_id TEXT PRIMARY KEY,
+        start_ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        end_ts TIMESTAMPTZ,
+        status TEXT NOT NULL DEFAULT 'running',
+        errors_json JSONB
+      );
+
+      CREATE TABLE IF NOT EXISTS jobs (
+        job_id SERIAL PRIMARY KEY,
+        source TEXT,
+        source_message_id TEXT,
+        company TEXT,
+        title TEXT,
+        location TEXT,
+        remote_hybrid TEXT,
+        posting_url TEXT,
+        date_posted TEXT,
+        date_ingested TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        jd_raw_text TEXT,
+        jd_hash TEXT,
+        url_canonical TEXT,
+        status TEXT NOT NULL DEFAULT 'new'
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_jd_hash ON jobs(jd_hash) WHERE jd_hash IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS scores (
+        job_id INTEGER PRIMARY KEY REFERENCES jobs(job_id),
+        total_score REAL,
+        breakdown_json JSONB
+      );
+
+      CREATE TABLE IF NOT EXISTS artifacts (
+        id SERIAL PRIMARY KEY,
+        job_id INTEGER REFERENCES jobs(job_id),
+        resume_docx_path TEXT,
+        cover_docx_path TEXT,
+        evidence_map_path TEXT,
+        verifier_json_path TEXT,
+        prompt_version TEXT,
+        model_used TEXT,
+        created_ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        truth_pass BOOLEAN DEFAULT FALSE
+      );
+
+      CREATE TABLE IF NOT EXISTS evidence_map (
+        id SERIAL PRIMARY KEY,
+        job_id INTEGER REFERENCES jobs(job_id),
+        claim_id TEXT,
+        claim_text TEXT,
+        evidence_quote TEXT,
+        evidence_source_key TEXT,
+        confidence REAL
+      );
+
+      CREATE TABLE IF NOT EXISTS contacts (
+        id SERIAL PRIMARY KEY,
+        job_id INTEGER REFERENCES jobs(job_id),
+        person_name TEXT,
+        title TEXT,
+        linkedin_url TEXT,
+        email TEXT,
+        rank INTEGER,
+        rationale TEXT,
+        message_draft TEXT
+      );
+    `);
+  } finally {
+    client.release();
+  }
+}
+
+export async function query(text: string, params?: any[]): Promise<any> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(text, params);
+    return result;
+  } finally {
+    client.release();
+  }
+}
+
+export { pool };

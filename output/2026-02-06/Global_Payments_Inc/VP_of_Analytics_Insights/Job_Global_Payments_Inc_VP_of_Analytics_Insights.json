@@ -1,0 +1,49 @@
+{
+  "job_id": 2026,
+  "company": "Global Payments Inc.",
+  "title": "VP of Analytics & Insights",
+  "total_score": 76,
+  "contacts": [
+    {
+      "title": "VP of Data",
+      "rationale": "Likely to oversee analytics and insights functions, relevant to the role."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "Directly relevant to the analytics leadership scope of the role."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "May be the hiring manager or closely involved in the decision-making process."
+    },
+    {
+      "title": "Director of Insights",
+      "rationale": "Could be a peer or subordinate role, useful for networking."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Responsible for managing the hiring process and initial screening."
+    },
+    {
+      "title": "VP of Strategy",
+      "rationale": "May collaborate with analytics leadership on strategic initiatives."
+    },
+    {
+      "title": "VP of Technology",
+      "rationale": "Likely to work closely with analytics teams on data platforms and tools."
+    },
+    {
+      "title": "Chief Technology Officer",
+      "rationale": "May oversee the technical infrastructure supporting analytics."
+    },
+    {
+      "title": "VP of Product",
+      "rationale": "Could collaborate on data-driven product strategies."
+    },
+    {
+      "title": "VP of Operations",
+      "rationale": "May interact with analytics teams for operational insights and efficiencies."
+    }
+  ],
+  "truth_pass": true
+}

@@ -9,70 +9,14 @@ import { z } from "zod";
 import { sharedPostgresStorage } from "./storage";
 import { inngest, inngestServe } from "./inngest";
 
-// ======================================================================
-// Option 1: FOR TIME-BASED (CRON) TRIGGERS
-// ======================================================================
-// Call registerCronTrigger() BEFORE the Mastra initialization below.
-//
-// Example:
-//   import { registerCronTrigger } from "../triggers/cronTriggers";
-//   import { myWorkflow } from "./workflows/myWorkflow";
-//
-//   registerCronTrigger({
-//     cronExpression: "0 8 * * *", // Daily at 8 AM
-//     workflow: myWorkflow
-//   });
-//
-// See src/triggers/cronTriggers.ts for details
-// ======================================================================
-// Option 2: FOR WEBHOOK-BASED TRIGGERS
-// ======================================================================
-// Spread trigger registration functions into this apiRoutes array.
-//
-// Pattern:
-//   import { registerYourTrigger } from "../triggers/yourTriggers";
-//   import { myWorkflow } from "./workflows/myWorkflow";
-//   import { inngest } from "./inngest";
-//
-//   ...registerYourTrigger({
-//     triggerType: "your/event.type",
-//     handler: async (mastra, triggerInfo, runId) => {
-//       // Extract what you need from the payload
-//       ...
-//
-//       // Create a run of the workflow unless one was provided
-//       if (!runId) {
-//         runId = (await myWorkflow.createRunAsync()).runId;
-//       }
-//       // Start the workflow
-//       return await inngest.send({
-//         name: `workflow.${myWorkflow.id}`,
-//         data: {
-//           runId,
-//           inputData: {
-//             // Your input data here
-//           },
-//         },
-//       });
-//     }
-//   })
-//
-// Available: src/triggers/slackTriggers.ts, telegramTriggers.ts, exampleConnectorTrigger.ts
-// ======================================================================
+import { registerCronTrigger } from "../triggers/cronTriggers";
+import { jobMatchWorkflow } from "./workflows/jobMatchWorkflow";
+import { jobMatchAgent } from "./agents/jobMatchAgent";
 
-// ======================================================================
-// IMPORT YOUR AGENTS AND WORKFLOWS
-// ======================================================================
-// Import your custom agents and workflows here.
-// See src/examples/ directory for complete examples:
-// - src/examples/exampleAgent.ts
-// - src/examples/exampleWorkflow.ts
-// - src/examples/exampleTool.ts
-//
-// Example imports:
-// import { myAgent } from "./agents/myAgent";
-// import { myWorkflow } from "./workflows/myWorkflow";
-// ======================================================================
+registerCronTrigger({
+  cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "30 12 * * *",
+  workflow: jobMatchWorkflow,
+});
 
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
@@ -117,10 +61,8 @@ class ProductionPinoLogger extends MastraLogger {
 
 export const mastra = new Mastra({
   storage: sharedPostgresStorage,
-  // Register your workflows here
-  workflows: {},
-  // Register your agents here
-  agents: {},
+  workflows: { jobMatchWorkflow },
+  agents: { jobMatchAgent },
   bundler: {
     // A few dependencies are not properly picked up by
     // the bundler if they are not added directly to the

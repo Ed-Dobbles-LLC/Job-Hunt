@@ -1,0 +1,33 @@
+{
+  "job_id": 67890,
+  "company": "InnovateFin Corp",
+  "title": "Head of Analytics & Data Science",
+  "total_score": 80,
+  "contacts": [
+    {
+      "title": "VP of Data",
+      "rationale": "Likely to oversee or collaborate with the Head of Analytics & Data Science role."
+    },
+    {
+      "title": "Head of Analytics",
+      "rationale": "Directly relevant to the role and may be the hiring manager."
+    },
+    {
+      "title": "Chief Data Officer",
+      "rationale": "Likely to be involved in strategic data leadership hiring decisions."
+    },
+    {
+      "title": "Director of Data Science",
+      "rationale": "May be a peer or report to the Head of Analytics & Data Science."
+    },
+    {
+      "title": "Recruiter",
+      "rationale": "Handles hiring processes and can provide application updates."
+    },
+    {
+      "title": "Talent Acquisition Manager",
+      "rationale": "Responsible for senior-level hiring at InnovateFin Corp."
+    }
+  ],
+  "truth_pass": true
+}
