@@ -78,6 +78,7 @@ export function getDashboardRoutes() {
           const result = await query(`
             SELECT j.job_id, j.company, j.title, j.location, j.remote_hybrid,
                    j.posting_url, j.status, j.date_ingested, j.compensation,
+                   j.user_action,
                    s.total_score,
                    CASE WHEN a.id IS NOT NULL THEN true ELSE false END as has_artifacts,
                    a.truth_pass
@@ -176,6 +177,27 @@ export function getDashboardRoutes() {
           return c.json({ success: true, ...data });
         } catch (err: any) {
           logger?.error(`❌ [dashboard] Trigger error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/dashboard/jobs/:id/action",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        const jobId = c.req.param("id");
+        try {
+          const body = await c.req.json();
+          const action = body.action;
+          if (!['applied', 'deleted', null].includes(action)) {
+            return c.json({ error: "Invalid action. Use 'applied', 'deleted', or null." }, 400);
+          }
+          logger?.info(`📊 [dashboard] Setting job ${jobId} action to: ${action}`);
+          await query("UPDATE jobs SET user_action = $1 WHERE job_id = $2", [action, jobId]);
+          return c.json({ success: true, job_id: jobId, action });
+        } catch (err: any) {
+          logger?.error(`❌ [dashboard] Action update error: ${err.message}`);
           return c.json({ error: err.message }, 500);
         }
       },

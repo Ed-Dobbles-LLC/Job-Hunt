@@ -223,6 +223,79 @@
       color: var(--accent);
     }
 
+    .folder-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .folder-tab {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .folder-tab:hover { border-color: var(--accent); color: var(--text); }
+    .folder-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+    .folder-tab .count {
+      background: rgba(255,255,255,0.15);
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 12px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .folder-tab.active .count { background: rgba(255,255,255,0.25); }
+
+    .action-btns {
+      display: flex;
+      gap: 4px;
+    }
+
+    .action-btn {
+      padding: 3px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .action-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    .action-btn.applied {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .action-btn.deleted {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .action-btn.undo {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     .modal-overlay {
       display: none;
       position: fixed;
@@ -478,6 +551,12 @@
     </div>
 
     <div class="panel active" id="panel-jobs">
+      <div class="folder-tabs" id="folderTabs">
+        <button class="folder-tab active" onclick="setFolder('new')">New <span class="count" id="count-new">0</span></button>
+        <button class="folder-tab" onclick="setFolder('applied')">Applied <span class="count" id="count-applied">0</span></button>
+        <button class="folder-tab" onclick="setFolder('deleted')">Dismissed <span class="count" id="count-deleted">0</span></button>
+        <button class="folder-tab" onclick="setFolder('all')">All <span class="count" id="count-all">0</span></button>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -489,6 +568,7 @@
               <th class="sortable" data-sort="status" onclick="sortJobs('status')">Status</th>
               <th class="sortable" data-sort="artifacts" onclick="sortJobs('artifacts')">Artifacts</th>
               <th class="sortable" data-sort="date" onclick="sortJobs('date')">Date</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="jobsBody"></tbody>
@@ -533,6 +613,7 @@
     const API = '/api/dashboard';
     let allJobs = [];
     let currentSort = { field: 'score', dir: 'desc' };
+    let currentFolder = 'new';
 
     async function api(path, opts) {
       const res = await fetch(API + path, opts);
@@ -613,8 +694,73 @@
       applySortAndRender();
     }
 
+    function updateFolderCounts() {
+      const newCount = allJobs.filter(j => !j.user_action).length;
+      const appliedCount = allJobs.filter(j => j.user_action === 'applied').length;
+      const deletedCount = allJobs.filter(j => j.user_action === 'deleted').length;
+      document.getElementById('count-new').textContent = newCount;
+      document.getElementById('count-applied').textContent = appliedCount;
+      document.getElementById('count-deleted').textContent = deletedCount;
+      document.getElementById('count-all').textContent = allJobs.length;
+    }
+
+    function setFolder(folder) {
+      currentFolder = folder;
+      document.querySelectorAll('.folder-tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.folder-tab[onclick="setFolder('${folder}')"]`).classList.add('active');
+      applySortAndRender();
+    }
+
+    function getFilteredJobs() {
+      switch (currentFolder) {
+        case 'new': return allJobs.filter(j => !j.user_action);
+        case 'applied': return allJobs.filter(j => j.user_action === 'applied');
+        case 'deleted': return allJobs.filter(j => j.user_action === 'deleted');
+        default: return allJobs;
+      }
+    }
+
+    function actionButtons(j) {
+      if (j.user_action === 'applied') {
+        return `<div class="action-btns">
+          <span class="action-btn applied">Applied</span>
+          <button class="action-btn undo" onclick="event.stopPropagation(); setJobAction(${j.job_id}, null)">Undo</button>
+        </div>`;
+      }
+      if (j.user_action === 'deleted') {
+        return `<div class="action-btns">
+          <span class="action-btn deleted">Dismissed</span>
+          <button class="action-btn undo" onclick="event.stopPropagation(); setJobAction(${j.job_id}, null)">Undo</button>
+        </div>`;
+      }
+      return `<div class="action-btns">
+        <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'applied')">Applied</button>
+        <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'deleted')">Dismiss</button>
+      </div>`;
+    }
+
+    async function setJobAction(jobId, action) {
+      try {
+        await api('/jobs/' + jobId + '/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        const job = allJobs.find(j => j.job_id === jobId);
+        if (job) job.user_action = action;
+        updateFolderCounts();
+        applySortAndRender();
+        showToast(action ? `Marked as ${action}` : 'Moved back to New', 'success');
+      } catch (e) {
+        console.error('Action error:', e);
+        showToast('Failed to update job', 'error');
+      }
+    }
+
     function applySortAndRender() {
-      const sorted = [...allJobs].sort((a, b) => {
+      updateFolderCounts();
+      const filtered = getFilteredJobs();
+      const sorted = [...filtered].sort((a, b) => {
         let va, vb;
         switch (currentSort.field) {
           case 'company': va = (a.company || '').toLowerCase(); vb = (b.company || '').toLowerCase(); break;
@@ -634,7 +780,11 @@
 
       const tbody = document.getElementById('jobsBody');
       if (sorted.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="icon">&#x1F4ED;</div><div>No jobs found. Run the workflow to fetch and process job alerts.</div></div></td></tr>';
+        const emptyMsg = currentFolder === 'new' ? 'No new jobs to review.' :
+                         currentFolder === 'applied' ? 'No jobs marked as applied yet.' :
+                         currentFolder === 'deleted' ? 'No dismissed jobs.' :
+                         'No jobs found. Run the workflow to fetch and process job alerts.';
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">&#x1F4ED;</div><div>${emptyMsg}</div></div></td></tr>`;
         return;
       }
       tbody.innerHTML = sorted.map(j => `
@@ -646,6 +796,7 @@
           <td>${statusBadge(j.status)}</td>
           <td>${j.has_artifacts ? (j.truth_pass ? '&#x2705;' : '&#x26A0;&#xFE0F;') : '-'}</td>
           <td>${formatDate(j.date_ingested)}</td>
+          <td>${actionButtons(j)}</td>
         </tr>
       `).join('');
     }
