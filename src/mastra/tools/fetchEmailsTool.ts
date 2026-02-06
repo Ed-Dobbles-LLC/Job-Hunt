@@ -6,6 +6,7 @@ import * as path from "path";
 import { workspacePath } from "./paths";
 
 const USE_FIXTURES = process.env.USE_FIXTURES === "true";
+const GMAIL_LABEL = process.env.GMAIL_LABEL || "JOB_ALERTS";
 
 function loadFixtureEmails(): RawEmail[] {
   const fixturesDir = workspacePath("fixtures/emails");
@@ -56,7 +57,7 @@ export const fetchEmailsTool = createTool({
   }),
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
-    const label = context.labelName || "JOB_ALERTS";
+    const label = context.labelName || GMAIL_LABEL;
     const max = context.maxResults || 20;
 
     if (USE_FIXTURES) {

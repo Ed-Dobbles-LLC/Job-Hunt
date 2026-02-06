@@ -81,7 +81,59 @@ export async function fetchEmailsFromLabel(
     console.log(
       `📧 Label "${labelName}" not found. Available labels: ${labels.map((l) => l.name).join(", ")}`,
     );
-    return [];
+    console.log(
+      `📧 Falling back to search for LinkedIn job alert emails`,
+    );
+    const fallbackResponse = await gmail.users.messages.list({
+      userId: "me",
+      maxResults,
+      q: 'from:(jobalerts-noreply@linkedin.com OR jobs-noreply@linkedin.com OR indeed.com) subject:(job OR jobs OR alert) is:unread',
+    });
+    const fallbackIds = fallbackResponse.data.messages || [];
+    if (fallbackIds.length === 0) {
+      console.log(`📧 No job alert emails found via search fallback either`);
+      return [];
+    }
+    console.log(`📧 Found ${fallbackIds.length} job alert emails via search fallback`);
+    const fallbackEmails: RawEmail[] = [];
+    for (const msg of fallbackIds) {
+      try {
+        const full = await gmail.users.messages.get({
+          userId: "me",
+          id: msg.id!,
+          format: "full",
+        });
+        const headers = full.data.payload?.headers || [];
+        const subject = headers.find((h) => h.name === "Subject")?.value || "No Subject";
+        const from = headers.find((h) => h.name === "From")?.value || "Unknown";
+        const date = headers.find((h) => h.name === "Date")?.value || new Date().toISOString();
+        let body = "";
+        const payload = full.data.payload;
+        if (payload?.body?.data) {
+          body = Buffer.from(payload.body.data, "base64").toString("utf-8");
+        } else if (payload?.parts) {
+          for (const part of payload.parts) {
+            if (part.mimeType === "text/plain" && part.body?.data) {
+              body = Buffer.from(part.body.data, "base64").toString("utf-8");
+              break;
+            }
+            if (part.mimeType === "text/html" && part.body?.data) {
+              body = Buffer.from(part.body.data, "base64").toString("utf-8");
+              body = body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+            }
+          }
+        }
+        fallbackEmails.push({ id: msg.id!, subject, from, date, body });
+        await gmail.users.messages.modify({
+          userId: "me",
+          id: msg.id!,
+          requestBody: { removeLabelIds: ["UNREAD"] },
+        });
+      } catch (err) {
+        console.error(`Failed to fetch message ${msg.id}:`, err);
+      }
+    }
+    return fallbackEmails;
   }
 
   const messagesResponse = await gmail.users.messages.list({

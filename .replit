@@ -73,4 +73,8 @@ outputType = "automations"
 [userenv]
 
 [userenv.development]
-USE_FIXTURES = "true"
+USE_FIXTURES = "false"
+
+[userenv.shared]
+CLAY_WEBHOOK_URL = "https://api.clay.com/v3/sources/webhook/pull-in-data-from-a-webhook-63d46a35-c3e8-4c82-82de-523c9718d608"
+GMAIL_LABEL = "Job Alerts"
