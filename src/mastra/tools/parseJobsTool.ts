@@ -19,6 +19,18 @@ export interface ParsedJob {
 function normalizeUrl(url: string): string {
   try {
     const u = new URL(url);
+
+    if (u.hostname.includes("linkedin.com")) {
+      const jobIdMatch = u.pathname.match(/\/jobs\/view\/(\d+)/);
+      if (jobIdMatch) {
+        return `https://www.linkedin.com/jobs/view/${jobIdMatch[1]}`;
+      }
+      const commMatch = u.pathname.match(/\/comm\/jobs\/view\/(\d+)/);
+      if (commMatch) {
+        return `https://www.linkedin.com/jobs/view/${commMatch[1]}`;
+      }
+    }
+
     const keepParams = ["view", "id", "job"];
     const newParams = new URLSearchParams();
     for (const [key, value] of u.searchParams) {
@@ -180,7 +192,7 @@ export const parseJobsTool = createTool({
           job.title,
           job.location,
           remoteHybrid,
-          job.posting_url || "",
+          canonicalUrl || job.posting_url || "",
           new Date().toISOString().split("T")[0],
           jdText,
           jdHash,
