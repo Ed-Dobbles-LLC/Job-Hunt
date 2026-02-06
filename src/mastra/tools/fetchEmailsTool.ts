@@ -7,7 +7,7 @@ import { workspacePath } from "./paths";
 import { query } from "./db";
 
 const USE_FIXTURES = process.env.USE_FIXTURES === "true";
-const GMAIL_LABEL = process.env.GMAIL_LABEL || "JOB_ALERTS";
+const GMAIL_LABEL = process.env.GMAIL_LABEL || "Job Alerts";
 
 async function loadImportedEmails(maxResults: number): Promise<RawEmail[]> {
   try {
