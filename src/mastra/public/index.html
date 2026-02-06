@@ -862,7 +862,14 @@
         </div>`;
 
         if (j.posting_url) {
-          html += `<div style="margin-bottom:20px"><a href="${esc(j.posting_url)}" target="_blank" class="btn" style="text-decoration:none;display:inline-block">View Original Posting &#x2197;</a></div>`;
+          const searchUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((j.title || '') + ' ' + (j.company || ''))}`;
+          html += `<div style="margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap">
+            <a href="${esc(j.posting_url)}" target="_blank" class="btn" style="text-decoration:none;display:inline-block">View Original Posting &#x2197;</a>
+            <a href="${searchUrl}" target="_blank" class="btn" style="text-decoration:none;display:inline-block">Search on LinkedIn &#x1F50D;</a>
+          </div>`;
+        } else if (j.company || j.title) {
+          const searchUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((j.title || '') + ' ' + (j.company || ''))}`;
+          html += `<div style="margin-bottom:20px"><a href="${searchUrl}" target="_blank" class="btn" style="text-decoration:none;display:inline-block">Search on LinkedIn &#x1F50D;</a></div>`;
         }
 
         if (s && s.breakdown_json) {
