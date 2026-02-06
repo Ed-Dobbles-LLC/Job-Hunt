@@ -47,7 +47,8 @@ const fetchAndParseStep = createStep({
     } else {
       logger?.info("📧 [Step 1] Fetching from Gmail");
       const { fetchEmailsFromLabel } = await import("../tools/gmailClient");
-      emailsData = await fetchEmailsFromLabel("JOB_ALERTS", 20);
+      const gmailLabel = process.env.GMAIL_LABEL || "Job Alerts";
+      emailsData = await fetchEmailsFromLabel(gmailLabel, 20);
     }
 
     if (emailsData.length === 0) {
