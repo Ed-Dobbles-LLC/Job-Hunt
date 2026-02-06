@@ -194,6 +194,35 @@
     .clickable { cursor: pointer; }
     .clickable:hover td { background: rgba(99, 102, 241, 0.08); }
 
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      padding-right: 24px;
+    }
+
+    th.sortable:hover { color: var(--text); }
+
+    th.sortable::after {
+      content: '\2195';
+      position: absolute;
+      right: 8px;
+      opacity: 0.3;
+      font-size: 11px;
+    }
+
+    th.sortable.sort-asc::after {
+      content: '\2191';
+      opacity: 1;
+      color: var(--accent);
+    }
+
+    th.sortable.sort-desc::after {
+      content: '\2193';
+      opacity: 1;
+      color: var(--accent);
+    }
+
     .modal-overlay {
       display: none;
       position: fixed;
@@ -453,13 +482,13 @@
         <table>
           <thead>
             <tr>
-              <th>Company</th>
-              <th>Title</th>
-              <th>Location</th>
-              <th>Score</th>
-              <th>Status</th>
-              <th>Artifacts</th>
-              <th>Date</th>
+              <th class="sortable" data-sort="company" onclick="sortJobs('company')">Company</th>
+              <th class="sortable" data-sort="title" onclick="sortJobs('title')">Title</th>
+              <th class="sortable" data-sort="location" onclick="sortJobs('location')">Location</th>
+              <th class="sortable sort-desc" data-sort="score" onclick="sortJobs('score')">Score</th>
+              <th class="sortable" data-sort="status" onclick="sortJobs('status')">Status</th>
+              <th class="sortable" data-sort="artifacts" onclick="sortJobs('artifacts')">Artifacts</th>
+              <th class="sortable" data-sort="date" onclick="sortJobs('date')">Date</th>
             </tr>
           </thead>
           <tbody id="jobsBody"></tbody>
@@ -502,6 +531,8 @@
 
   <script>
     const API = '/api/dashboard';
+    let allJobs = [];
+    let currentSort = { field: 'score', dir: 'desc' };
 
     async function api(path, opts) {
       const res = await fetch(API + path, opts);
@@ -559,25 +590,64 @@
     async function loadJobs() {
       try {
         const data = await api('/jobs');
-        const tbody = document.getElementById('jobsBody');
-        if (data.jobs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="icon">&#x1F4ED;</div><div>No jobs found. Run the workflow to fetch and process job alerts.</div></div></td></tr>';
-          return;
-        }
-        tbody.innerHTML = data.jobs.map(j => `
-          <tr class="clickable" onclick="openJobDetail(${j.job_id})">
-            <td><strong>${esc(j.company || '-')}</strong></td>
-            <td>${esc(j.title || '-')}</td>
-            <td>${esc(j.location || '-')}</td>
-            <td>${scoreBadge(j.total_score)}</td>
-            <td>${statusBadge(j.status)}</td>
-            <td>${j.has_artifacts ? (j.truth_pass ? '&#x2705;' : '&#x26A0;&#xFE0F;') : '-'}</td>
-            <td>${formatDate(j.date_ingested)}</td>
-          </tr>
-        `).join('');
+        allJobs = data.jobs || [];
+        applySortAndRender();
       } catch (e) {
         console.error('Jobs load error:', e);
       }
+    }
+
+    function sortJobs(field) {
+      if (currentSort.field === field) {
+        currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.field = field;
+        currentSort.dir = (field === 'score' || field === 'artifacts' || field === 'date') ? 'desc' : 'asc';
+      }
+      document.querySelectorAll('th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.sort === currentSort.field) {
+          th.classList.add(currentSort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+      });
+      applySortAndRender();
+    }
+
+    function applySortAndRender() {
+      const sorted = [...allJobs].sort((a, b) => {
+        let va, vb;
+        switch (currentSort.field) {
+          case 'company': va = (a.company || '').toLowerCase(); vb = (b.company || '').toLowerCase(); break;
+          case 'title': va = (a.title || '').toLowerCase(); vb = (b.title || '').toLowerCase(); break;
+          case 'location': va = (a.location || '').toLowerCase(); vb = (b.location || '').toLowerCase(); break;
+          case 'score': va = a.total_score ?? -1; vb = b.total_score ?? -1; break;
+          case 'status': va = (a.status || '').toLowerCase(); vb = (b.status || '').toLowerCase(); break;
+          case 'artifacts': va = a.has_artifacts ? 1 : 0; vb = b.has_artifacts ? 1 : 0; break;
+          case 'date': va = a.date_ingested ? new Date(a.date_ingested).getTime() : 0; vb = b.date_ingested ? new Date(b.date_ingested).getTime() : 0; break;
+          default: va = 0; vb = 0;
+        }
+        let cmp = 0;
+        if (typeof va === 'string') cmp = va.localeCompare(vb);
+        else cmp = va < vb ? -1 : va > vb ? 1 : 0;
+        return currentSort.dir === 'asc' ? cmp : -cmp;
+      });
+
+      const tbody = document.getElementById('jobsBody');
+      if (sorted.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="icon">&#x1F4ED;</div><div>No jobs found. Run the workflow to fetch and process job alerts.</div></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = sorted.map(j => `
+        <tr class="clickable" onclick="openJobDetail(${j.job_id})">
+          <td><strong>${esc(j.company || '-')}</strong></td>
+          <td>${esc(j.title || '-')}</td>
+          <td>${esc(j.location || '-')}</td>
+          <td>${scoreBadge(j.total_score)}</td>
+          <td>${statusBadge(j.status)}</td>
+          <td>${j.has_artifacts ? (j.truth_pass ? '&#x2705;' : '&#x26A0;&#xFE0F;') : '-'}</td>
+          <td>${formatDate(j.date_ingested)}</td>
+        </tr>
+      `).join('');
     }
 
     async function loadRuns() {
