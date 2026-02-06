@@ -175,25 +175,13 @@ export async function fetchEmailsFromLabel(
 
       if (targetLabel) {
         console.log(`📧 [Gmail] Found label "${labelName}" (${targetLabel.id})`);
-        const emails = await fetchMessagesFromGmail(
-          directGmail,
-          "is:unread",
-          maxResults,
-          false,
-        );
-
-        if (emails.length > 0) {
-          console.log(`📧 [Gmail] Fetched ${emails.length} unread emails from label "${labelName}"`);
-          return emails;
-        }
-
         const labelResponse = await directGmail.users.messages.list({
           userId: "me",
           labelIds: [targetLabel.id!],
           maxResults,
-          q: "is:unread",
         });
         const labelMsgIds = labelResponse.data.messages || [];
+        console.log(`📧 [Gmail] Found ${labelMsgIds.length} emails in label "${labelName}"`);
         if (labelMsgIds.length > 0) {
           const labelEmails: RawEmail[] = [];
           for (const msg of labelMsgIds) {
