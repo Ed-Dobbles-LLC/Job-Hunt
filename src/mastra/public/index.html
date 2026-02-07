@@ -885,15 +885,23 @@
               </div>`;
             });
           } else if (typeof breakdown === 'object') {
+            const maxScores = { role_level_match: 25, leadership_scope: 15, data_ai_stack_match: 15, domain_relevance: 10, location_fit: 10, compensation: 10, transformation_mandate: 10, company_preference: 5, execution_mode_match: 10 };
             Object.entries(breakdown).forEach(([key, val]) => {
+              if (key === 'execution_mode_reason') return;
               const score = typeof val === 'object' ? val.score : val;
-              const max = typeof val === 'object' ? (val.maxScore || val.max || 10) : 10;
-              const pct = (score / max) * 100;
+              const max = typeof val === 'object' ? (val.maxScore || val.max || 10) : (maxScores[key] || 10);
+              const isNeg = score < 0;
+              const pct = isNeg ? 0 : Math.min(100, (score / max) * 100);
+              const barColor = isNeg ? 'var(--red)' : 'var(--accent)';
+              const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
               html += `<div class="breakdown-bar">
-                <div class="name">${esc(key)}</div>
-                <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
-                <div class="score-val">${score}/${max}</div>
+                <div class="name">${esc(label)}</div>
+                <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+                <div class="score-val" style="${isNeg ? 'color:var(--red)' : ''}">${score}/${max}</div>
               </div>`;
+              if (key === 'execution_mode_match' && breakdown.execution_mode_reason) {
+                html += `<div style="font-size:12px;color:var(--text-dim);margin:-4px 0 8px 212px;font-style:italic">${esc(breakdown.execution_mode_reason)}</div>`;
+              }
             });
           }
         }

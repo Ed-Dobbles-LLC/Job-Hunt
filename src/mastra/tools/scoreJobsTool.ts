@@ -10,10 +10,102 @@ function loadInventory(): any {
   return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
 }
 
+const EXECUTION_MODE_NEGATIVE_SIGNALS = [
+  "agentic",
+  "autonomous agents",
+  "ai-driven ci/cd",
+  "pipelines",
+  "mlops",
+  "deployment",
+  "monitoring",
+  "infra",
+  "architect",
+  "software engineering",
+  "platform",
+  "latency",
+  "slas",
+  "kubernetes",
+  "devops",
+];
+
+const EXECUTION_MODE_POSITIVE_SIGNALS = [
+  "roadmap",
+  "strategy",
+  "business value",
+  "operating model",
+  "adoption",
+  "portfolio",
+  "executive stakeholders",
+  "board",
+  "roi",
+  "transformation",
+];
+
+export function classifyExecutionMode(jd: string): {
+  score: number;
+  reason: string;
+} {
+  const text = jd.toLowerCase();
+
+  const posHits = EXECUTION_MODE_POSITIVE_SIGNALS.filter((s) =>
+    text.includes(s),
+  );
+  const negHits = EXECUTION_MODE_NEGATIVE_SIGNALS.filter((s) =>
+    text.includes(s),
+  );
+
+  const posCount = posHits.length;
+  const negCount = negHits.length;
+
+  let score: number;
+  const reasons: string[] = [];
+
+  if (negCount >= 6) {
+    score = -20;
+    reasons.push(
+      `Heavy engineering/platform depth expected (${negCount} infra signals: ${negHits.slice(0, 4).join(", ")}...)`,
+    );
+  } else if (negCount >= 3 && posCount <= 1) {
+    score = -10;
+    reasons.push(
+      `Engineering-heavy AI ownership (${negCount} infra signals: ${negHits.join(", ")})`,
+    );
+  } else if (posCount >= 4 && negCount <= 1) {
+    score = 10;
+    reasons.push(
+      `Strategy-led role (${posCount} strategy signals: ${posHits.slice(0, 4).join(", ")})`,
+    );
+  } else if (posCount >= 2 && negCount <= 1) {
+    score = 5;
+    reasons.push(
+      `Mostly strategy-led (${posCount} strategy signals, ${negCount} infra signals)`,
+    );
+  } else if (negCount >= 3 && posCount >= 2) {
+    score = -5;
+    reasons.push(
+      `Mixed but leans engineering (${posCount} strategy vs ${negCount} infra signals)`,
+    );
+  } else {
+    score = 0;
+    reasons.push(
+      `Mixed strategy + execution (${posCount} strategy, ${negCount} infra signals)`,
+    );
+  }
+
+  if (posHits.length > 0) {
+    reasons.push(`Strategy: ${posHits.join(", ")}`);
+  }
+  if (negHits.length > 0) {
+    reasons.push(`Infra: ${negHits.join(", ")}`);
+  }
+
+  return { score, reason: reasons.join(". ") };
+}
+
 function scoreSingleJob(
   job: any,
   inventory: any,
-): { total: number; breakdown: Record<string, number> } {
+): { total: number; breakdown: Record<string, any> } {
   const jd = (job.jd_raw_text || "").toLowerCase();
   const title = (job.title || "").toLowerCase();
   const location = (job.location || "").toLowerCase();
@@ -114,7 +206,14 @@ function scoreSingleJob(
   const prefCount = companyPrefSignals.filter((s) => jd.includes(s)).length;
   breakdown.company_preference = Math.min(5, Math.round((prefCount / 2) * 5));
 
-  const total = Object.values(breakdown).reduce((sum, v) => sum + v, 0);
+  const execMode = classifyExecutionMode(jd);
+  breakdown.execution_mode_match = execMode.score;
+  breakdown.execution_mode_reason = execMode.reason as any;
+
+  const total = Object.entries(breakdown).reduce((sum, [key, v]) => {
+    if (key === "execution_mode_reason") return sum;
+    return sum + (v as number);
+  }, 0);
 
   return { total, breakdown };
 }
