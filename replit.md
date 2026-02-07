@@ -75,6 +75,12 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
   - Config in `src/mastra/tools/scoringConfig.ts` with adjustable thresholds and term lists
   - Integrated into scoreSingleJob breakdown and dashboard display
   - 7 unit tests in `tests/specInflationPenalty.test.ts`
+- Added hard flag rules engine for gating and automatic disqualification
+  - Rules defined in `src/mastra/tools/hardFlagRules.ts` (JSON config structure)
+  - Engine in `src/mastra/tools/hardFlagEngine.ts` returns flags[], gate_override, score_adjustment
+  - 5 rules: CI/CD+K8s+MLOps depth (REVIEW -10), Sponsorship (NO), Onsite mismatch (REVIEW -10), PhD required (REVIEW -5), IC/Staff engineer (NO -15)
+  - Integrated into scoreSingleJob report: hardFlags, gateStatus, hardFlagAdjustment
+  - 28 unit tests in `tests/hardFlagEngine.test.ts`
 - Enhanced scoring output with structured ScoreReport
   - `scoreSingleJob` now returns `report: ScoreReport` with categories, penalties, riskFlags
   - Each category includes score, maxPoints, and up to 5 sorted matchedPhrases

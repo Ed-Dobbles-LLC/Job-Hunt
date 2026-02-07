@@ -15,6 +15,8 @@ import {
   type ScoringWeights,
   type ScoringProfile,
 } from "./scoringConfig";
+import { evaluateRules } from "./hardFlagEngine";
+import type { GateStatus } from "./hardFlagRules";
 
 function loadInventory(): any {
   const inventoryPath = workspacePath("experience_inventory.json");
@@ -201,6 +203,12 @@ export interface CategoryDetail {
   reason?: string;
 }
 
+export interface HardFlagResult {
+  ruleId: string;
+  ruleName: string;
+  message: string;
+}
+
 export interface ScoreReport {
   total: number;
   mode: string;
@@ -209,6 +217,9 @@ export interface ScoreReport {
   categories: Record<string, CategoryDetail>;
   penalties: { key: string; score: number; reason: string }[];
   riskFlags: string[];
+  hardFlags: HardFlagResult[];
+  gateStatus: GateStatus;
+  hardFlagAdjustment: number;
 }
 
 const DISPLAY_ORDER = [
@@ -461,17 +472,39 @@ export function scoreSingleJob(
     if (categories[key]) orderedCategories[key] = categories[key];
   }
 
+  const hardFlagResult = evaluateRules(job, inventory);
+
+  for (const hf of hardFlagResult.flags) {
+    riskFlags.push(`[${hf.ruleId}] ${hf.message}`);
+  }
+
+  if (hardFlagResult.scoreAdjustment !== 0) {
+    penalties.push({
+      key: "hard_flag_rules",
+      score: hardFlagResult.scoreAdjustment,
+      reason: hardFlagResult.flags.map((f) => f.message).join("; "),
+    });
+  }
+
+  const adjustedTotal = Math.max(0, Math.min(100, normalized + Math.round((hardFlagResult.scoreAdjustment / maxPos) * 100)));
+
+  breakdown._hard_flag_adjustment = hardFlagResult.scoreAdjustment;
+  breakdown._gate_status = hardFlagResult.gateOverride;
+
   const report: ScoreReport = {
-    total: normalized,
+    total: adjustedTotal,
     mode,
     rawTotal,
     maxPossible: maxPos,
     categories: orderedCategories,
     penalties: penalties.sort((a, b) => a.key.localeCompare(b.key)),
     riskFlags: riskFlags.sort(),
+    hardFlags: hardFlagResult.flags,
+    gateStatus: hardFlagResult.gateOverride,
+    hardFlagAdjustment: hardFlagResult.scoreAdjustment,
   };
 
-  return { total: normalized, breakdown, mode, report };
+  return { total: adjustedTotal, breakdown, mode, report };
 }
 
 export function prettyPrintReport(report: ScoreReport, jobLabel?: string): string {
@@ -502,6 +535,16 @@ export function prettyPrintReport(report: ScoreReport, jobLabel?: string): strin
     lines.push(divider);
     for (const pen of report.penalties) {
       lines.push(`  ${pen.key.padEnd(28)} ${String(pen.score).padStart(4)}  ${pen.reason}`);
+    }
+  }
+
+  if (report.hardFlags.length > 0) {
+    lines.push("");
+    lines.push(`HARD FLAGS  (gate: ${report.gateStatus}, adjustment: ${report.hardFlagAdjustment})`);
+    lines.push(divider);
+    for (const hf of report.hardFlags) {
+      lines.push(`  [${hf.ruleId}] ${hf.ruleName}`);
+      lines.push(`          ${hf.message}`);
     }
   }
 
