@@ -10,6 +10,7 @@ import { buildOutputTool } from "../tools/buildOutputTool";
 import { enrichJobsTool } from "../tools/enrichJobsTool";
 import { clayEnrichTool } from "../tools/clayEnrichTool";
 import { extractInventoryTool } from "../tools/extractInventoryTool";
+import { extractJDRequirementsTool } from "../tools/extractJDRequirementsTool";
 import * as fs from "fs";
 import { workspacePath } from "../tools/paths";
 
@@ -66,12 +67,13 @@ Every evidence mapping entry MUST include:
 3. **parse-jobs**: Store parsed jobs in the database with deduplication
 4. **enrich-jobs**: Update job records with enriched data from web search
 5. **clay-enrich**: Send jobs to Clay webhook for company/contact enrichment
-6. **score-jobs**: Score and rank jobs against the experience inventory
-7. **generate-resume**: Submit a tailored resume with mandatory evidence pointers
-8. **generate-cover-letter**: Submit a tailored cover letter with mandatory evidence pointers
-9. **verify-truth**: Run 5-layer truth verification (evidence completeness, pointer validity, quote accuracy, fact allowlist, unknown compliance)
-10. **build-output**: Create the output folder with DOCX files and reports
-11. **webSearch**: Search the web for current information
+6. **extract-jd-requirements**: Extract structured requirements from a job description (must_have, nice_to_have, leadership_scope, domain_context, tech_keywords, keywords_for_ats, red_flags with confidence scores)
+7. **score-jobs**: Score and rank jobs against the experience inventory
+8. **generate-resume**: Submit a tailored resume with mandatory evidence pointers
+9. **generate-cover-letter**: Submit a tailored cover letter with mandatory evidence pointers
+10. **verify-truth**: Run 5-layer truth verification (evidence completeness, pointer validity, quote accuracy, fact allowlist, unknown compliance)
+11. **build-output**: Create the output folder with DOCX files and reports
+12. **webSearch**: Search the web for current information
 
 ## WHEN PARSING LINKEDIN JOB ALERT EMAILS
 LinkedIn job alert emails contain brief listings with ONLY: job title, company name, location, and a LinkedIn URL. They do NOT contain full job descriptions. Your job:
@@ -130,6 +132,7 @@ Since we don't scrape LinkedIn, return target titles to search for (e.g., "VP Da
   model: openai("gpt-4o"),
   tools: {
     extractInventoryTool,
+    extractJDRequirementsTool,
     fetchEmailsTool,
     parseJobsTool,
     scoreJobsTool,

@@ -41,6 +41,7 @@ export async function initDatabase(): Promise<void> {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS level TEXT DEFAULT 'Unknown';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS simhash TEXT;
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS keywords JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS jd_requirements JSONB;
 
       CREATE TABLE IF NOT EXISTS scores (
         job_id INTEGER PRIMARY KEY REFERENCES jobs(job_id),
