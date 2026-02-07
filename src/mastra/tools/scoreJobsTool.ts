@@ -503,6 +503,8 @@ export function scoreSingleJob(
 
   breakdown._role_shape = roleShape.shape;
   breakdown._role_shape_confidence = roleShape.confidence;
+  breakdown._hard_flags = hardFlagResult.flags;
+  breakdown._risk_flags = riskFlags.sort();
 
   const report: ScoreReport = {
     total: adjustedTotal,

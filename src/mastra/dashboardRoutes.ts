@@ -84,7 +84,7 @@ export function getDashboardRoutes() {
             SELECT j.job_id, j.company, j.title, j.location, j.remote_hybrid,
                    j.posting_url, j.status, j.date_ingested, j.compensation,
                    j.user_action,
-                   s.total_score,
+                   s.total_score, s.breakdown_json,
                    CASE WHEN a.id IS NOT NULL THEN true ELSE false END as has_artifacts,
                    a.truth_pass
             FROM jobs j
