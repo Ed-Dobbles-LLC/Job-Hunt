@@ -24,16 +24,23 @@ export async function initDatabase(): Promise<void> {
         title TEXT,
         location TEXT,
         remote_hybrid TEXT,
+        level TEXT DEFAULT 'Unknown',
         posting_url TEXT,
         date_posted TEXT,
         date_ingested TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         jd_raw_text TEXT,
         jd_hash TEXT,
+        simhash TEXT,
+        keywords JSONB DEFAULT '[]'::jsonb,
         url_canonical TEXT,
         status TEXT NOT NULL DEFAULT 'new'
       );
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_jd_hash ON jobs(jd_hash) WHERE jd_hash IS NOT NULL;
+
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS level TEXT DEFAULT 'Unknown';
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS simhash TEXT;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS keywords JSONB DEFAULT '[]'::jsonb;
 
       CREATE TABLE IF NOT EXISTS scores (
         job_id INTEGER PRIMARY KEY REFERENCES jobs(job_id),

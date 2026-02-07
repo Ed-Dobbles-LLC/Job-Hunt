@@ -1,7 +1,15 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { createHash } from "crypto";
 import { query } from "./db";
+import {
+  normalizeText,
+  computeHash,
+  computeSimhash,
+  isNearDuplicate,
+  hammingDistance,
+  classifyLevel,
+  extractKeywords,
+} from "./jobPostingSchema";
 
 export interface ParsedJob {
   company: string;
@@ -45,18 +53,6 @@ function normalizeUrl(url: string): string {
   }
 }
 
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function hashJD(text: string): string {
-  return createHash("sha256").update(normalizeText(text)).digest("hex");
-}
-
 function detectRemoteHybrid(text: string): string {
   const lower = text.toLowerCase();
   if (lower.includes("remote") && lower.includes("hybrid"))
@@ -82,6 +78,8 @@ function extractCompensation(text: string): string {
   }
   return "";
 }
+
+const SIMHASH_NEAR_DUPE_THRESHOLD = 10;
 
 export const parseJobsTool = createTool({
   id: "parse-jobs",
@@ -122,7 +120,11 @@ export const parseJobsTool = createTool({
 
     for (const job of context.jobs) {
       const jdText = job.jd_text || "";
-      const jdHash = hashJD(jdText || `${job.company}|${job.title}|${job.location}|${job.posting_url || ""}`);
+      const hashInput = jdText || `${job.company}|${job.title}|${job.location}|${job.posting_url || ""}`;
+      const jdHash = computeHash(hashInput);
+      const simhash = computeSimhash(jdText);
+      const level = classifyLevel(job.title);
+      const keywords = extractKeywords(jdText);
       const canonicalUrl = job.posting_url
         ? normalizeUrl(job.posting_url)
         : null;
@@ -158,6 +160,29 @@ export const parseJobsTool = createTool({
         }
       }
 
+      if (jdText && simhash !== "0000000000000000") {
+        const recentJobs = await query(
+          `SELECT job_id, simhash, company, title FROM jobs
+           WHERE simhash IS NOT NULL AND simhash != '0000000000000000'
+           AND date_ingested > NOW() - INTERVAL '14 days'`,
+        );
+        let nearDupe = false;
+        for (const row of recentJobs.rows) {
+          if (isNearDuplicate(simhash, row.simhash, SIMHASH_NEAR_DUPE_THRESHOLD)) {
+            const dist = hammingDistance(simhash, row.simhash);
+            logger?.info(
+              `🔄 [parseJobs] Near-duplicate by simhash (distance=${dist}): ${job.company} - ${job.title} ≈ ${row.company} - ${row.title} (job_id=${row.job_id})`,
+            );
+            nearDupe = true;
+            break;
+          }
+        }
+        if (nearDupe) {
+          duplicateCount++;
+          continue;
+        }
+      }
+
       const normalizedCompany = normalizeText(job.company);
       const normalizedTitle = normalizeText(job.title);
       const normalizedLocation = normalizeText(job.location);
@@ -182,8 +207,8 @@ export const parseJobsTool = createTool({
       }
 
       const insertResult = await query(
-        `INSERT INTO jobs (source, source_message_id, company, title, location, remote_hybrid, posting_url, date_posted, jd_raw_text, jd_hash, url_canonical, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'new')
+        `INSERT INTO jobs (source, source_message_id, company, title, location, remote_hybrid, level, posting_url, date_posted, jd_raw_text, jd_hash, simhash, keywords, url_canonical, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'new')
          RETURNING job_id`,
         [
           job.source || "email",
@@ -192,17 +217,20 @@ export const parseJobsTool = createTool({
           job.title,
           job.location,
           remoteHybrid,
+          level,
           canonicalUrl || job.posting_url || "",
           new Date().toISOString().split("T")[0],
           jdText,
           jdHash,
+          simhash,
+          JSON.stringify(keywords),
           canonicalUrl,
         ],
       );
 
       newJobIds.push(insertResult.rows[0].job_id);
       logger?.info(
-        `✅ [parseJobs] Stored new job: ${job.company} - ${job.title} (ID: ${insertResult.rows[0].job_id})`,
+        `✅ [parseJobs] Stored new job: ${job.company} - ${job.title} (level=${level}, keywords=${keywords.length}, ID: ${insertResult.rows[0].job_id})`,
       );
     }
 

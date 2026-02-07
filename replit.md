@@ -16,6 +16,7 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
 - `src/mastra/workflows/jobMatchWorkflow.ts` - 5-step workflow pipeline
 - `src/mastra/agents/jobMatchAgent.ts` - Agent with all tools, web search, and truthfulness instructions
 - `src/mastra/tools/` - 11 tools (fetch emails, parse jobs, enrich jobs, clay enrich, score jobs, extract inventory, generate resume, generate cover letter, verify truth, build output)
+- `src/mastra/tools/jobPostingSchema.ts` - Formal JobPosting Zod schema + SimHash + keyword extraction + level classifier
 - `src/mastra/tools/factRegistry.ts` - FactRegistry module: extracts all allowable facts from inventory indexed by ID
 - `src/mastra/tools/entityAllowlist.ts` - EntityAllowlist + EntityDenylist: typed allowlist categories + placeholder/artifact detection
 - `src/mastra/tools/extractInventoryTool.ts` - Tool that builds FactRegistry at runtime (must be called before packet generation)
@@ -81,6 +82,16 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
 - Import endpoint has API key auth and duplicate detection
 
 ## Recent Changes (2026-02-07)
+- Formalized JobPosting schema with SimHash near-duplicate detection
+  - New `jobPostingSchema.ts`: Zod-validated schema with all fields (id, source, url, company, title, location, level, date_posted, description, keywords, hash, simhash, status)
+  - SimHash implementation (FNV-1a 64-bit) with hamming distance comparison for content-based fuzzy dedup
+  - Level classifier: IC/Manager/Director/Senior Director/VP/SVP/C-Suite from title patterns
+  - Keyword extraction using domain-aware boost patterns + frequency analysis
+  - `isNewSinceYesterday()` helper for marking recent jobs
+  - `buildJobPosting()` builder for canonical job construction
+  - DB: added `level`, `simhash`, `keywords` (JSONB) columns to jobs table
+  - parseJobsTool now uses 4-layer dedup: exact hash → canonical URL → simhash near-dupe → company/title/location
+  - 53 unit tests in `tests/jobPostingSchema.test.ts`
 - Built Extract→Tailor→Verify→Render truthfulness pipeline
   - New FactRegistry module (`factRegistry.ts`): extracts all allowable facts from inventory indexed by ID
   - New extract-inventory tool: builds FactRegistry at runtime before packet generation
