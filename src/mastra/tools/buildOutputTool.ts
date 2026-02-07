@@ -241,6 +241,7 @@ export const buildOutputTool = createTool({
     coverLetterText: z.string(),
     evidenceMap: z.array(z.object({
       claim_text: z.string(),
+      evidence_id: z.string().optional(),
       evidence_quote: z.string(),
       evidence_source_key: z.string(),
       confidence: z.number(),
@@ -374,7 +375,7 @@ export const buildOutputTool = createTool({
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           actualJobId,
-          evidence.claim_text?.substring(0, 20),
+          evidence.evidence_id || evidence.claim_text?.substring(0, 20),
           evidence.claim_text,
           evidence.evidence_quote,
           evidence.evidence_source_key,

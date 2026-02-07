@@ -15,7 +15,9 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
 - `src/mastra/index.ts` - Main Mastra instance registration + import-emails API routes
 - `src/mastra/workflows/jobMatchWorkflow.ts` - 5-step workflow pipeline
 - `src/mastra/agents/jobMatchAgent.ts` - Agent with all tools, web search, and truthfulness instructions
-- `src/mastra/tools/` - 9 tools (fetch emails, parse jobs, enrich jobs, clay enrich, score jobs, generate resume, generate cover letter, verify truth, build output)
+- `src/mastra/tools/` - 11 tools (fetch emails, parse jobs, enrich jobs, clay enrich, score jobs, extract inventory, generate resume, generate cover letter, verify truth, build output)
+- `src/mastra/tools/factRegistry.ts` - FactRegistry module: extracts all allowable facts from inventory indexed by ID
+- `src/mastra/tools/extractInventoryTool.ts` - Tool that builds FactRegistry at runtime (must be called before packet generation)
 - `src/mastra/tools/paths.ts` - Workspace path helper (critical for Mastra bundling)
 - `src/mastra/tools/enrichJobsTool.ts` - Saves web search enrichment results to DB
 - `src/mastra/tools/clayEnrichTool.ts` - Clay webhook for company/contact enrichment
@@ -36,8 +38,23 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
 1. **fetch-and-parse-emails**: Checks imported_emails DB, then Gmail label, then fixtures; uses agent to parse individual postings from LinkedIn job alerts (title, company, location, URL only)
 2. **enrich-jobs-web-search**: For each parsed job lacking a full description, uses OpenAI web search to look up the role and saves enriched JD text to the DB. Sends to Clay webhook for company/contact enrichment.
 3. **score-and-shortlist**: Deterministic scoring against experience inventory using enriched JD text, selects top 10
-4. **generate-packets**: For each job: generate resume, cover letter, verify truth (dual: LLM + deterministic), build output folder
+4. **generate-packets**: For each job follows Extract→Tailor→Verify→Render pipeline:
+   - EXTRACT: Agent calls extract-inventory to build FactRegistry (indexed allowlist)
+   - TAILOR: Agent calls generate-resume + generate-cover-letter with evidence_id pointers per bullet/claim
+   - VERIFY: Agent calls verify-truth for 5-layer deterministic verification
+   - RENDER: Agent calls build-output to create DOCX files + JSON artifacts
 5. **send-digest**: Builds HTML digest email with results summary
+
+## Truthfulness Pipeline (Extract → Tailor → Verify → Render)
+- **FactRegistry** (`factRegistry.ts`): Extracts all allowable facts from experience_inventory.json indexed by ID — employers, titles, dates, metrics, tools, degrees, certifications, bullet texts
+- **Evidence Pointers**: Every resume bullet and cover letter claim requires evidence_id (inventory ID like exp-001-b2), evidence_quote (exact text from inventory), evidence_source_key (JSON path), confidence (0.7-1.0)
+- **5-Layer Verification**:
+  - Layer 1: Evidence Completeness — every resume bullet and cover letter claim has an evidence pointer
+  - Layer 2: Pointer Validity — every evidence_id exists in the FactRegistry
+  - Layer 3: Quote Accuracy — every evidence_quote matches text in the inventory (fuzzy with 60% word overlap)
+  - Layer 4: Fact Allowlist — all numbers, tools, dates, certifications in generated text exist in inventory
+  - Layer 5: Unknown Compliance — no ungrounded assertions or fabricated company claims
+- **Non-negotiable rules**: Never invent employers/titles/dates/tools/degrees/certs/metrics; state unknowns as unknown; ATS-friendly DOCX from deterministic templates
 
 ## Cron Schedule
 - Expression: `30 12 * * *` (UTC) = 6:30 AM Chicago time (CST)
@@ -55,13 +72,23 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
 - All file paths must use `workspacePath()` helper from `src/mastra/tools/paths.ts` because Mastra bundles to `.mastra/output/`
 - Tool results from multi-step agent calls have structure `{type, toolCallId, toolName, args, result}` - access actual data via `.result`
 - The buildOutputTool resolves actual DB job_id by company+title lookup to handle agent-generated IDs
-- Deterministic verifier checks numbers (3+ digit), tool names, dates against inventory JSON
+- Verifier runs 5-layer deterministic checks: evidence completeness, pointer validity, quote accuracy, fact allowlist, unknown compliance
 - LinkedIn job alerts only contain title, company, location, URL — no full JD. Web search enrichment fills in the details.
 - Enrichment step processes jobs in batches of 3 to prevent token limits
 - Agent instructions explicitly restrict tool usage during enrichment to webSearch + enrich-jobs only
 - Import endpoint has API key auth and duplicate detection
 
 ## Recent Changes (2026-02-07)
+- Built Extract→Tailor→Verify→Render truthfulness pipeline
+  - New FactRegistry module (`factRegistry.ts`): extracts all allowable facts from inventory indexed by ID
+  - New extract-inventory tool: builds FactRegistry at runtime before packet generation
+  - 5-layer deterministic verification in verifyTruthTool: evidence completeness, pointer validity, quote accuracy, fact allowlist, unknown compliance
+  - Evidence pointers now require evidence_id (inventory bullet ID like exp-001-b2) in resume and cover letter tools
+  - Agent instructions enforce strict truthfulness: never invent, always cite, state unknowns
+  - Workflow generate-packets step instructs agent to follow Extract→Tailor→Verify→Render sequence
+  - 64 unit tests in `tests/verifyTruth5Layer.test.ts` covering all 5 layers + FactRegistry + integration
+- Added RoleShape and Gate Status columns to dashboard (sortable, color-coded badges)
+  - Job detail modal shows RoleShape label/confidence, gate status, hard flags, risk flags
 - Refactored scoring system with configurable weights and dual-mode support
   - Split `data_ai_stack_match` into `ai_strategy_stack` (0-8) and `ai_engineering_stack` (0-7)
   - Added dominance check: if eng > strat AND VP+ title, applies -5 adjustment (precision mode only)

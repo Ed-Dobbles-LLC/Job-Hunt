@@ -402,14 +402,22 @@ const generatePacketsStep = createStep({
           [
             {
               role: "user",
-              content: `Generate a complete application packet for this job. You MUST follow these steps in order:
+              content: `Generate a complete application packet for this job. You MUST follow the Extract → Tailor → Verify → Render pipeline:
 
-1. Call the generate-resume tool with a tailored resume for this job
-2. Call the generate-cover-letter tool with a tailored cover letter (250-350 words)
-3. Call the verify-truth tool to verify all claims
-4. Call the build-output tool to create the output folder with all files
+1. **EXTRACT**: Call the extract-inventory tool to build the FactRegistry
+2. **TAILOR**: Call generate-resume with tailored resume content + evidence pointers (each with evidence_id = inventory bullet ID like exp-001-b2)
+3. **TAILOR**: Call generate-cover-letter with cover letter text + evidence pointers (each with evidence_id)
+4. **VERIFY**: Call verify-truth to run 5-layer deterministic verification
+5. **RENDER**: Call build-output to create the output folder with all files
 
 IMPORTANT: Include contact discovery targets (3-10 recommended titles to search for at this company, since we cannot scrape LinkedIn).
+
+## EVIDENCE POINTER REQUIREMENTS
+Every resume bullet and cover letter factual claim MUST have an evidence pointer with:
+- evidence_id: The inventory bullet ID (e.g., "exp-001-b2", "edu-001", "cert-001")
+- evidence_quote: Exact or near-exact text from the inventory
+- evidence_source_key: Path in inventory JSON (e.g., "experience[0].bullets[1]")
+- confidence: 0.7-1.0
 
 ## JOB DETAILS
 Company: ${job.company}
@@ -425,12 +433,13 @@ ${job.jd_raw_text}
 ## EXPERIENCE INVENTORY (SOURCE OF TRUTH)
 ${inventoryText}
 
-Remember:
-- ONLY use facts from the inventory
-- Every claim needs an evidence mapping
-- Resume: 1-2 pages, ATS-friendly, no tables
-- Cover letter: 250-350 words
-- After generating, verify truth, then build output`,
+## STRICT TRUTHFULNESS RULES
+- ONLY use facts from the inventory — NEVER invent employers, titles, dates, tools, degrees, certs, or metrics
+- Every resume bullet needs an evidence_id pointing to inventory
+- Every cover letter claim with metrics/tools/achievements needs an evidence_id
+- If something is unknown, state it as unknown — never fabricate
+- Numbers and metrics must be EXACT copies from inventory
+- After generating, verify truth with 5-layer check, then build output`,
             },
           ],
           { maxSteps: 10 },
