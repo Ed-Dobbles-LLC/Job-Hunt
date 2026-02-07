@@ -49,6 +49,17 @@ The truthfulness verifier (`truthfulnessVerifier.ts`) is a deterministic, advers
 -   **Line Item Fixes**: Actionable `line_item_fixes[]` suggestions with `location`, `current_text`, `suggested_text`, `reason`, and `violation_type`.
 -   **Evidence Pointer Validation**: Cross-checks every `source_hash` against inventory bullet IDs, validates `evidence_quote` similarity (≥60% word match ratio), ensures confidence ≥ 0.7, and verifies pointer count matches bullet count.
 
+### Automated Fail/Regenerate Loop (Mini-prompt 9)
+The `generateVerifiedPacketTool` (`generateVerifiedPacketTool.ts`) orchestrates the full Generate→Verify→Correct loop. Key design decisions:
+-   **Loop Structure**: Generates resume + cover letter JSON, runs 6-layer verifier, and if verification fails, re-prompts the LLM with violation details and per-type correction instructions. Repeats up to N attempts (configurable 1-5, default 3).
+-   **Correction Prompts**: `buildCorrectionPrompt` constructs targeted re-prompts with the previous output, critical violations, suggested fixes, and type-specific correction instructions for all 6 violation types.
+-   **Selective Re-generation**: Only re-generates the document (resume or cover letter) that had violations — keeps clean documents unchanged between attempts.
+-   **Temperature Reduction**: Correction attempts use temperature 0.2 (vs 0.3/0.4 initial) for more deterministic output.
+-   **Best Attempt Tracking**: Tracks the attempt with the fewest critical violations (with warning-count tie-breaker). If all attempts fail, returns the best attempt rather than the last.
+-   **Human Review Packet**: On exhaustion, sets `human_review_required: true` with detailed `human_review_notes[]` listing remaining violations and suggested fixes for manual correction.
+-   **Attempt History**: Records each attempt's pass/fail, violation counts, violation types, and timestamp in `attempt_history[]`.
+-   **DB Persistence**: Saves `verified_packet` metadata (pass/fail, attempts_used, best_attempt, attempt_history, human_review_required) to `scores.breakdown_json`.
+
 ## External Dependencies
 -   **Database**: PostgreSQL (via Neon)
 -   **LLM**: OpenAI (gpt-4o with web search)

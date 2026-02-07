@@ -6,6 +6,7 @@ import { scoreJobsTool } from "../tools/scoreJobsTool";
 import { generateResumeTool } from "../tools/generateResumeTool";
 import { generateCoverLetterTool } from "../tools/generateCoverLetterTool";
 import { verifyTruthTool } from "../tools/verifyTruthTool";
+import { generateVerifiedPacketTool } from "../tools/generateVerifiedPacketTool";
 import { buildOutputTool } from "../tools/buildOutputTool";
 import { enrichJobsTool } from "../tools/enrichJobsTool";
 import { clayEnrichTool } from "../tools/clayEnrichTool";
@@ -142,6 +143,7 @@ Since we don't scrape LinkedIn, return target titles to search for (e.g., "VP Da
     generateResumeTool,
     generateCoverLetterTool,
     verifyTruthTool,
+    generateVerifiedPacketTool,
     buildOutputTool,
     enrichJobsTool,
     clayEnrichTool,
