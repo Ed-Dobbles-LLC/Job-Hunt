@@ -46,8 +46,11 @@ export async function initDatabase(): Promise<void> {
       CREATE TABLE IF NOT EXISTS scores (
         job_id INTEGER PRIMARY KEY REFERENCES jobs(job_id),
         total_score REAL,
-        breakdown_json JSONB
+        breakdown_json JSONB,
+        match_report JSONB
       );
+
+      ALTER TABLE scores ADD COLUMN IF NOT EXISTS match_report JSONB;
 
       CREATE TABLE IF NOT EXISTS artifacts (
         id SERIAL PRIMARY KEY,
