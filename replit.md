@@ -24,6 +24,23 @@ Truthfulness is a critical architectural principle, enforced through:
 
 The system also incorporates a formalized `JobPosting` schema with SimHash for near-duplicate detection, a level classifier, and keyword extraction. A sophisticated scoring system with configurable weights, a `SpecInflationPenalty`, `RoleShape` classification, and a hard flag rules engine determines job suitability.
 
+### Tailored Resume Generator (Mini-prompt 6)
+The resume generation pipeline uses a structured LLM prompt (`tailoredResumePrompt.ts`) with `generateObject` to produce a `TailoredResume` JSON. Key design decisions:
+-   **Entity Allowlist Lock-down**: Every entity (employer, title, date, metric, tool) must appear in the `EntityAllowlist` built from the inventory.
+-   **Evidence on Every Bullet**: Each `ResumeBullet` includes `source_hash` (inventory bullet ID) and `evidence_quote` (verbatim text).
+-   **Reject Behavior**: Unsupported JD requirements produce `gap_notes` with `requirement_text`, `reason`, and optional `closest_match` — never fabricated content.
+-   **ATS-Friendly**: No tables, no columns — plain sections (Summary, Experience, Skills, Education, Certifications).
+-   **Schema Constraints**: 1-5 experience entries, 1-6 bullets per role, `ats_keywords_used` array for keyword tracking.
+
+### Tailored Cover Letter Generator (Mini-prompt 7)
+The cover letter pipeline uses `tailoredCoverLetterPrompt.ts` with `generateObject` to produce a `TailoredCoverLetter` JSON. Key design decisions:
+-   **250-350 Word Constraint**: Enforced via schema and prompt instructions with `word_count` field.
+-   **1-3 Value Claims Max**: Each `ValueClaim` includes `claim_sentence`, `source_hash`, `evidence_quote`, and optional `metric_used`.
+-   **Executive Tone**: Specific, confident, forward-looking — no clichés or buzzword stuffing.
+-   **Company Research Todo**: Populated when company context is missing — prevents fabricating company-specific claims.
+-   **Evidence Pointers**: Required for ALL factual claims (not just value claims), with confidence ≥ 0.7.
+-   **Reject Behavior**: Same `gap_notes` pattern as resume for unsupported requirements.
+
 ## External Dependencies
 -   **Database**: PostgreSQL (via Neon)
 -   **LLM**: OpenAI (gpt-4o with web search)
