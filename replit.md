@@ -75,6 +75,13 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
   - Config in `src/mastra/tools/scoringConfig.ts` with adjustable thresholds and term lists
   - Integrated into scoreSingleJob breakdown and dashboard display
   - 7 unit tests in `tests/specInflationPenalty.test.ts`
+- Added RoleShape classifier (A/B/C/D categorization with confidence scoring)
+  - A = Strategy-Led AI/Data Leadership (ideal fit), B = Hybrid Strategy + Engineering (review), C = Analytics/BI Leadership, D = Engineering/Platform/IC-Heavy (poor fit)
+  - Classifier in `src/mastra/tools/roleShapeClassifier.ts` with 4 signal categories (strategy, engineering, analytics, leadership)
+  - Integrated into ScoreReport: `roleShape` field with shape, confidence, label, reason, and signal hits
+  - B/D shapes auto-generate risk flags for review
+  - Pretty print includes RoleShape line in header
+  - 36 unit tests in `tests/roleShapeClassifier.test.ts`
 - Added hard flag rules engine for gating and automatic disqualification
   - Rules defined in `src/mastra/tools/hardFlagRules.ts` (JSON config structure)
   - Engine in `src/mastra/tools/hardFlagEngine.ts` returns flags[], gate_override, score_adjustment

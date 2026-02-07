@@ -17,6 +17,7 @@ import {
 } from "./scoringConfig";
 import { evaluateRules } from "./hardFlagEngine";
 import type { GateStatus } from "./hardFlagRules";
+import { classifyRoleShape, type RoleShapeResult } from "./roleShapeClassifier";
 
 function loadInventory(): any {
   const inventoryPath = workspacePath("experience_inventory.json");
@@ -220,6 +221,7 @@ export interface ScoreReport {
   hardFlags: HardFlagResult[];
   gateStatus: GateStatus;
   hardFlagAdjustment: number;
+  roleShape: RoleShapeResult;
 }
 
 const DISPLAY_ORDER = [
@@ -491,6 +493,17 @@ export function scoreSingleJob(
   breakdown._hard_flag_adjustment = hardFlagResult.scoreAdjustment;
   breakdown._gate_status = hardFlagResult.gateOverride;
 
+  const roleShape = classifyRoleShape(job);
+
+  if (roleShape.shape === "D") {
+    riskFlags.push(`RoleShape D: ${roleShape.label} (confidence ${roleShape.confidence})`);
+  } else if (roleShape.shape === "B" && roleShape.confidence >= 0.5) {
+    riskFlags.push(`RoleShape B: ${roleShape.label} — review engineering ownership scope`);
+  }
+
+  breakdown._role_shape = roleShape.shape;
+  breakdown._role_shape_confidence = roleShape.confidence;
+
   const report: ScoreReport = {
     total: adjustedTotal,
     mode,
@@ -502,6 +515,7 @@ export function scoreSingleJob(
     hardFlags: hardFlagResult.flags,
     gateStatus: hardFlagResult.gateOverride,
     hardFlagAdjustment: hardFlagResult.scoreAdjustment,
+    roleShape,
   };
 
   return { total: adjustedTotal, breakdown, mode, report };
@@ -515,6 +529,7 @@ export function prettyPrintReport(report: ScoreReport, jobLabel?: string): strin
   lines.push(`SCORE REPORT${jobLabel ? `: ${jobLabel}` : ""}`);
   lines.push(divider);
   lines.push(`Total: ${report.total}/100  (raw ${report.rawTotal}/${report.maxPossible})  mode=${report.mode}`);
+  lines.push(`RoleShape: ${report.roleShape.shape} — ${report.roleShape.label}  (confidence ${report.roleShape.confidence})`);
   lines.push("");
   lines.push("CATEGORY BREAKDOWN");
   lines.push(divider);
