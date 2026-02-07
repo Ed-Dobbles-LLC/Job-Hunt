@@ -81,6 +81,20 @@ The `formattingValidator.ts` provides a deterministic pre-PDF validation layer t
 -   **Block Sending**: Returns `blockSending: true` when any critical violation exists, preventing digest/output from proceeding.
 -   **Combined Report**: `validatePacketFormatting()` runs both resume and cover letter checks in parallel, returns unified pass/fail with per-document breakdowns.
 
+### Contact Discovery — Compliant (Mini-prompt 12)
+The `contactDiscoveryTool` (`contactDiscoveryTool.ts`) identifies outreach targets for job applications using only publicly available sources. Key design decisions:
+-   **Compliance First**: Only uses web search on public sources (company websites, press releases, news articles, public directories). Never scrapes LinkedIn or violates platform ToS.
+-   **Two-Step Web Search + Structuring**: Step 1 uses `generateText` with OpenAI `webSearchPreview` tool to gather real public data. Step 2 uses `generateObject` with gpt-4o to structure the web search results into typed OutreachTargets. Web search results are passed as context with explicit anti-fabrication constraints.
+-   **7 Role Categories**: hiring_manager, department_head, recruiter, team_lead, hr_contact, executive_sponsor, peer — each with a fixed priority ranking.
+-   **Function Inference**: Automatically infers target department from job title using regex pattern matching (12 function categories).
+-   **Hiring Chain Builder**: Generates appropriate title chain based on job seniority level (exec/manager/IC) and target function.
+-   **3-Tier Ranking**: Targets ranked by role priority → confidence score → named vs unnamed.
+-   **Confidence Scoring**: 1.0 = confirmed named person, 0.7-0.9 = person found but title uncertain, 0.5 = role exists but person unknown, 0.3 = inferred from structure.
+-   **None-Found Fallback**: When no named contacts are discovered, returns actionable fallback with recommended LinkedIn/Google search queries, suggested titles, and alternative channels (careers page, alumni networks, conferences).
+-   **DB Persistence**: Saves ranked contacts to the `contacts` table with job_id, rank, rationale, and outreach angle.
+-   **Search Query Generation**: Every target includes a concrete search query the user can run to find/verify the contact.
+-   **Outreach Angle**: Each target includes a suggested talking point for initial outreach.
+
 ## External Dependencies
 -   **Database**: PostgreSQL (via Neon)
 -   **LLM**: OpenAI (gpt-4o with web search)

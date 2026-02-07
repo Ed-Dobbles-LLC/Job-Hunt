@@ -15,6 +15,7 @@ import { extractJDRequirementsTool } from "../tools/extractJDRequirementsTool";
 import { matchScorerTool } from "../tools/matchScorerTool";
 import { sendDigestTool } from "../tools/sendDigestTool";
 import { validateFormattingTool } from "../tools/validateFormattingTool";
+import { contactDiscoveryTool } from "../tools/contactDiscoveryTool";
 import * as fs from "fs";
 import { workspacePath } from "../tools/paths";
 
@@ -78,7 +79,9 @@ Every evidence mapping entry MUST include:
 10. **generate-cover-letter**: Submit a tailored cover letter with mandatory evidence pointers
 11. **verify-truth**: Run 5-layer truth verification (evidence completeness, pointer validity, quote accuracy, fact allowlist, unknown compliance)
 12. **build-output**: Create the output folder with DOCX files and reports
-13. **webSearch**: Search the web for current information
+13. **validate-formatting**: Pre-PDF formatting validation (placeholder detection, page counts, contact info, broken links)
+14. **discover-contacts**: Compliant contact discovery using web search on public sources — finds outreach targets (hiring managers, recruiters, department heads) and saves to contacts table
+15. **webSearch**: Search the web for current information
 
 ## WHEN PARSING LINKEDIN JOB ALERT EMAILS
 LinkedIn job alert emails contain brief listings with ONLY: job title, company name, location, and a LinkedIn URL. They do NOT contain full job descriptions. Your job:
@@ -131,8 +134,17 @@ The verify-truth tool will then run 5 deterministic layers:
 - Layer 4: Fact allowlist (all numbers, tools, dates, certs in inventory)
 - Layer 5: Unknown compliance (no ungrounded assertions)
 
-## CONTACT DISCOVERY
-Since we don't scrape LinkedIn, return target titles to search for (e.g., "VP Data", "Head of Analytics", "Recruiter") with rationale for why each contact type would be valuable.`,
+## CONTACT DISCOVERY (COMPLIANT)
+For shortlisted jobs, use the discover-contacts tool to find outreach targets. This tool:
+- Uses web search on PUBLIC sources only (company websites, press releases, news, public directories)
+- NEVER scrapes LinkedIn or violates any platform ToS
+- Identifies hiring managers, department heads, recruiters, and team leads
+- Ranks contacts by relevance to the specific role
+- Saves results to the contacts table
+- When no named contacts are found, provides fallback search queries and alternative channels
+
+Call discover-contacts with: job_id, company_name, job_title, location, and target_function (department).
+The tool will return ranked OutreachTargets with role_category, rationale, confidence, search_query, and outreach_angle.`,
 
   model: openai("gpt-4o"),
   tools: {
@@ -151,6 +163,7 @@ Since we don't scrape LinkedIn, return target titles to search for (e.g., "VP Da
     clayEnrichTool,
     sendDigestTool,
     validateFormattingTool,
+    contactDiscoveryTool,
     webSearch: openai.tools.webSearchPreview(),
   },
 });
