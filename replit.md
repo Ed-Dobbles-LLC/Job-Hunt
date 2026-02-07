@@ -41,6 +41,14 @@ The cover letter pipeline uses `tailoredCoverLetterPrompt.ts` with `generateObje
 -   **Evidence Pointers**: Required for ALL factual claims (not just value claims), with confidence ≥ 0.7.
 -   **Reject Behavior**: Same `gap_notes` pattern as resume for unsupported requirements.
 
+### Truthfulness Verifier (Mini-prompt 8)
+The truthfulness verifier (`truthfulnessVerifier.ts`) is a deterministic, adversarial 6-layer verification engine that assumes the generator may hallucinate. It takes `TailoredResume`, `TailoredCoverLetter`, `EntityAllowlist`, and `ExperienceInventory` as inputs and returns a strict JSON report. Key design decisions:
+-   **Pass/Fail Verdict**: `pass: true` only when zero critical violations exist.
+-   **6 Violation Types**: `NEW_ENTITY` (hallucinated employer/title/cert/degree), `UNSUPPORTED_METRIC` (fabricated numbers), `PLACEHOLDER` (denylist artifacts like template vars, lorem ipsum, code artifacts), `INCONSISTENT_DATE` (dates not in allowlist or chronologically invalid), `STYLE_RULE_BROKEN` (missing evidence pointers, invalid source_hash, low confidence, clichés, word count), `ATS_RISK` (tables, special chars, missing keywords).
+-   **Allowlist-Aware Placeholder Suppression**: Denylist matches that overlap with allowlisted entities (e.g., "Acme" in "Acme Financial Group") are automatically suppressed to prevent false positives.
+-   **Line Item Fixes**: Actionable `line_item_fixes[]` suggestions with `location`, `current_text`, `suggested_text`, `reason`, and `violation_type`.
+-   **Evidence Pointer Validation**: Cross-checks every `source_hash` against inventory bullet IDs, validates `evidence_quote` similarity (≥60% word match ratio), ensures confidence ≥ 0.7, and verifies pointer count matches bullet count.
+
 ## External Dependencies
 -   **Database**: PostgreSQL (via Neon)
 -   **LLM**: OpenAI (gpt-4o with web search)
