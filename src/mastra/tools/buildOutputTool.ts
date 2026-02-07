@@ -3,242 +3,35 @@ import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
 import { workspacePath } from "./paths";
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  HeadingLevel,
-  AlignmentType,
-} from "docx";
 import { query } from "./db";
+import { TailoredResumeSchema } from "./tailoredResumePrompt";
+import { TailoredCoverLetterSchema } from "./tailoredCoverLetterPrompt";
+import {
+  renderResumeDocx,
+  renderCoverLetterDocx,
+  convertDocxToPdf,
+  checkPagination,
+} from "./docxRenderer";
 
 function sanitizeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "_");
 }
 
-async function buildResumeDocx(
-  resumeData: any,
-  inventory: any,
-): Promise<Buffer> {
-  const profile = inventory.profile;
-
-  const children: Paragraph[] = [];
-
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: profile.name, bold: true, size: 32, font: "Calibri" }),
-      ],
-      alignment: AlignmentType.CENTER,
-    }),
-  );
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: `${profile.email} | ${profile.phone} | ${profile.location} | ${profile.linkedin}`,
-          size: 20,
-          font: "Calibri",
-        }),
-      ],
-      alignment: AlignmentType.CENTER,
-    }),
-  );
-  children.push(new Paragraph({ text: "" }));
-
-  children.push(
-    new Paragraph({
-      text: "PROFESSIONAL SUMMARY",
-      heading: HeadingLevel.HEADING_2,
-      children: [new TextRun({ text: "PROFESSIONAL SUMMARY", bold: true, size: 24, font: "Calibri" })],
-    }),
-  );
-  children.push(
-    new Paragraph({
-      children: [new TextRun({ text: resumeData.summary, size: 22, font: "Calibri" })],
-    }),
-  );
-  children.push(new Paragraph({ text: "" }));
-
-  children.push(
-    new Paragraph({
-      children: [new TextRun({ text: "EXPERIENCE", bold: true, size: 24, font: "Calibri" })],
-    }),
-  );
-
-  for (const exp of resumeData.experience) {
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: `${exp.title} | ${exp.employer}`,
-            bold: true,
-            size: 22,
-            font: "Calibri",
-          }),
-        ],
-      }),
-    );
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: `${exp.location} | ${exp.start_date} – ${exp.end_date}`,
-            italics: true,
-            size: 20,
-            font: "Calibri",
-          }),
-        ],
-      }),
-    );
-    for (const bullet of exp.bullets) {
-      children.push(
-        new Paragraph({
-          children: [new TextRun({ text: `• ${bullet}`, size: 22, font: "Calibri" })],
-          indent: { left: 360 },
-        }),
-      );
-    }
-    children.push(new Paragraph({ text: "" }));
-  }
-
-  children.push(
-    new Paragraph({
-      children: [new TextRun({ text: "SKILLS", bold: true, size: 24, font: "Calibri" })],
-    }),
-  );
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: resumeData.skills.join(" | "), size: 22, font: "Calibri" }),
-      ],
-    }),
-  );
-  children.push(new Paragraph({ text: "" }));
-
-  children.push(
-    new Paragraph({
-      children: [new TextRun({ text: "EDUCATION", bold: true, size: 24, font: "Calibri" })],
-    }),
-  );
-  for (const edu of resumeData.education) {
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: `${edu.degree} — ${edu.institution} (${edu.year})`,
-            size: 22,
-            font: "Calibri",
-          }),
-        ],
-      }),
-    );
-  }
-
-  if (resumeData.certifications && resumeData.certifications.length > 0) {
-    children.push(new Paragraph({ text: "" }));
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({ text: "CERTIFICATIONS", bold: true, size: 24, font: "Calibri" }),
-        ],
-      }),
-    );
-    for (const cert of resumeData.certifications) {
-      children.push(
-        new Paragraph({
-          children: [new TextRun({ text: `• ${cert}`, size: 22, font: "Calibri" })],
-          indent: { left: 360 },
-        }),
-      );
-    }
-  }
-
-  const doc = new Document({
-    sections: [{ children }],
-  });
-
-  return Buffer.from(await Packer.toBuffer(doc));
-}
-
-async function buildCoverLetterDocx(
-  coverLetterText: string,
-  company: string,
-  title: string,
-  inventory: any,
-): Promise<Buffer> {
-  const profile = inventory.profile;
-  const today = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  const paragraphs = coverLetterText
-    .split("\n")
-    .filter((p) => p.trim())
-    .map(
-      (p) =>
-        new Paragraph({
-          children: [new TextRun({ text: p.trim(), size: 22, font: "Calibri" })],
-          spacing: { after: 200 },
-        }),
-    );
-
-  const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({
-            children: [
-              new TextRun({ text: profile.name, bold: true, size: 24, font: "Calibri" }),
-            ],
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `${profile.email} | ${profile.phone} | ${profile.location}`,
-                size: 20,
-                font: "Calibri",
-              }),
-            ],
-          }),
-          new Paragraph({ text: "" }),
-          new Paragraph({
-            children: [new TextRun({ text: today, size: 22, font: "Calibri" })],
-          }),
-          new Paragraph({ text: "" }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Re: ${title} at ${company}`,
-                bold: true,
-                size: 22,
-                font: "Calibri",
-              }),
-            ],
-          }),
-          new Paragraph({ text: "" }),
-          ...paragraphs,
-        ],
-      },
-    ],
-  });
-
-  return Buffer.from(await Packer.toBuffer(doc));
+function loadInventory(): Record<string, any> {
+  const inventoryPath = workspacePath("experience_inventory.json");
+  return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
 }
 
 export const buildOutputTool = createTool({
   id: "build-output",
   description:
-    "Builds the output folder structure with DOCX files (resume, cover letter), evidence map JSON, verifier JSON, and job details JSON for a single job.",
+    "Builds the output folder structure with DOCX + PDF files (resume, cover letter), evidence map JSON, verifier JSON, and job details JSON. Uses deterministic DOCX templates with professional formatting, then converts to PDF via LibreOffice with pagination checks (1-2 pages max for resume, 1 page for cover letter).",
   inputSchema: z.object({
     job_id: z.number(),
     company: z.string(),
     title: z.string(),
-    resumeData: z.object({}).passthrough(),
-    coverLetterText: z.string(),
+    resume: TailoredResumeSchema.describe("TailoredResume JSON from generate-verified-packet"),
+    cover_letter: TailoredCoverLetterSchema.describe("TailoredCoverLetter JSON from generate-verified-packet"),
     evidenceMap: z.array(z.object({
       claim_text: z.string(),
       evidence_id: z.string().optional(),
@@ -256,12 +49,25 @@ export const buildOutputTool = createTool({
     ).optional(),
     scoringBreakdown: z.record(z.string(), z.number()).optional(),
     totalScore: z.number().optional(),
+    skip_pdf: z.boolean().optional().describe("Skip PDF conversion (default false)"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
     outputDir: z.string(),
     files: z.array(z.string()),
     truthPass: z.boolean(),
+    resume_pagination: z.object({
+      pageCount: z.number(),
+      withinLimit: z.boolean(),
+      maxPages: z.number(),
+      warning: z.string().nullable(),
+    }).optional(),
+    cover_letter_pagination: z.object({
+      pageCount: z.number(),
+      withinLimit: z.boolean(),
+      maxPages: z.number(),
+      warning: z.string().nullable(),
+    }).optional(),
   }),
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
@@ -273,62 +79,71 @@ export const buildOutputTool = createTool({
     );
 
     logger?.info(`📁 [buildOutput] Creating output at: ${outputDir}`);
-
     fs.mkdirSync(outputDir, { recursive: true });
 
-    const inventoryPath = workspacePath("experience_inventory.json");
-    const inventory = JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
-
+    const inventory = loadInventory();
+    const profile = inventory.profile || {};
     const files: string[] = [];
-    const truthPass = context.verifierResult?.overallPass ?? false;
+    const truthPass = context.verifierResult?.pass ?? context.verifierResult?.overallPass ?? false;
 
-    const resumeBuffer = await buildResumeDocx(context.resumeData, inventory);
-    const resumePath = path.join(
-      outputDir,
-      `Resume_${companySafe}_${titleSafe}.docx`,
-    );
-    fs.writeFileSync(resumePath, resumeBuffer);
-    files.push(resumePath);
-    logger?.info(`📄 [buildOutput] Resume DOCX written`);
+    logger?.info(`📄 [buildOutput] Rendering resume DOCX from TailoredResume JSON...`);
+    logger?.info(`📄 [buildOutput] Resume has ${context.resume.experience.length} experience entries, ${context.resume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0)} bullets`);
+    const resumeBuffer = await renderResumeDocx(context.resume, profile);
+    const resumeDocxPath = path.join(outputDir, `Resume_${companySafe}_${titleSafe}.docx`);
+    fs.writeFileSync(resumeDocxPath, resumeBuffer);
+    files.push(resumeDocxPath);
+    logger?.info(`✅ [buildOutput] Resume DOCX written: ${resumeDocxPath}`);
 
-    const coverBuffer = await buildCoverLetterDocx(
-      context.coverLetterText,
-      context.company,
-      context.title,
-      inventory,
-    );
-    const coverPath = path.join(
-      outputDir,
-      `CoverLetter_${companySafe}_${titleSafe}.docx`,
-    );
-    fs.writeFileSync(coverPath, coverBuffer);
-    files.push(coverPath);
-    logger?.info(`📝 [buildOutput] Cover letter DOCX written`);
+    logger?.info(`📝 [buildOutput] Rendering cover letter DOCX from TailoredCoverLetter JSON...`);
+    logger?.info(`📝 [buildOutput] Cover letter: ${context.cover_letter.word_count} words, ${context.cover_letter.value_claims.length} value claims`);
+    const coverBuffer = await renderCoverLetterDocx(context.cover_letter, profile);
+    const coverDocxPath = path.join(outputDir, `CoverLetter_${companySafe}_${titleSafe}.docx`);
+    fs.writeFileSync(coverDocxPath, coverBuffer);
+    files.push(coverDocxPath);
+    logger?.info(`✅ [buildOutput] Cover letter DOCX written: ${coverDocxPath}`);
 
-    const evidenceMapPath = path.join(
-      outputDir,
-      `EvidenceMap_${companySafe}_${titleSafe}.json`,
-    );
-    fs.writeFileSync(
-      evidenceMapPath,
-      JSON.stringify(context.evidenceMap, null, 2),
-    );
+    let resumePagination;
+    let coverLetterPagination;
+
+    if (!context.skip_pdf) {
+      logger?.info(`📄 [buildOutput] Converting resume DOCX → PDF via LibreOffice...`);
+      try {
+        const resumePdf = await convertDocxToPdf(resumeDocxPath, outputDir);
+        files.push(resumePdf.pdfPath);
+        resumePagination = checkPagination(resumePdf.pageCount, 2);
+        logger?.info(`✅ [buildOutput] Resume PDF: ${resumePdf.pdfPath} (${resumePdf.pageCount} page(s))`);
+        if (resumePagination.warning) {
+          logger?.warn(`⚠️ [buildOutput] Resume pagination: ${resumePagination.warning}`);
+        }
+      } catch (err: any) {
+        logger?.error(`⚠️ [buildOutput] Resume PDF conversion failed: ${err.message}`);
+      }
+
+      logger?.info(`📝 [buildOutput] Converting cover letter DOCX → PDF via LibreOffice...`);
+      try {
+        const coverPdf = await convertDocxToPdf(coverDocxPath, outputDir);
+        files.push(coverPdf.pdfPath);
+        coverLetterPagination = checkPagination(coverPdf.pageCount, 1);
+        logger?.info(`✅ [buildOutput] Cover letter PDF: ${coverPdf.pdfPath} (${coverPdf.pageCount} page(s))`);
+        if (coverLetterPagination.warning) {
+          logger?.warn(`⚠️ [buildOutput] Cover letter pagination: ${coverLetterPagination.warning}`);
+        }
+      } catch (err: any) {
+        logger?.error(`⚠️ [buildOutput] Cover letter PDF conversion failed: ${err.message}`);
+      }
+    } else {
+      logger?.info(`⏩ [buildOutput] Skipping PDF conversion (skip_pdf=true)`);
+    }
+
+    const evidenceMapPath = path.join(outputDir, `EvidenceMap_${companySafe}_${titleSafe}.json`);
+    fs.writeFileSync(evidenceMapPath, JSON.stringify(context.evidenceMap, null, 2));
     files.push(evidenceMapPath);
 
-    const verifierPath = path.join(
-      outputDir,
-      `Verifier_${companySafe}_${titleSafe}.json`,
-    );
-    fs.writeFileSync(
-      verifierPath,
-      JSON.stringify(context.verifierResult, null, 2),
-    );
+    const verifierPath = path.join(outputDir, `Verifier_${companySafe}_${titleSafe}.json`);
+    fs.writeFileSync(verifierPath, JSON.stringify(context.verifierResult, null, 2));
     files.push(verifierPath);
 
-    const jobPath = path.join(
-      outputDir,
-      `Job_${companySafe}_${titleSafe}.json`,
-    );
+    const jobPath = path.join(outputDir, `Job_${companySafe}_${titleSafe}.json`);
     fs.writeFileSync(
       jobPath,
       JSON.stringify(
@@ -340,6 +155,8 @@ export const buildOutputTool = createTool({
           scoring_breakdown: context.scoringBreakdown,
           contacts: context.contactTargets || [],
           truth_pass: truthPass,
+          resume_pagination: resumePagination || null,
+          cover_letter_pagination: coverLetterPagination || null,
         },
         null,
         2,
@@ -354,63 +171,75 @@ export const buildOutputTool = createTool({
     const actualJobId = jobLookup.rows?.[0]?.job_id || context.job_id;
     logger?.info(`🔍 [buildOutput] Resolved job_id: ${actualJobId} (input was ${context.job_id})`);
 
-    await query(
-      `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        actualJobId,
-        resumePath,
-        coverPath,
-        evidenceMapPath,
-        verifierPath,
-        "v1",
-        "gpt-5",
-        truthPass,
-      ],
-    );
-
-    for (const evidence of context.evidenceMap) {
+    try {
       await query(
-        `INSERT INTO evidence_map (job_id, claim_id, claim_text, evidence_quote, evidence_source_key, confidence)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           actualJobId,
-          evidence.evidence_id || evidence.claim_text?.substring(0, 20),
-          evidence.claim_text,
-          evidence.evidence_quote,
-          evidence.evidence_source_key,
-          evidence.confidence,
+          resumeDocxPath,
+          coverDocxPath,
+          evidenceMapPath,
+          verifierPath,
+          "v2",
+          "gpt-4o",
+          truthPass,
         ],
       );
+      logger?.info(`💾 [buildOutput] Artifact record saved to DB`);
+    } catch (err: any) {
+      logger?.error(`⚠️ [buildOutput] Failed to save artifact record: ${err.message}`);
+    }
+
+    for (const evidence of context.evidenceMap) {
+      try {
+        await query(
+          `INSERT INTO evidence_map (job_id, claim_id, claim_text, evidence_quote, evidence_source_key, confidence)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            actualJobId,
+            evidence.evidence_id || evidence.claim_text?.substring(0, 20),
+            evidence.claim_text,
+            evidence.evidence_quote,
+            evidence.evidence_source_key,
+            evidence.confidence,
+          ],
+        );
+      } catch (err: any) {
+        logger?.error(`⚠️ [buildOutput] Failed to save evidence: ${err.message}`);
+      }
     }
 
     if (context.contactTargets) {
       for (let i = 0; i < context.contactTargets.length; i++) {
         const ct = context.contactTargets[i];
-        await query(
-          `INSERT INTO contacts (job_id, person_name, title, rank, rationale, message_draft)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            actualJobId,
-            "NONE FOUND",
-            ct.title,
-            i + 1,
-            ct.rationale,
-            ct.message_draft || "",
-          ],
-        );
+        try {
+          await query(
+            `INSERT INTO contacts (job_id, person_name, title, rank, rationale, message_draft)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [actualJobId, "NONE FOUND", ct.title, i + 1, ct.rationale, ct.message_draft || ""],
+          );
+        } catch (err: any) {
+          logger?.error(`⚠️ [buildOutput] Failed to save contact: ${err.message}`);
+        }
       }
     }
 
-    logger?.info(
-      `✅ [buildOutput] Output complete: ${files.length} files, truth_pass: ${truthPass}`,
-    );
+    logger?.info(`\n✅ [buildOutput] Output complete: ${files.length} files, truth_pass: ${truthPass}`);
+    if (resumePagination) {
+      logger?.info(`📊 [buildOutput] Resume: ${resumePagination.pageCount} page(s), within limit: ${resumePagination.withinLimit}`);
+    }
+    if (coverLetterPagination) {
+      logger?.info(`📊 [buildOutput] Cover letter: ${coverLetterPagination.pageCount} page(s), within limit: ${coverLetterPagination.withinLimit}`);
+    }
 
     return {
       success: true,
       outputDir,
       files,
       truthPass,
+      resume_pagination: resumePagination,
+      cover_letter_pagination: coverLetterPagination,
     };
   },
 });

@@ -86,6 +86,20 @@ export async function initDatabase(): Promise<void> {
         rationale TEXT,
         message_draft TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS digests (
+        digest_id SERIAL PRIMARY KEY,
+        run_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        jobs_fetched INTEGER NOT NULL DEFAULT 0,
+        jobs_scored INTEGER NOT NULL DEFAULT 0,
+        jobs_shortlisted INTEGER NOT NULL DEFAULT 0,
+        packets_generated INTEGER NOT NULL DEFAULT 0,
+        truth_pass_count INTEGER NOT NULL DEFAULT 0,
+        truth_fail_count INTEGER NOT NULL DEFAULT 0,
+        email_sent BOOLEAN NOT NULL DEFAULT FALSE,
+        sent_at TIMESTAMPTZ,
+        recipient_email TEXT
+      );
     `);
   } finally {
     client.release();

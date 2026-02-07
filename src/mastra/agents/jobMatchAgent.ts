@@ -13,6 +13,7 @@ import { clayEnrichTool } from "../tools/clayEnrichTool";
 import { extractInventoryTool } from "../tools/extractInventoryTool";
 import { extractJDRequirementsTool } from "../tools/extractJDRequirementsTool";
 import { matchScorerTool } from "../tools/matchScorerTool";
+import { sendDigestTool } from "../tools/sendDigestTool";
 import * as fs from "fs";
 import { workspacePath } from "../tools/paths";
 
@@ -147,6 +148,7 @@ Since we don't scrape LinkedIn, return target titles to search for (e.g., "VP Da
     buildOutputTool,
     enrichJobsTool,
     clayEnrichTool,
+    sendDigestTool,
     webSearch: openai.tools.webSearchPreview(),
   },
 });

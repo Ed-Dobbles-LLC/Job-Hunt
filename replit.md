@@ -60,6 +60,15 @@ The `generateVerifiedPacketTool` (`generateVerifiedPacketTool.ts`) orchestrates 
 -   **Attempt History**: Records each attempt's pass/fail, violation counts, violation types, and timestamp in `attempt_history[]`.
 -   **DB Persistence**: Saves `verified_packet` metadata (pass/fail, attempts_used, best_attempt, attempt_history, human_review_required) to `scores.breakdown_json`.
 
+### Daily Digest Email (Mini-prompt 11)
+The `sendDigestTool` (`sendDigestTool.ts`) aggregates daily results and sends a rich HTML digest email. Key design decisions:
+-   **DB Aggregation**: Queries `jobs`, `scores`, and `artifacts` tables for today's results, computing stats (fetched, scored, shortlisted, packets, pass/fail).
+-   **HTML Template**: `digestEmailTemplate.ts` renders a mobile-responsive, inline-CSS email with summary stat boxes, ranked job table (color-coded scores: green ≥80, yellow ≥60, red <60), detail cards (skills, salary, location, roleShape, gaps), and empty-state handling.
+-   **Gmail API**: Uses existing `sendEmail()` from `gmailClient.ts` with OAuth credentials.
+-   **Digest Metadata**: Stored in `digests` table (digest_id, run_date, stats, email_sent, sent_at, recipient_email).
+-   **Dry-Run Mode**: `dryRun: true` generates HTML without sending, returns `htmlPreview`.
+-   **Recipient**: Defaults to `experience_inventory.json` → `profile.email`, overridable via `recipientOverride`.
+
 ## External Dependencies
 -   **Database**: PostgreSQL (via Neon)
 -   **LLM**: OpenAI (gpt-4o with web search)
