@@ -4,7 +4,16 @@ import { query } from "./db";
 import * as fs from "fs";
 import * as path from "path";
 import { workspacePath } from "./paths";
-import { SPEC_INFLATION_CONFIG } from "./scoringConfig";
+import {
+  SPEC_INFLATION_CONFIG,
+  AI_STRATEGY_TERMS,
+  AI_ENGINEERING_TERMS,
+  getActiveMode,
+  getActiveProfile,
+  getMaxPositiveScore,
+  type ScoringWeights,
+  type ScoringProfile,
+} from "./scoringConfig";
 
 function loadInventory(): any {
   const inventoryPath = workspacePath("experience_inventory.json");
@@ -170,28 +179,48 @@ export function computeSpecInflationPenalty(jd: string): {
   };
 }
 
-function scoreSingleJob(
+export function scoreAIStrategyStack(jd: string, maxPoints: number): { score: number; hits: string[] } {
+  const text = jd.toLowerCase();
+  const hits = AI_STRATEGY_TERMS.filter((t) => text.includes(t));
+  const raw = Math.min(maxPoints, Math.round((hits.length / 4) * maxPoints));
+  return { score: raw, hits };
+}
+
+export function scoreAIEngineeringStack(jd: string, maxPoints: number): { score: number; hits: string[] } {
+  const text = jd.toLowerCase();
+  const hits = AI_ENGINEERING_TERMS.filter((t) => text.includes(t));
+  const raw = Math.min(maxPoints, Math.round((hits.length / 4) * maxPoints));
+  return { score: raw, hits };
+}
+
+export function scoreSingleJob(
   job: any,
   inventory: any,
-): { total: number; breakdown: Record<string, any> } {
+  profile?: ScoringProfile,
+): { total: number; breakdown: Record<string, any>; mode: string } {
+  const p = profile || getActiveProfile();
+  const w = p.weights;
+  const mode = profile ? (profile === getActiveProfile() ? getActiveMode() : "custom") : getActiveMode();
+
   const jd = (job.jd_raw_text || "").toLowerCase();
   const title = (job.title || "").toLowerCase();
   const location = (job.location || "").toLowerCase();
   const remoteHybrid = (job.remote_hybrid || "").toLowerCase();
 
-  const breakdown: Record<string, number> = {};
+  const breakdown: Record<string, any> = {};
 
-  const vpKeywords = ["vp", "vice president", "head of", "chief", "cdo"];
+  const vpKeywords = ["vp", "vice president", "head of", "chief", "cdo", "svp"];
   const dirKeywords = ["director", "senior director"];
   const managerKeywords = ["manager", "lead"];
-  if (vpKeywords.some((kw) => title.includes(kw))) {
-    breakdown.role_level_match = 25;
+  const isVpPlus = vpKeywords.some((kw) => title.includes(kw));
+  if (isVpPlus) {
+    breakdown.role_level_match = w.role_level_match;
   } else if (dirKeywords.some((kw) => title.includes(kw))) {
-    breakdown.role_level_match = 20;
+    breakdown.role_level_match = Math.round(w.role_level_match * 0.8);
   } else if (managerKeywords.some((kw) => title.includes(kw))) {
-    breakdown.role_level_match = 10;
+    breakdown.role_level_match = Math.round(w.role_level_match * 0.4);
   } else {
-    breakdown.role_level_match = 5;
+    breakdown.role_level_match = Math.round(w.role_level_match * 0.2);
   }
 
   const leadershipSignals = [
@@ -211,27 +240,31 @@ function scoreSingleJob(
   const leadershipCount = leadershipSignals.filter((s) =>
     jd.includes(s),
   ).length;
-  breakdown.leadership_scope = Math.min(15, Math.round((leadershipCount / 4) * 15));
+  breakdown.leadership_scope = Math.min(w.leadership_scope, Math.round((leadershipCount / 4) * w.leadership_scope));
 
   const domains = inventory.skills?.domains || [];
   const domainMatch = domains.filter((d: string) =>
     jd.includes(d.toLowerCase()),
   ).length;
-  breakdown.domain_relevance = Math.min(10, Math.round((domainMatch / 2) * 10));
+  breakdown.domain_relevance = Math.min(w.domain_relevance, Math.round((domainMatch / 2) * w.domain_relevance));
 
-  const techSkills = inventory.skills?.technical || [];
-  const dsSkills = inventory.skills?.data_science || [];
-  const allTech = [...techSkills, ...dsSkills];
-  const techMatch = allTech.filter((t: string) =>
-    jd.includes(t.toLowerCase()),
-  ).length;
-  breakdown.data_ai_stack_match = Math.min(15, Math.round((techMatch / 5) * 15));
+  const stratStack = scoreAIStrategyStack(jd, w.ai_strategy_stack);
+  breakdown.ai_strategy_stack = stratStack.score;
+
+  const engStack = scoreAIEngineeringStack(jd, w.ai_engineering_stack);
+  breakdown.ai_engineering_stack = engStack.score;
+
+  let dominanceAdj = 0;
+  if (engStack.score > stratStack.score && isVpPlus && p.dominanceAdjustment !== 0) {
+    dominanceAdj = p.dominanceAdjustment;
+  }
+  breakdown.dominance_adjustment = dominanceAdj;
 
   const preferredLocations = ["chicago", "remote", "hybrid"];
   const locationMatch = preferredLocations.some(
     (loc) => location.includes(loc) || remoteHybrid.includes(loc),
   );
-  breakdown.location_fit = locationMatch ? 10 : 3;
+  breakdown.location_fit = locationMatch ? w.location_fit : Math.round(w.location_fit * 0.375);
 
   const compText = jd.match(
     /\$[\d,]+\s*[-–]\s*\$[\d,]+/,
@@ -239,13 +272,13 @@ function scoreSingleJob(
   if (compText) {
     const numbers = compText[0].match(/[\d,]+/g) || [];
     const high = parseInt(numbers[numbers.length - 1]?.replace(/,/g, "") || "0");
-    if (high >= 300000) breakdown.compensation = 10;
-    else if (high >= 250000) breakdown.compensation = 8;
-    else if (high >= 200000) breakdown.compensation = 6;
-    else if (high >= 150000) breakdown.compensation = 4;
-    else breakdown.compensation = 2;
+    if (high >= 300000) breakdown.compensation = w.compensation;
+    else if (high >= 250000) breakdown.compensation = Math.round(w.compensation * 0.8);
+    else if (high >= 200000) breakdown.compensation = Math.round(w.compensation * 0.6);
+    else if (high >= 150000) breakdown.compensation = Math.round(w.compensation * 0.4);
+    else breakdown.compensation = Math.round(w.compensation * 0.2);
   } else {
-    breakdown.compensation = 5;
+    breakdown.compensation = Math.round(w.compensation * 0.5);
   }
 
   const transformSignals = [
@@ -262,7 +295,7 @@ function scoreSingleJob(
   const transformCount = transformSignals.filter((s) =>
     jd.includes(s),
   ).length;
-  breakdown.transformation_mandate = Math.min(10, Math.round((transformCount / 3) * 10));
+  breakdown.transformation_mandate = Math.min(w.transformation_mandate, Math.round((transformCount / 3) * w.transformation_mandate));
 
   const companyPrefSignals = [
     "series",
@@ -272,22 +305,32 @@ function scoreSingleJob(
     "leading",
   ];
   const prefCount = companyPrefSignals.filter((s) => jd.includes(s)).length;
-  breakdown.company_preference = Math.min(5, Math.round((prefCount / 2) * 5));
+  breakdown.company_preference = Math.min(w.company_preference, Math.round((prefCount / 2) * w.company_preference));
 
   const execMode = classifyExecutionMode(jd);
-  breakdown.execution_mode_match = execMode.score;
-  breakdown.execution_mode_reason = execMode.reason as any;
+  const clampedExec = Math.max(w.execution_mode_match.min, Math.min(w.execution_mode_match.max, execMode.score));
+  breakdown.execution_mode_match = clampedExec;
+  breakdown.execution_mode_reason = execMode.reason;
 
   const specInflation = computeSpecInflationPenalty(jd);
-  breakdown.spec_inflation_penalty = specInflation.score;
-  breakdown.spec_inflation_reason = specInflation.reason as any;
+  const clampedSpec = Math.max(w.spec_inflation_penalty.min, Math.min(w.spec_inflation_penalty.max, specInflation.score));
+  breakdown.spec_inflation_penalty = clampedSpec;
+  breakdown.spec_inflation_reason = specInflation.reason;
 
-  const total = Object.entries(breakdown).reduce((sum, [key, v]) => {
-    if (key === "execution_mode_reason" || key === "spec_inflation_reason") return sum;
+  const REASON_KEYS = ["execution_mode_reason", "spec_inflation_reason"];
+  const rawTotal = Object.entries(breakdown).reduce((sum, [key, v]) => {
+    if (REASON_KEYS.includes(key)) return sum;
     return sum + (v as number);
   }, 0);
 
-  return { total, breakdown };
+  const maxPos = getMaxPositiveScore(w);
+  const normalized = Math.max(0, Math.min(100, Math.round((rawTotal / maxPos) * 100)));
+
+  breakdown._raw_total = rawTotal;
+  breakdown._max_possible = maxPos;
+  breakdown._scoring_mode = mode;
+
+  return { total: normalized, breakdown, mode };
 }
 
 export const scoreJobsTool = createTool({
@@ -311,16 +354,19 @@ export const scoreJobsTool = createTool({
         remote_hybrid: z.string(),
         posting_url: z.string(),
         total_score: z.number(),
-        breakdown: z.record(z.string(), z.number()),
+        breakdown: z.record(z.string(), z.any()),
         jd_raw_text: z.string(),
       }),
     ),
     totalScored: z.number(),
+    scoringMode: z.string(),
   }),
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
+    const mode = getActiveMode();
+    const profile = getActiveProfile();
     logger?.info(
-      `📊 [scoreJobs] Scoring ${context.jobIds.length} jobs`,
+      `📊 [scoreJobs] Scoring ${context.jobIds.length} jobs in ${mode} mode (${profile.label})`,
     );
 
     const inventory = loadInventory();
@@ -337,7 +383,7 @@ export const scoreJobsTool = createTool({
         continue;
       }
       const job = result.rows[0];
-      const { total, breakdown } = scoreSingleJob(job, inventory);
+      const { total, breakdown } = scoreSingleJob(job, inventory, profile);
 
       await query(
         `INSERT INTO scores (job_id, total_score, breakdown_json)
@@ -359,7 +405,7 @@ export const scoreJobsTool = createTool({
       });
 
       logger?.info(
-        `📊 [scoreJobs] ${job.company} - ${job.title}: ${total}/100`,
+        `📊 [scoreJobs] ${job.company} - ${job.title}: ${total}/100 (${mode})`,
       );
     }
 
@@ -372,12 +418,13 @@ export const scoreJobsTool = createTool({
     );
 
     logger?.info(
-      `✅ [scoreJobs] Top ${topJobs.length} jobs selected. Highest: ${topJobs[0]?.total_score}/100`,
+      `✅ [scoreJobs] Top ${topJobs.length} jobs selected. Highest: ${topJobs[0]?.total_score}/100 (${mode})`,
     );
 
     return {
       scoredJobs: topJobs,
       totalScored: scoredJobs.length,
+      scoringMode: mode,
     };
   },
 });

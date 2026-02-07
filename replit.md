@@ -62,6 +62,15 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
 - Import endpoint has API key auth and duplicate detection
 
 ## Recent Changes (2026-02-07)
+- Refactored scoring system with configurable weights and dual-mode support
+  - Split `data_ai_stack_match` into `ai_strategy_stack` (0-8) and `ai_engineering_stack` (0-7)
+  - Added dominance check: if eng > strat AND VP+ title, applies -5 adjustment (precision mode only)
+  - Weights loaded from `src/mastra/tools/scoringConfig.ts` with precision and recall profiles
+  - Scores normalized to 0-100 scale with raw total and max possible preserved in breakdown
+  - `SCORING_MODE` env var toggles between "precision" (default, strict fit) and "recall" (wider net)
+  - Recall mode: softens penalties (execution_mode_match clamped to -10/+5, dominance adj disabled)
+  - Dashboard shows scoring mode badge and raw-to-normalized mapping
+  - 18 unit tests in `tests/scoringWeights.test.ts`
 - Added SpecInflationPenalty (0 to -10): penalizes JDs with high AI buzzword density but low business outcome grounding
   - Config in `src/mastra/tools/scoringConfig.ts` with adjustable thresholds and term lists
   - Integrated into scoreSingleJob breakdown and dashboard display

@@ -873,41 +873,39 @@
         }
 
         if (s && s.breakdown_json) {
-          html += `<div class="section-title">Score Breakdown</div>`;
           const breakdown = typeof s.breakdown_json === 'string' ? JSON.parse(s.breakdown_json) : s.breakdown_json;
-          if (Array.isArray(breakdown)) {
-            breakdown.forEach(b => {
-              const pct = (b.score / (b.maxScore || 10)) * 100;
-              html += `<div class="breakdown-bar">
-                <div class="name">${esc(b.category || b.name || 'Category')}</div>
-                <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
-                <div class="score-val">${b.score}/${b.maxScore || 10}</div>
-              </div>`;
-            });
-          } else if (typeof breakdown === 'object') {
-            const maxScores = { role_level_match: 25, leadership_scope: 15, data_ai_stack_match: 15, domain_relevance: 10, location_fit: 10, compensation: 10, transformation_mandate: 10, company_preference: 5, execution_mode_match: 10, spec_inflation_penalty: 10 };
-            const reasonKeys = ['execution_mode_reason', 'spec_inflation_reason'];
-            Object.entries(breakdown).forEach(([key, val]) => {
-              if (reasonKeys.includes(key)) return;
-              const score = typeof val === 'object' ? val.score : val;
-              const max = typeof val === 'object' ? (val.maxScore || val.max || 10) : (maxScores[key] || 10);
-              const isNeg = score < 0;
-              const pct = isNeg ? 0 : Math.min(100, (score / max) * 100);
-              const barColor = isNeg ? 'var(--red)' : 'var(--accent)';
-              const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-              html += `<div class="breakdown-bar">
-                <div class="name">${esc(label)}</div>
-                <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
-                <div class="score-val" style="${isNeg ? 'color:var(--red)' : ''}">${score}/${max}</div>
-              </div>`;
-              if (key === 'execution_mode_match' && breakdown.execution_mode_reason) {
-                html += `<div style="font-size:12px;color:var(--text-dim);margin:-4px 0 8px 212px;font-style:italic">${esc(breakdown.execution_mode_reason)}</div>`;
-              }
-              if (key === 'spec_inflation_penalty' && breakdown.spec_inflation_reason) {
-                html += `<div style="font-size:12px;color:var(--text-dim);margin:-4px 0 8px 212px;font-style:italic">${esc(breakdown.spec_inflation_reason)}</div>`;
-              }
-            });
+          const modeLabel = breakdown._scoring_mode === 'recall' ? 'Recall (wider net)' : 'Precision (strict fit)';
+          const modeColor = breakdown._scoring_mode === 'recall' ? '#f59e0b' : '#6366f1';
+          html += `<div class="section-title">Score Breakdown <span style="font-size:12px;font-weight:normal;color:${modeColor};margin-left:8px;padding:2px 8px;border:1px solid ${modeColor};border-radius:4px">${esc(modeLabel)}</span></div>`;
+          if (breakdown._raw_total !== undefined) {
+            html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Raw: ${breakdown._raw_total} / ${breakdown._max_possible} &rarr; Normalized: ${s.total_score}/100</div>`;
           }
+          const maxScores = { role_level_match: 20, leadership_scope: 15, domain_relevance: 8, ai_strategy_stack: 8, ai_engineering_stack: 7, dominance_adjustment: 5, location_fit: 8, compensation: 8, transformation_mandate: 12, company_preference: 5, execution_mode_match: 10, spec_inflation_penalty: 10, data_ai_stack_match: 15 };
+          const skipKeys = ['execution_mode_reason', 'spec_inflation_reason', '_raw_total', '_max_possible', '_scoring_mode'];
+          const displayOrder = ['role_level_match', 'leadership_scope', 'domain_relevance', 'ai_strategy_stack', 'ai_engineering_stack', 'dominance_adjustment', 'location_fit', 'compensation', 'transformation_mandate', 'company_preference', 'execution_mode_match', 'spec_inflation_penalty'];
+          const keys = displayOrder.filter(k => breakdown[k] !== undefined);
+          Object.keys(breakdown).forEach(k => { if (!keys.includes(k) && !skipKeys.includes(k)) keys.push(k); });
+          keys.forEach(key => {
+            if (skipKeys.includes(key)) return;
+            const val = breakdown[key];
+            const score = typeof val === 'number' ? val : 0;
+            const max = maxScores[key] || 10;
+            const isNeg = score < 0;
+            const pct = isNeg ? 0 : Math.min(100, (Math.abs(score) / max) * 100);
+            const barColor = isNeg ? 'var(--red)' : 'var(--accent)';
+            const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            html += `<div class="breakdown-bar">
+              <div class="name">${esc(label)}</div>
+              <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+              <div class="score-val" style="${isNeg ? 'color:var(--red)' : ''}">${score}/${isNeg ? max * -1 : max}</div>
+            </div>`;
+            if (key === 'execution_mode_match' && breakdown.execution_mode_reason) {
+              html += `<div style="font-size:12px;color:var(--text-dim);margin:-4px 0 8px 212px;font-style:italic">${esc(breakdown.execution_mode_reason)}</div>`;
+            }
+            if (key === 'spec_inflation_penalty' && breakdown.spec_inflation_reason) {
+              html += `<div style="font-size:12px;color:var(--text-dim);margin:-4px 0 8px 212px;font-style:italic">${esc(breakdown.spec_inflation_reason)}</div>`;
+            }
+          });
         }
 
         if (a) {
