@@ -16,6 +16,7 @@ import { matchScorerTool } from "../tools/matchScorerTool";
 import { sendDigestTool } from "../tools/sendDigestTool";
 import { validateFormattingTool } from "../tools/validateFormattingTool";
 import { contactDiscoveryTool } from "../tools/contactDiscoveryTool";
+import { linkedInMessageTool } from "../tools/linkedInMessageTool";
 import * as fs from "fs";
 import { workspacePath } from "../tools/paths";
 
@@ -81,7 +82,8 @@ Every evidence mapping entry MUST include:
 12. **build-output**: Create the output folder with DOCX files and reports
 13. **validate-formatting**: Pre-PDF formatting validation (placeholder detection, page counts, contact info, broken links)
 14. **discover-contacts**: Compliant contact discovery using web search on public sources — finds outreach targets (hiring managers, recruiters, department heads) and saves to contacts table
-15. **webSearch**: Search the web for current information
+15. **generate-linkedin-messages**: Generate two grounded LinkedIn outreach messages (warm/cold) per job — <450 chars each, evidence-backed, with JD requirement hooks
+16. **webSearch**: Search the web for current information
 
 ## WHEN PARSING LINKEDIN JOB ALERT EMAILS
 LinkedIn job alert emails contain brief listings with ONLY: job title, company name, location, and a LinkedIn URL. They do NOT contain full job descriptions. Your job:
@@ -144,7 +146,20 @@ For shortlisted jobs, use the discover-contacts tool to find outreach targets. T
 - When no named contacts are found, provides fallback search queries and alternative channels
 
 Call discover-contacts with: job_id, company_name, job_title, location, and target_function (department).
-The tool will return ranked OutreachTargets with role_category, rationale, confidence, search_query, and outreach_angle.`,
+The tool will return ranked OutreachTargets with role_category, rationale, confidence, search_query, and outreach_angle.
+
+## LINKEDIN MESSAGE GENERATION (GROUNDED)
+After contact discovery, use generate-linkedin-messages to create two outreach messages per job:
+- **Warm message**: For mutual connections or referrals — conversational, direct
+- **Cold message**: No prior relationship — professional, value-first
+Both messages MUST be:
+- Under 450 characters (LinkedIn limit)
+- Grounded in the experience inventory with evidence pointers for every factual claim
+- Include one specific hook from the job requirements (different hooks for warm vs cold)
+- NEVER fabricate achievements, metrics, or facts not in the inventory
+
+Call generate-linkedin-messages with: job_id (required), plus optional company, title, requirements, recipient_name, recipient_title.
+The tool auto-loads job details from DB if not provided and persists messages to the contacts table.`,
 
   model: openai("gpt-4o"),
   tools: {
@@ -164,6 +179,7 @@ The tool will return ranked OutreachTargets with role_category, rationale, confi
     sendDigestTool,
     validateFormattingTool,
     contactDiscoveryTool,
+    linkedInMessageTool,
     webSearch: openai.tools.webSearchPreview(),
   },
 });
