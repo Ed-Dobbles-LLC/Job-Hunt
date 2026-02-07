@@ -17,6 +17,7 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
 - `src/mastra/agents/jobMatchAgent.ts` - Agent with all tools, web search, and truthfulness instructions
 - `src/mastra/tools/` - 11 tools (fetch emails, parse jobs, enrich jobs, clay enrich, score jobs, extract inventory, generate resume, generate cover letter, verify truth, build output)
 - `src/mastra/tools/factRegistry.ts` - FactRegistry module: extracts all allowable facts from inventory indexed by ID
+- `src/mastra/tools/entityAllowlist.ts` - EntityAllowlist + EntityDenylist: typed allowlist categories + placeholder/artifact detection
 - `src/mastra/tools/extractInventoryTool.ts` - Tool that builds FactRegistry at runtime (must be called before packet generation)
 - `src/mastra/tools/paths.ts` - Workspace path helper (critical for Mastra bundling)
 - `src/mastra/tools/enrichJobsTool.ts` - Saves web search enrichment results to DB
@@ -48,11 +49,12 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
 ## Truthfulness Pipeline (Extract → Tailor → Verify → Render)
 - **FactRegistry** (`factRegistry.ts`): Extracts all allowable facts from experience_inventory.json indexed by ID — employers, titles, dates, metrics, tools, degrees, certifications, bullet texts
 - **Evidence Pointers**: Every resume bullet and cover letter claim requires evidence_id (inventory ID like exp-001-b2), evidence_quote (exact text from inventory), evidence_source_key (JSON path), confidence (0.7-1.0)
-- **5-Layer Verification**:
+- **6-Layer Verification**:
   - Layer 1: Evidence Completeness — every resume bullet and cover letter claim has an evidence pointer
   - Layer 2: Pointer Validity — every evidence_id exists in the FactRegistry
   - Layer 3: Quote Accuracy — every evidence_quote matches text in the inventory (fuzzy with 60% word overlap)
   - Layer 4: Fact Allowlist — all numbers, tools, dates, certifications in generated text exist in inventory
+  - Layer 4b: Denylist Check — no placeholder domains, phone numbers, names, code artifacts, or template variables in output
   - Layer 5: Unknown Compliance — no ungrounded assertions or fabricated company claims
 - **Non-negotiable rules**: Never invent employers/titles/dates/tools/degrees/certs/metrics; state unknowns as unknown; ATS-friendly DOCX from deterministic templates
 
@@ -87,6 +89,14 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
   - Agent instructions enforce strict truthfulness: never invent, always cite, state unknowns
   - Workflow generate-packets step instructs agent to follow Extract→Tailor→Verify→Render sequence
   - 64 unit tests in `tests/verifyTruth5Layer.test.ts` covering all 5 layers + FactRegistry + integration
+- Added EntityAllowlist + EntityDenylist module (`entityAllowlist.ts`)
+  - EntityAllowlist: typed categories (companies, titles, dates, locations, degrees, certs, tools, metrics, skills) with sourceId/sourcePath traceability
+  - EntityDenylist: 22 rules covering placeholder domains (example.com), phone (555), names (John Doe), companies (Acme), code artifacts ([object Object], undefined, NaN, null), template variables ({{ }}, ${ }), lorem ipsum, TODO/TBD/FIXME/xxx
+  - scanForPlaceholders(): detects placeholders in the inventory itself
+  - checkTextAgainstDenylist(): screens generated text for denylist violations
+  - checkTextAgainstAllowlist(): validates entities in text against the allowlist
+  - Layer 4b (denylist_check) added to verifyTruthTool — now 6-layer verification (L1, L2, L3, L4, L4b, L5)
+  - 57 unit tests in `tests/entityAllowlist.test.ts`
 - Added RoleShape and Gate Status columns to dashboard (sortable, color-coded badges)
   - Job detail modal shows RoleShape label/confidence, gate status, hard flags, risk flags
 - Refactored scoring system with configurable weights and dual-mode support

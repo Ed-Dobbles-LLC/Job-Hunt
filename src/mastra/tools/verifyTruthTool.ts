@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { extractFactRegistry, type FactRegistry } from "./factRegistry";
+import { buildEntityDenylist, checkTextAgainstDenylist } from "./entityAllowlist";
 
 const EvidencePointerSchema = z.object({
   claim_text: z.string(),
@@ -219,6 +220,26 @@ export function layer4FactAllowlist(
   };
 }
 
+export function layer4bDenylistCheck(
+  resumeText: string,
+  coverLetterText: string,
+): VerificationLayer {
+  const failures: string[] = [];
+  const denylist = buildEntityDenylist();
+  const combinedText = resumeText + "\n" + coverLetterText;
+
+  const result = checkTextAgainstDenylist(combinedText, denylist);
+  for (const v of result.violations) {
+    failures.push(`Denylist violation: "${v.match}" — ${v.reason}`);
+  }
+
+  return {
+    name: "denylist_check",
+    passed: failures.length === 0,
+    failures,
+  };
+}
+
 export function layer5UnknownCompliance(
   resumeText: string,
   coverLetterText: string,
@@ -342,10 +363,13 @@ export const verifyTruthTool = createTool({
     const l4 = layer4FactAllowlist(context.resumeText, context.coverLetterText, registry);
     logger?.info(`🔍 [verifyTruth] Layer 4 (Fact Allowlist): ${l4.passed ? "PASS" : "FAIL"} (${l4.failures.length} issues)`);
 
+    const l4b = layer4bDenylistCheck(context.resumeText, context.coverLetterText);
+    logger?.info(`🔍 [verifyTruth] Layer 4b (Denylist Check): ${l4b.passed ? "PASS" : "FAIL"} (${l4b.failures.length} issues)`);
+
     const l5 = layer5UnknownCompliance(context.resumeText, context.coverLetterText);
     logger?.info(`🔍 [verifyTruth] Layer 5 (Unknown Compliance): ${l5.passed ? "PASS" : "FAIL"} (${l5.failures.length} issues)`);
 
-    const layers = [l1, l2, l3, l4, l5];
+    const layers = [l1, l2, l3, l4, l4b, l5];
     const allDeterministicFailures = layers.flatMap(l => l.failures);
     const deterministicPassed = allDeterministicFailures.length === 0;
 
