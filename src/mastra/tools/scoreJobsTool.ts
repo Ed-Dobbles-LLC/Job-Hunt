@@ -4,6 +4,7 @@ import { query } from "./db";
 import * as fs from "fs";
 import * as path from "path";
 import { workspacePath } from "./paths";
+import { SPEC_INFLATION_CONFIG } from "./scoringConfig";
 
 function loadInventory(): any {
   const inventoryPath = workspacePath("experience_inventory.json");
@@ -100,6 +101,73 @@ export function classifyExecutionMode(jd: string): {
   }
 
   return { score, reason: reasons.join(". ") };
+}
+
+export function computeSpecInflationPenalty(jd: string): {
+  score: number;
+  reason: string;
+  advancedCount: number;
+  businessCount: number;
+} {
+  const text = jd.toLowerCase();
+  const cfg = SPEC_INFLATION_CONFIG;
+
+  const advHits = cfg.advancedAITerms.filter((t) => text.includes(t));
+  const bizHits = cfg.businessOutcomeTerms.filter((t) => text.includes(t));
+  const advCount = advHits.length;
+  const bizCount = bizHits.length;
+
+  const th = cfg.thresholds;
+  const advLevel =
+    advCount >= th.advancedDensity.high
+      ? "high"
+      : advCount >= th.advancedDensity.med
+        ? "med"
+        : advCount >= th.advancedDensity.low
+          ? "low"
+          : "none";
+  const bizLevel =
+    bizCount >= th.businessDensity.high
+      ? "high"
+      : bizCount >= th.businessDensity.med
+        ? "med"
+        : bizCount >= th.businessDensity.low
+          ? "low"
+          : "none";
+
+  let penalty = 0;
+
+  if (advLevel === "high" && (bizLevel === "none" || bizLevel === "low")) {
+    penalty = cfg.penalties.highAdvLowBiz;
+  } else if (advLevel === "high" && bizLevel === "med") {
+    penalty = cfg.penalties.highAdvMedBiz;
+  } else if (advLevel === "med" && (bizLevel === "none" || bizLevel === "low")) {
+    penalty = cfg.penalties.medAdvLowBiz;
+  } else if (advLevel === "med" && bizLevel === "med") {
+    penalty = cfg.penalties.medAdvMedBiz;
+  }
+
+  penalty = Math.max(penalty, cfg.maxPenalty);
+
+  const reasons: string[] = [];
+  if (penalty < 0) {
+    reasons.push(
+      `Spec inflation detected: ${advCount} advanced AI terms (${advLevel}) vs ${bizCount} business outcomes (${bizLevel}), penalty ${penalty}`,
+    );
+    if (advHits.length > 0) reasons.push(`AI terms: ${advHits.join(", ")}`);
+    if (bizHits.length > 0) reasons.push(`Biz terms: ${bizHits.join(", ")}`);
+  } else {
+    reasons.push(
+      `No spec inflation (${advCount} advanced, ${bizCount} business)`,
+    );
+  }
+
+  return {
+    score: penalty,
+    reason: reasons.join(". "),
+    advancedCount: advCount,
+    businessCount: bizCount,
+  };
 }
 
 function scoreSingleJob(
@@ -210,8 +278,12 @@ function scoreSingleJob(
   breakdown.execution_mode_match = execMode.score;
   breakdown.execution_mode_reason = execMode.reason as any;
 
+  const specInflation = computeSpecInflationPenalty(jd);
+  breakdown.spec_inflation_penalty = specInflation.score;
+  breakdown.spec_inflation_reason = specInflation.reason as any;
+
   const total = Object.entries(breakdown).reduce((sum, [key, v]) => {
-    if (key === "execution_mode_reason") return sum;
+    if (key === "execution_mode_reason" || key === "spec_inflation_reason") return sum;
     return sum + (v as number);
   }, 0);
 

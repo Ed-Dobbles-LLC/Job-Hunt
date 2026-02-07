@@ -885,9 +885,10 @@
               </div>`;
             });
           } else if (typeof breakdown === 'object') {
-            const maxScores = { role_level_match: 25, leadership_scope: 15, data_ai_stack_match: 15, domain_relevance: 10, location_fit: 10, compensation: 10, transformation_mandate: 10, company_preference: 5, execution_mode_match: 10 };
+            const maxScores = { role_level_match: 25, leadership_scope: 15, data_ai_stack_match: 15, domain_relevance: 10, location_fit: 10, compensation: 10, transformation_mandate: 10, company_preference: 5, execution_mode_match: 10, spec_inflation_penalty: 10 };
+            const reasonKeys = ['execution_mode_reason', 'spec_inflation_reason'];
             Object.entries(breakdown).forEach(([key, val]) => {
-              if (key === 'execution_mode_reason') return;
+              if (reasonKeys.includes(key)) return;
               const score = typeof val === 'object' ? val.score : val;
               const max = typeof val === 'object' ? (val.maxScore || val.max || 10) : (maxScores[key] || 10);
               const isNeg = score < 0;
@@ -901,6 +902,9 @@
               </div>`;
               if (key === 'execution_mode_match' && breakdown.execution_mode_reason) {
                 html += `<div style="font-size:12px;color:var(--text-dim);margin:-4px 0 8px 212px;font-style:italic">${esc(breakdown.execution_mode_reason)}</div>`;
+              }
+              if (key === 'spec_inflation_penalty' && breakdown.spec_inflation_reason) {
+                html += `<div style="font-size:12px;color:var(--text-dim);margin:-4px 0 8px 212px;font-style:italic">${esc(breakdown.spec_inflation_reason)}</div>`;
               }
             });
           }

@@ -61,6 +61,12 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
 - Agent instructions explicitly restrict tool usage during enrichment to webSearch + enrich-jobs only
 - Import endpoint has API key auth and duplicate detection
 
+## Recent Changes (2026-02-07)
+- Added SpecInflationPenalty (0 to -10): penalizes JDs with high AI buzzword density but low business outcome grounding
+  - Config in `src/mastra/tools/scoringConfig.ts` with adjustable thresholds and term lists
+  - Integrated into scoreSingleJob breakdown and dashboard display
+  - 7 unit tests in `tests/specInflationPenalty.test.ts`
+
 ## Recent Changes (2026-02-06)
 - Added email import system: POST /api/import-emails (authenticated) for receiving emails from external sources
 - Created Google Apps Script (scripts/gmail-apps-script.js) for forwarding Gmail emails to import endpoint
