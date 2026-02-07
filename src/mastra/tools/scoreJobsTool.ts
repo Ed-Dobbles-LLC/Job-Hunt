@@ -8,6 +8,7 @@ import {
   SPEC_INFLATION_CONFIG,
   AI_STRATEGY_TERMS,
   AI_ENGINEERING_TERMS,
+  SCORING_PROFILES,
   getActiveMode,
   getActiveProfile,
   getMaxPositiveScore,
@@ -193,14 +194,52 @@ export function scoreAIEngineeringStack(jd: string, maxPoints: number): { score:
   return { score: raw, hits };
 }
 
+export interface CategoryDetail {
+  score: number;
+  maxPoints: number;
+  matchedPhrases: string[];
+  reason?: string;
+}
+
+export interface ScoreReport {
+  total: number;
+  mode: string;
+  rawTotal: number;
+  maxPossible: number;
+  categories: Record<string, CategoryDetail>;
+  penalties: { key: string; score: number; reason: string }[];
+  riskFlags: string[];
+}
+
+const DISPLAY_ORDER = [
+  "role_level_match",
+  "leadership_scope",
+  "domain_relevance",
+  "ai_strategy_stack",
+  "ai_engineering_stack",
+  "dominance_adjustment",
+  "location_fit",
+  "compensation",
+  "transformation_mandate",
+  "company_preference",
+  "execution_mode_match",
+  "spec_inflation_penalty",
+] as const;
+
+function cap(arr: string[], n: number): string[] {
+  return arr.sort().slice(0, n);
+}
+
 export function scoreSingleJob(
   job: any,
   inventory: any,
   profile?: ScoringProfile,
-): { total: number; breakdown: Record<string, any>; mode: string } {
+): { total: number; breakdown: Record<string, any>; mode: string; report: ScoreReport } {
   const p = profile || getActiveProfile();
   const w = p.weights;
-  const mode = profile ? (profile === getActiveProfile() ? getActiveMode() : "custom") : getActiveMode();
+  const mode = profile
+    ? Object.entries(SCORING_PROFILES).find(([, p]) => p === profile)?.[0] as string || "custom"
+    : getActiveMode();
 
   const jd = (job.jd_raw_text || "").toLowerCase();
   const title = (job.title || "").toLowerCase();
@@ -208,20 +247,31 @@ export function scoreSingleJob(
   const remoteHybrid = (job.remote_hybrid || "").toLowerCase();
 
   const breakdown: Record<string, any> = {};
+  const categories: Record<string, CategoryDetail> = {};
+  const penalties: ScoreReport["penalties"] = [];
+  const riskFlags: string[] = [];
 
   const vpKeywords = ["vp", "vice president", "head of", "chief", "cdo", "svp"];
   const dirKeywords = ["director", "senior director"];
   const managerKeywords = ["manager", "lead"];
   const isVpPlus = vpKeywords.some((kw) => title.includes(kw));
+  const roleLevelHits = vpKeywords.filter((kw) => title.includes(kw));
+  const dirHits = dirKeywords.filter((kw) => title.includes(kw));
+  const mgrHits = managerKeywords.filter((kw) => title.includes(kw));
   if (isVpPlus) {
     breakdown.role_level_match = w.role_level_match;
-  } else if (dirKeywords.some((kw) => title.includes(kw))) {
+  } else if (dirHits.length > 0) {
     breakdown.role_level_match = Math.round(w.role_level_match * 0.8);
-  } else if (managerKeywords.some((kw) => title.includes(kw))) {
+  } else if (mgrHits.length > 0) {
     breakdown.role_level_match = Math.round(w.role_level_match * 0.4);
   } else {
     breakdown.role_level_match = Math.round(w.role_level_match * 0.2);
   }
+  categories.role_level_match = {
+    score: breakdown.role_level_match,
+    maxPoints: w.role_level_match,
+    matchedPhrases: cap([...roleLevelHits, ...dirHits, ...mgrHits], 5),
+  };
 
   const leadershipSignals = [
     "lead a team",
@@ -237,39 +287,73 @@ export function scoreSingleJob(
     "c-suite",
     "board",
   ];
-  const leadershipCount = leadershipSignals.filter((s) =>
-    jd.includes(s),
-  ).length;
-  breakdown.leadership_scope = Math.min(w.leadership_scope, Math.round((leadershipCount / 4) * w.leadership_scope));
+  const leadershipHits = leadershipSignals.filter((s) => jd.includes(s));
+  breakdown.leadership_scope = Math.min(w.leadership_scope, Math.round((leadershipHits.length / 4) * w.leadership_scope));
+  categories.leadership_scope = {
+    score: breakdown.leadership_scope,
+    maxPoints: w.leadership_scope,
+    matchedPhrases: cap(leadershipHits, 5),
+  };
 
   const domains = inventory.skills?.domains || [];
-  const domainMatch = domains.filter((d: string) =>
-    jd.includes(d.toLowerCase()),
-  ).length;
-  breakdown.domain_relevance = Math.min(w.domain_relevance, Math.round((domainMatch / 2) * w.domain_relevance));
+  const domainHits = domains.filter((d: string) => jd.includes(d.toLowerCase()));
+  breakdown.domain_relevance = Math.min(w.domain_relevance, Math.round((domainHits.length / 2) * w.domain_relevance));
+  categories.domain_relevance = {
+    score: breakdown.domain_relevance,
+    maxPoints: w.domain_relevance,
+    matchedPhrases: cap(domainHits.map((d: string) => d.toLowerCase()), 5),
+  };
 
   const stratStack = scoreAIStrategyStack(jd, w.ai_strategy_stack);
   breakdown.ai_strategy_stack = stratStack.score;
+  categories.ai_strategy_stack = {
+    score: stratStack.score,
+    maxPoints: w.ai_strategy_stack,
+    matchedPhrases: cap(stratStack.hits, 5),
+  };
 
   const engStack = scoreAIEngineeringStack(jd, w.ai_engineering_stack);
   breakdown.ai_engineering_stack = engStack.score;
+  categories.ai_engineering_stack = {
+    score: engStack.score,
+    maxPoints: w.ai_engineering_stack,
+    matchedPhrases: cap(engStack.hits, 5),
+  };
 
   let dominanceAdj = 0;
   if (engStack.score > stratStack.score && isVpPlus && p.dominanceAdjustment !== 0) {
     dominanceAdj = p.dominanceAdjustment;
   }
   breakdown.dominance_adjustment = dominanceAdj;
+  if (dominanceAdj !== 0) {
+    penalties.push({ key: "dominance_adjustment", score: dominanceAdj, reason: "Engineering stack exceeds strategy stack for VP+ role" });
+    riskFlags.push("Engineering-heavy AI execution expected for a strategy-level title");
+  }
+  categories.dominance_adjustment = {
+    score: dominanceAdj,
+    maxPoints: 0,
+    matchedPhrases: [],
+    reason: dominanceAdj !== 0 ? "eng_stack > strat_stack for VP+" : "n/a",
+  };
 
   const preferredLocations = ["chicago", "remote", "hybrid"];
-  const locationMatch = preferredLocations.some(
+  const locationHits = preferredLocations.filter(
     (loc) => location.includes(loc) || remoteHybrid.includes(loc),
   );
+  const locationMatch = locationHits.length > 0;
   breakdown.location_fit = locationMatch ? w.location_fit : Math.round(w.location_fit * 0.375);
+  categories.location_fit = {
+    score: breakdown.location_fit,
+    maxPoints: w.location_fit,
+    matchedPhrases: cap(locationHits, 5),
+  };
 
   const compText = jd.match(
     /\$[\d,]+\s*[-–]\s*\$[\d,]+/,
   );
+  const compPhrases: string[] = [];
   if (compText) {
+    compPhrases.push(compText[0]);
     const numbers = compText[0].match(/[\d,]+/g) || [];
     const high = parseInt(numbers[numbers.length - 1]?.replace(/,/g, "") || "0");
     if (high >= 300000) breakdown.compensation = w.compensation;
@@ -280,6 +364,11 @@ export function scoreSingleJob(
   } else {
     breakdown.compensation = Math.round(w.compensation * 0.5);
   }
+  categories.compensation = {
+    score: breakdown.compensation,
+    maxPoints: w.compensation,
+    matchedPhrases: compPhrases,
+  };
 
   const transformSignals = [
     "transform",
@@ -292,10 +381,13 @@ export function scoreSingleJob(
     "scale",
     "grow",
   ];
-  const transformCount = transformSignals.filter((s) =>
-    jd.includes(s),
-  ).length;
-  breakdown.transformation_mandate = Math.min(w.transformation_mandate, Math.round((transformCount / 3) * w.transformation_mandate));
+  const transformHits = transformSignals.filter((s) => jd.includes(s));
+  breakdown.transformation_mandate = Math.min(w.transformation_mandate, Math.round((transformHits.length / 3) * w.transformation_mandate));
+  categories.transformation_mandate = {
+    score: breakdown.transformation_mandate,
+    maxPoints: w.transformation_mandate,
+    matchedPhrases: cap(transformHits, 5),
+  };
 
   const companyPrefSignals = [
     "series",
@@ -304,18 +396,52 @@ export function scoreSingleJob(
     "innovative",
     "leading",
   ];
-  const prefCount = companyPrefSignals.filter((s) => jd.includes(s)).length;
-  breakdown.company_preference = Math.min(w.company_preference, Math.round((prefCount / 2) * w.company_preference));
+  const prefHits = companyPrefSignals.filter((s) => jd.includes(s));
+  breakdown.company_preference = Math.min(w.company_preference, Math.round((prefHits.length / 2) * w.company_preference));
+  categories.company_preference = {
+    score: breakdown.company_preference,
+    maxPoints: w.company_preference,
+    matchedPhrases: cap(prefHits, 5),
+  };
 
   const execMode = classifyExecutionMode(jd);
   const clampedExec = Math.max(w.execution_mode_match.min, Math.min(w.execution_mode_match.max, execMode.score));
   breakdown.execution_mode_match = clampedExec;
   breakdown.execution_mode_reason = execMode.reason;
+  categories.execution_mode_match = {
+    score: clampedExec,
+    maxPoints: w.execution_mode_match.max,
+    matchedPhrases: cap([
+      ...EXECUTION_MODE_POSITIVE_SIGNALS.filter((s) => jd.includes(s)),
+      ...EXECUTION_MODE_NEGATIVE_SIGNALS.filter((s) => jd.includes(s)),
+    ], 5),
+    reason: execMode.reason,
+  };
+  if (clampedExec < 0) {
+    penalties.push({ key: "execution_mode_match", score: clampedExec, reason: execMode.reason });
+    if (clampedExec <= -10) {
+      riskFlags.push("Engineering-heavy AI execution expected");
+    }
+  }
 
   const specInflation = computeSpecInflationPenalty(jd);
   const clampedSpec = Math.max(w.spec_inflation_penalty.min, Math.min(w.spec_inflation_penalty.max, specInflation.score));
   breakdown.spec_inflation_penalty = clampedSpec;
   breakdown.spec_inflation_reason = specInflation.reason;
+  categories.spec_inflation_penalty = {
+    score: clampedSpec,
+    maxPoints: 0,
+    matchedPhrases: cap(SPEC_INFLATION_CONFIG.advancedAITerms.filter((t) => jd.includes(t)), 5),
+    reason: specInflation.reason,
+  };
+  if (clampedSpec < 0) {
+    penalties.push({ key: "spec_inflation_penalty", score: clampedSpec, reason: specInflation.reason });
+    riskFlags.push("High buzzword density with weak business grounding");
+  }
+
+  if (!locationMatch) {
+    riskFlags.push("No preferred location match (not Chicago/remote/hybrid)");
+  }
 
   const REASON_KEYS = ["execution_mode_reason", "spec_inflation_reason"];
   const rawTotal = Object.entries(breakdown).reduce((sum, [key, v]) => {
@@ -330,7 +456,66 @@ export function scoreSingleJob(
   breakdown._max_possible = maxPos;
   breakdown._scoring_mode = mode;
 
-  return { total: normalized, breakdown, mode };
+  const orderedCategories: Record<string, CategoryDetail> = {};
+  for (const key of DISPLAY_ORDER) {
+    if (categories[key]) orderedCategories[key] = categories[key];
+  }
+
+  const report: ScoreReport = {
+    total: normalized,
+    mode,
+    rawTotal,
+    maxPossible: maxPos,
+    categories: orderedCategories,
+    penalties: penalties.sort((a, b) => a.key.localeCompare(b.key)),
+    riskFlags: riskFlags.sort(),
+  };
+
+  return { total: normalized, breakdown, mode, report };
+}
+
+export function prettyPrintReport(report: ScoreReport, jobLabel?: string): string {
+  const lines: string[] = [];
+  const divider = "─".repeat(60);
+
+  lines.push(divider);
+  lines.push(`SCORE REPORT${jobLabel ? `: ${jobLabel}` : ""}`);
+  lines.push(divider);
+  lines.push(`Total: ${report.total}/100  (raw ${report.rawTotal}/${report.maxPossible})  mode=${report.mode}`);
+  lines.push("");
+  lines.push("CATEGORY BREAKDOWN");
+  lines.push(divider);
+
+  for (const [key, cat] of Object.entries(report.categories)) {
+    const bar = cat.maxPoints > 0
+      ? `${cat.score}/${cat.maxPoints}`
+      : `${cat.score}`;
+    const phrases = cat.matchedPhrases.length > 0
+      ? `  phrases: ${cat.matchedPhrases.join(", ")}`
+      : "";
+    lines.push(`  ${key.padEnd(28)} ${bar.padStart(8)}${phrases}`);
+  }
+
+  if (report.penalties.length > 0) {
+    lines.push("");
+    lines.push("PENALTIES APPLIED");
+    lines.push(divider);
+    for (const pen of report.penalties) {
+      lines.push(`  ${pen.key.padEnd(28)} ${String(pen.score).padStart(4)}  ${pen.reason}`);
+    }
+  }
+
+  if (report.riskFlags.length > 0) {
+    lines.push("");
+    lines.push("RISK FLAGS");
+    lines.push(divider);
+    for (const flag of report.riskFlags) {
+      lines.push(`  • ${flag}`);
+    }
+  }
+
+  lines.push(divider);
+  return lines.join("\n");
 }
 
 export const scoreJobsTool = createTool({

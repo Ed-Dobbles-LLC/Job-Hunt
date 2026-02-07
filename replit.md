@@ -75,6 +75,14 @@ Automated daily job-matching system built with Mastra (Agent Stack). Fetches job
   - Config in `src/mastra/tools/scoringConfig.ts` with adjustable thresholds and term lists
   - Integrated into scoreSingleJob breakdown and dashboard display
   - 7 unit tests in `tests/specInflationPenalty.test.ts`
+- Enhanced scoring output with structured ScoreReport
+  - `scoreSingleJob` now returns `report: ScoreReport` with categories, penalties, riskFlags
+  - Each category includes score, maxPoints, and up to 5 sorted matchedPhrases
+  - Penalties array lists all negative adjustments with reasons
+  - Risk flags auto-generated for dominance issues, engineering-heavy roles, buzzword inflation, location mismatches
+  - `prettyPrintReport()` produces human-readable output with aligned columns
+  - Deterministic ordering via DISPLAY_ORDER constant and sorted phrases/flags
+  - 44 snapshot tests in `tests/scoreReport.test.ts`
 
 ## Recent Changes (2026-02-06)
 - Added email import system: POST /api/import-emails (authenticated) for receiving emails from external sources
