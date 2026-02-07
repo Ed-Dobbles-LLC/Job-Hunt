@@ -69,6 +69,18 @@ The `sendDigestTool` (`sendDigestTool.ts`) aggregates daily results and sends a 
 -   **Dry-Run Mode**: `dryRun: true` generates HTML without sending, returns `htmlPreview`.
 -   **Recipient**: Defaults to `experience_inventory.json` → `profile.email`, overridable via `recipientOverride`.
 
+### Formatting Validator (Pre-PDF)
+The `formattingValidator.ts` provides a deterministic pre-PDF validation layer that inspects rendered DOCX content before sending. `validateFormattingTool.ts` wraps it as a Mastra tool. Key design decisions:
+-   **5 Check Categories**: DUPLICATE_HEADING, PLACEHOLDER, PAGE_COUNT, MISSING_CONTACT, BROKEN_LINK, plus MISSING_SECTION for resumes.
+-   **DOCX XML Inspection**: Parses rendered DOCX via JSZip to extract word/document.xml, then runs pattern matching on text runs.
+-   **Placeholder Denylist**: 23 patterns covering template variables ({{ }}, ${ }), [INSERT/YOUR/COMPANY] brackets, lorem ipsum, [object Object], undefined/null, TODO/FIXME/XXX markers, placeholder domains, sample@ prefixes, N/A, TBD.
+-   **Allowlist-Aware**: Placeholder checks accept an allowlist to suppress false positives (e.g., profile email containing example.com).
+-   **Contact Info Validation**: Checks for candidate name (critical), email/phone/location (warnings) in document content.
+-   **Link Validation**: Detects localhost, 127.0.0.1, example.com, and malformed URLs.
+-   **Page Count Enforcement**: Resume max 2 pages, cover letter max 1 page (critical violations).
+-   **Block Sending**: Returns `blockSending: true` when any critical violation exists, preventing digest/output from proceeding.
+-   **Combined Report**: `validatePacketFormatting()` runs both resume and cover letter checks in parallel, returns unified pass/fail with per-document breakdowns.
+
 ## External Dependencies
 -   **Database**: PostgreSQL (via Neon)
 -   **LLM**: OpenAI (gpt-4o with web search)

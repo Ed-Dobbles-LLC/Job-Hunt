@@ -14,6 +14,7 @@ import { extractInventoryTool } from "../tools/extractInventoryTool";
 import { extractJDRequirementsTool } from "../tools/extractJDRequirementsTool";
 import { matchScorerTool } from "../tools/matchScorerTool";
 import { sendDigestTool } from "../tools/sendDigestTool";
+import { validateFormattingTool } from "../tools/validateFormattingTool";
 import * as fs from "fs";
 import { workspacePath } from "../tools/paths";
 
@@ -149,6 +150,7 @@ Since we don't scrape LinkedIn, return target titles to search for (e.g., "VP Da
     enrichJobsTool,
     clayEnrichTool,
     sendDigestTool,
+    validateFormattingTool,
     webSearch: openai.tools.webSearchPreview(),
   },
 });
