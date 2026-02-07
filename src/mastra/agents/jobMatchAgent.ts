@@ -17,6 +17,7 @@ import { sendDigestTool } from "../tools/sendDigestTool";
 import { validateFormattingTool } from "../tools/validateFormattingTool";
 import { contactDiscoveryTool } from "../tools/contactDiscoveryTool";
 import { linkedInMessageTool } from "../tools/linkedInMessageTool";
+import { assembleDailyBriefTool } from "../tools/dailyBriefTool";
 import * as fs from "fs";
 import { workspacePath } from "../tools/paths";
 
@@ -83,7 +84,8 @@ Every evidence mapping entry MUST include:
 13. **validate-formatting**: Pre-PDF formatting validation (placeholder detection, page counts, contact info, broken links)
 14. **discover-contacts**: Compliant contact discovery using web search on public sources — finds outreach targets (hiring managers, recruiters, department heads) and saves to contacts table
 15. **generate-linkedin-messages**: Generate two grounded LinkedIn outreach messages (warm/cold) per job — <450 chars each, evidence-backed, with JD requirement hooks
-16. **webSearch**: Search the web for current information
+16. **assemble-daily-brief**: Assemble the full DailyBrief JSON with top matches, scores, file paths, outreach targets, and Questions for Ed — saves to /output/YYYY-MM-DD/daily_brief.json
+17. **webSearch**: Search the web for current information
 
 ## WHEN PARSING LINKEDIN JOB ALERT EMAILS
 LinkedIn job alert emails contain brief listings with ONLY: job title, company name, location, and a LinkedIn URL. They do NOT contain full job descriptions. Your job:
@@ -159,7 +161,16 @@ Both messages MUST be:
 - NEVER fabricate achievements, metrics, or facts not in the inventory
 
 Call generate-linkedin-messages with: job_id (required), plus optional company, title, requirements, recipient_name, recipient_title.
-The tool auto-loads job details from DB if not provided and persists messages to the contacts table.`,
+The tool auto-loads job details from DB if not provided and persists messages to the contacts table.
+
+## DAILY BRIEF ASSEMBLY
+After all jobs are processed, assemble the comprehensive daily brief:
+- Call assemble-daily-brief to aggregate all matches, scores, file paths, outreach targets, and auto-generated Questions for Ed
+- The brief follows storage layout: /output/YYYY-MM-DD/Company_Role/ with resume/coverletter/report.json
+- Questions for Ed are auto-generated from: experience gaps, missing contacts, unknown salary, red flags, truthfulness failures
+- Questions are prioritized (high/medium/low) and categorized by type
+- The brief JSON is saved to /output/YYYY-MM-DD/daily_brief.json for programmatic access
+- Then call send-digest with useDailyBrief=true to send the enhanced email with file paths, outreach targets, and questions section`,
 
   model: openai("gpt-4o"),
   tools: {
@@ -180,6 +191,7 @@ The tool auto-loads job details from DB if not provided and persists messages to
     validateFormattingTool,
     contactDiscoveryTool,
     linkedInMessageTool,
+    assembleDailyBriefTool,
     webSearch: openai.tools.webSearchPreview(),
   },
 });

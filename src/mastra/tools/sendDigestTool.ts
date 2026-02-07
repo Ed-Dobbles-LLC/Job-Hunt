@@ -6,10 +6,15 @@ import { query } from "./db";
 import { sendEmail } from "./gmailClient";
 import {
   renderDigestEmail,
+  renderDailyBriefEmail,
   type DigestData,
   type DigestJob,
   type DigestStats,
 } from "./digestEmailTemplate";
+import {
+  type DailyBrief,
+  assembleDailyBriefTool,
+} from "./dailyBriefTool";
 
 function loadRecipientEmail(): string {
   const inventoryPath = workspacePath("experience_inventory.json");
@@ -134,7 +139,7 @@ async function aggregateTodayStats(): Promise<{
 export const sendDigestTool = createTool({
   id: "send-digest",
   description:
-    "Aggregates today's job match results from the database, composes a rich HTML digest email with ranked job table, detail cards, and summary stats, then sends it via Gmail API. Stores digest metadata in the digests table.",
+    "Aggregates today's job match results from the database, composes a rich HTML digest email with ranked job table, detail cards, file paths, outreach targets, Questions for Ed, and summary stats, then sends it via Gmail API. Stores digest metadata in the digests table. When useDailyBrief=true (default), uses the enhanced DailyBrief format with full file paths, outreach targets, and questions section.",
   inputSchema: z.object({
     recipientOverride: z
       .string()
@@ -145,6 +150,15 @@ export const sendDigestTool = createTool({
       .boolean()
       .optional()
       .describe("If true, generate the email HTML but do not send it"),
+    useDailyBrief: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe("If true (default), use the enhanced DailyBrief format with file paths, outreach targets, and Questions for Ed"),
+    dateOverride: z
+      .string()
+      .optional()
+      .describe("Override date (YYYY-MM-DD format). Defaults to today."),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -153,11 +167,13 @@ export const sendDigestTool = createTool({
     jobCount: z.number(),
     emailSent: z.boolean(),
     htmlPreview: z.string().optional(),
+    briefPath: z.string().optional(),
+    questionsCount: z.number().optional(),
     error: z.string().optional(),
   }),
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
-    const today = new Date().toISOString().split("T")[0];
+    const today = context.dateOverride || new Date().toISOString().split("T")[0];
 
     logger?.info(`📧 [sendDigest] Starting digest generation for ${today}`);
 
@@ -175,45 +191,104 @@ export const sendDigestTool = createTool({
 
     logger?.info(`📧 [sendDigest] Recipient: ${recipientEmail}`);
 
-    let stats: DigestStats;
-    let jobs: DigestJob[];
+    let html: string;
+    let jobCount: number;
+    let statsForDb: DigestStats;
+    let briefPath: string | undefined;
+    let questionsCount: number | undefined;
 
-    try {
-      const aggregated = await aggregateTodayStats();
-      stats = aggregated.stats;
-      jobs = aggregated.jobs;
-      logger?.info(
-        `📊 [sendDigest] Aggregated: ${stats.jobsFetched} fetched, ${stats.jobsScored} scored, ${stats.jobsShortlisted} shortlisted, ${stats.packetsGenerated} packets`,
-      );
-    } catch (err: any) {
-      logger?.error(`❌ [sendDigest] Failed to aggregate stats: ${err.message}`);
-      return {
-        success: false,
-        recipientEmail,
-        jobCount: 0,
-        emailSent: false,
-        error: `Database aggregation failed: ${err.message}`,
-      };
+    if (context.useDailyBrief !== false) {
+      logger?.info(`📋 [sendDigest] Using DailyBrief format`);
+
+      try {
+        const briefResult = await assembleDailyBriefTool.execute({
+          context: { dateOverride: today },
+          mastra: mastra as any,
+          runId: "send-digest-brief",
+          threadId: undefined,
+          resourceId: undefined,
+        });
+
+        if (!briefResult.success || !briefResult.brief) {
+          logger?.error(`❌ [sendDigest] DailyBrief assembly failed: ${briefResult.error}`);
+          return {
+            success: false,
+            recipientEmail,
+            jobCount: 0,
+            emailSent: false,
+            error: `DailyBrief assembly failed: ${briefResult.error}`,
+          };
+        }
+
+        const brief = briefResult.brief;
+        html = renderDailyBriefEmail(brief);
+        jobCount = brief.top_matches.length;
+        briefPath = briefResult.briefPath;
+        questionsCount = brief.questions_for_ed.length;
+
+        statsForDb = {
+          jobsFetched: brief.summary.jobs_fetched,
+          jobsScored: brief.summary.jobs_scored,
+          jobsShortlisted: brief.summary.jobs_shortlisted,
+          packetsGenerated: brief.summary.packets_generated,
+          truthPassCount: brief.summary.truth_pass_count,
+          truthFailCount: brief.summary.truth_fail_count,
+        };
+
+        logger?.info(
+          `📊 [sendDigest] DailyBrief: ${jobCount} matches, ${questionsCount} questions, brief saved to ${briefPath}`,
+        );
+      } catch (err: any) {
+        logger?.error(`❌ [sendDigest] DailyBrief assembly error: ${err.message}`);
+        return {
+          success: false,
+          recipientEmail,
+          jobCount: 0,
+          emailSent: false,
+          error: `DailyBrief assembly error: ${err.message}`,
+        };
+      }
+    } else {
+      logger?.info(`📧 [sendDigest] Using legacy digest format`);
+
+      try {
+        const aggregated = await aggregateTodayStats();
+        statsForDb = aggregated.stats;
+        jobCount = aggregated.jobs.length;
+        logger?.info(
+          `📊 [sendDigest] Aggregated: ${statsForDb.jobsFetched} fetched, ${statsForDb.jobsScored} scored, ${statsForDb.jobsShortlisted} shortlisted`,
+        );
+
+        const digestData: DigestData = {
+          date: today,
+          stats: statsForDb,
+          jobs: aggregated.jobs,
+          runTimestamp: new Date().toISOString(),
+          modelUsed: "gpt-4o",
+          promptVersion: "v2",
+        };
+
+        html = renderDigestEmail(digestData);
+      } catch (err: any) {
+        logger?.error(`❌ [sendDigest] Failed to aggregate stats: ${err.message}`);
+        return {
+          success: false,
+          recipientEmail,
+          jobCount: 0,
+          emailSent: false,
+          error: `Database aggregation failed: ${err.message}`,
+        };
+      }
     }
 
-    const digestData: DigestData = {
-      date: today,
-      stats,
-      jobs,
-      runTimestamp: new Date().toISOString(),
-      modelUsed: "gpt-4o",
-      promptVersion: "v2",
-    };
-
-    const html = renderDigestEmail(digestData);
-    logger?.info(`📧 [sendDigest] HTML digest rendered (${html.length} chars)`);
+    logger?.info(`📧 [sendDigest] HTML rendered (${html.length} chars)`);
 
     let emailSent = false;
     if (!context.dryRun) {
       try {
-        const subject = jobs.length > 0
-          ? `Job Match Digest – ${today} (${jobs.length} match${jobs.length !== 1 ? "es" : ""})`
-          : `Job Match Digest – ${today} (No matches)`;
+        const subject = jobCount > 0
+          ? `Daily Brief – ${today} (${jobCount} match${jobCount !== 1 ? "es" : ""}${questionsCount ? `, ${questionsCount} Q` : ""})`
+          : `Daily Brief – ${today} (No matches)`;
 
         await sendEmail(recipientEmail, subject, html);
         emailSent = true;
@@ -223,7 +298,7 @@ export const sendDigestTool = createTool({
         return {
           success: false,
           recipientEmail,
-          jobCount: jobs.length,
+          jobCount,
           emailSent: false,
           error: `Email send failed: ${err.message}`,
         };
@@ -240,12 +315,12 @@ export const sendDigestTool = createTool({
          RETURNING digest_id`,
         [
           today,
-          stats.jobsFetched,
-          stats.jobsScored,
-          stats.jobsShortlisted,
-          stats.packetsGenerated,
-          stats.truthPassCount,
-          stats.truthFailCount,
+          statsForDb.jobsFetched,
+          statsForDb.jobsScored,
+          statsForDb.jobsShortlisted,
+          statsForDb.packetsGenerated,
+          statsForDb.truthPassCount,
+          statsForDb.truthFailCount,
           emailSent,
           emailSent ? new Date() : null,
           recipientEmail,
@@ -258,16 +333,18 @@ export const sendDigestTool = createTool({
     }
 
     logger?.info(
-      `✅ [sendDigest] Digest complete: ${jobs.length} jobs, email_sent=${emailSent}, digest_id=${digestId}`,
+      `✅ [sendDigest] Digest complete: ${jobCount} jobs, email_sent=${emailSent}, digest_id=${digestId}`,
     );
 
     return {
       success: true,
       digestId,
       recipientEmail,
-      jobCount: jobs.length,
+      jobCount,
       emailSent,
       htmlPreview: context.dryRun ? html : undefined,
+      briefPath,
+      questionsCount,
     };
   },
 });
