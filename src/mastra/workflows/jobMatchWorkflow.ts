@@ -451,19 +451,31 @@ ${inventoryText}
         const allResults = allToolResults.map((r: any) => r.result || r);
 
         const buildResult = allResults.find(
-          (r: any) => r.outputDir,
+          (r: any) => r.outputDir !== undefined,
         );
         const verifyResult = allResults.find(
           (r: any) => r.overallPass !== undefined,
         );
+        const packetResult = allResults.find(
+          (r: any) => r.pass !== undefined && r.resume !== undefined,
+        );
+
+        // Determine truth pass from all available verification results
+        const truthPass = verifyResult?.overallPass ?? packetResult?.pass ?? buildResult?.truthPass ?? false;
+
+        if (!truthPass) {
+          logger?.warn(
+            `🚫 [Step 3] BLOCKED: ${job.company} - ${job.title} failed verification. No output files generated.`,
+          );
+        }
 
         results.push({
           job_id: job.job_id,
           company: job.company,
           title: job.title,
           total_score: job.total_score,
-          truthPass: verifyResult?.overallPass ?? buildResult?.truthPass ?? false,
-          outputDir: buildResult?.outputDir || "",
+          truthPass,
+          outputDir: truthPass ? (buildResult?.outputDir || "") : "",
         });
 
         logger?.info(

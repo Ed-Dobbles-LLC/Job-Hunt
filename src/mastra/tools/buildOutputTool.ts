@@ -87,6 +87,36 @@ export const buildOutputTool = createTool({
     const vr = context.verifierResult as Record<string, unknown>;
     const truthPass = Boolean(vr?.pass ?? vr?.overallPass ?? false);
 
+    if (!truthPass) {
+      logger?.error(`🚫 [buildOutput] BLOCKED: Verification failed. Refusing to generate output files.`);
+      logger?.error(`🚫 [buildOutput] Verifier result: ${JSON.stringify(vr).substring(0, 500)}`);
+
+      // Still save a record to the DB so the failure is tracked
+      const jobLookup = await query(
+        `SELECT job_id FROM jobs WHERE company = $1 AND title = $2 ORDER BY job_id DESC LIMIT 1`,
+        [context.company, context.title],
+      );
+      const actualJobId = jobLookup.rows?.[0]?.job_id || context.job_id;
+      try {
+        await query(
+          `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [actualJobId, null, null, null, null, "v2", "gpt-4o", false],
+        );
+      } catch (err: any) {
+        logger?.error(`⚠️ [buildOutput] Failed to save blocked artifact record: ${err.message}`);
+      }
+
+      return {
+        success: false,
+        outputDir: "",
+        files: [],
+        truthPass: false,
+        resume_pagination: undefined,
+        cover_letter_pagination: undefined,
+      };
+    }
+
     logger?.info(`📄 [buildOutput] Rendering resume DOCX from TailoredResume JSON...`);
     logger?.info(`📄 [buildOutput] Resume has ${context.resume.experience.length} experience entries, ${context.resume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0)} bullets`);
     const resumeBuffer = await renderResumeDocx(context.resume, profile);

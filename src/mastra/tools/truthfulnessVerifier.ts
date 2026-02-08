@@ -494,7 +494,7 @@ export function verifyStyleRules(
                 const invWords = invNorm.split(/\s+/);
                 const matchCount = quoteWords.filter((w) => invWords.includes(w)).length;
                 const matchRatio = matchCount / Math.max(quoteWords.length, 1);
-                if (matchRatio < 0.6) {
+                if (matchRatio < 0.8) {
                   violations.push({
                     type: "STYLE_RULE_BROKEN",
                     severity: "critical",

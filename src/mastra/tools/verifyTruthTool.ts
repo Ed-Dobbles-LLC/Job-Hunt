@@ -132,7 +132,7 @@ export function layer3QuoteAccuracy(
       const bulletWords = bulletNorm.split(/\s+/);
       const matchingWords = quoteWords.filter(w => bulletWords.includes(w));
       const matchRatio = matchingWords.length / quoteWords.length;
-      if (matchRatio >= 0.6) {
+      if (matchRatio >= 0.8) {
         continue;
       }
     }
@@ -145,7 +145,7 @@ export function layer3QuoteAccuracy(
     if (quoteWords.length >= 3) {
       const significantWords = quoteWords.filter(w => w.length > 3);
       const matchCount = significantWords.filter(w => registry.allText.includes(w)).length;
-      if (matchCount / Math.max(significantWords.length, 1) >= 0.7) {
+      if (matchCount / Math.max(significantWords.length, 1) >= 0.85) {
         continue;
       }
     }

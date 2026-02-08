@@ -14,17 +14,24 @@ export function getDashboardRoutes() {
       path: "/dashboard",
       method: "GET" as const,
       createHandler: async () => async (c: any) => {
-        const htmlPath = path.join(__dirname, "public", "index.html");
+        // Try multiple paths to locate the dashboard HTML
+        const candidates = [
+          path.join(__dirname, "public", "index.html"),
+          workspacePath("src/mastra/public/index.html"),
+          path.join(process.cwd(), "src/mastra/public/index.html"),
+          path.resolve(__dirname, "..", "mastra", "public", "index.html"),
+        ];
+
         let html = "";
-        if (fs.existsSync(htmlPath)) {
-          html = fs.readFileSync(htmlPath, "utf-8");
-        } else {
-          const altPath = workspacePath("src/mastra/public/index.html");
-          if (fs.existsSync(altPath)) {
-            html = fs.readFileSync(altPath, "utf-8");
-          } else {
-            return c.text("Dashboard not found", 404);
+        for (const candidate of candidates) {
+          if (fs.existsSync(candidate)) {
+            html = fs.readFileSync(candidate, "utf-8");
+            break;
           }
+        }
+
+        if (!html) {
+          return c.text(`Dashboard not found. Searched paths:\n${candidates.join("\n")}`, 404);
         }
         return new Response(html, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -172,7 +179,10 @@ export function getDashboardRoutes() {
         const logger = mastra.getLogger();
         logger?.info("🚀 [dashboard] Triggering workflow");
         try {
-          const resp = await fetch("http://localhost:5000/api/workflows/job-match-workflow/start-async", {
+          // Derive base URL from the incoming request, falling back to localhost
+          const reqUrl = new URL(c.req.url);
+          const baseUrl = `${reqUrl.protocol}//${reqUrl.host}`;
+          const resp = await fetch(`${baseUrl}/api/workflows/job-match-workflow/start-async`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ inputData: {} }),

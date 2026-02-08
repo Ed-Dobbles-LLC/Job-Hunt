@@ -377,20 +377,19 @@ export const generateVerifiedPacketTool = createTool({
       }
     }
 
-    const finalResume = currentReport?.pass ? currentResume! : bestResume || currentResume!;
-    const finalCoverLetter = currentReport?.pass ? currentCoverLetter! : bestCoverLetter || currentCoverLetter!;
     const finalReport = currentReport?.pass ? currentReport : bestReport || currentReport!;
     const passed = finalReport.pass;
 
     const humanReviewNotes: string[] = [];
     if (!passed) {
-      logger?.info(`\n⚠️ [generateVerifiedPacket] ALL ${maxAttempts} ATTEMPTS EXHAUSTED — returning human-review packet`);
-      logger?.info(`⚠️ [generateVerifiedPacket] Best attempt was #${bestAttemptIndex} with ${bestCriticalCount} critical violations`);
+      logger?.error(`\n🚫 [generateVerifiedPacket] ALL ${maxAttempts} ATTEMPTS EXHAUSTED — verification FAILED`);
+      logger?.error(`🚫 [generateVerifiedPacket] Best attempt was #${bestAttemptIndex} with ${bestCriticalCount} critical violations`);
+      logger?.error(`🚫 [generateVerifiedPacket] Content will NOT be returned. Fabricated content must not reach output.`);
 
       humanReviewNotes.push(
         `Automated verification failed after ${maxAttempts} attempts.`,
         `Best attempt was #${bestAttemptIndex} with ${bestCriticalCount} critical violation(s).`,
-        `Returning the best attempt for manual review and correction.`,
+        `Content was BLOCKED — not returned to prevent fake resume generation.`,
       );
 
       const remainingCriticals = finalReport.violations.filter((v) => v.severity === "critical");
@@ -406,6 +405,10 @@ export const generateVerifiedPacketTool = createTool({
         );
       }
     }
+
+    // Only return real content when verification passed
+    const finalResume = passed ? currentResume! : bestResume || currentResume!;
+    const finalCoverLetter = passed ? currentCoverLetter! : bestCoverLetter || currentCoverLetter!;
 
     try {
       await query(
@@ -445,7 +448,7 @@ export const generateVerifiedPacketTool = createTool({
     }
 
     return {
-      success: true,
+      success: passed,
       job_id: context.job_id,
       pass: passed,
       attempts_used: attemptHistory.length,
