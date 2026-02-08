@@ -18,6 +18,11 @@ import { validateFormattingTool } from "../tools/validateFormattingTool";
 import { contactDiscoveryTool } from "../tools/contactDiscoveryTool";
 import { linkedInMessageTool } from "../tools/linkedInMessageTool";
 import { assembleDailyBriefTool } from "../tools/dailyBriefTool";
+import { resumeStyleSelectorTool } from "../tools/resumeStyleSelectorTool";
+import { atsKeywordOptimizerTool } from "../tools/atsKeywordOptimizerTool";
+import { skillsGapAnalyzerTool } from "../tools/skillsGapAnalyzerTool";
+import { bulletRewriterTool } from "../tools/bulletRewriterTool";
+import { resumeSummaryVariantsTool } from "../tools/resumeSummaryVariantsTool";
 import * as fs from "fs";
 import { workspacePath } from "../tools/paths";
 
@@ -86,6 +91,20 @@ Every evidence mapping entry MUST include:
 15. **generate-linkedin-messages**: Generate two grounded LinkedIn outreach messages (warm/cold) per job — <450 chars each, evidence-backed, with JD requirement hooks
 16. **assemble-daily-brief**: Assemble the full DailyBrief JSON with top matches, scores, file paths, outreach targets, and Questions for Ed — saves to /output/YYYY-MM-DD/daily_brief.json
 17. **webSearch**: Search the web for current information
+
+## CUSTOM RESUME TOOLS
+18. **resume-style-selector**: Generate a resume in a specific style format (chronological, functional, hybrid, executive). Each style rearranges sections and emphasis differently — use this when the default resume format isn't the best fit for a particular role.
+19. **ats-keyword-optimizer**: Analyze a generated resume against JD requirements to find keyword gaps. Returns a detailed report with covered/uncovered keywords, ATS score, and prioritized actions for improving keyword coverage. Only recommends additions truthfully sourced from inventory.
+20. **skills-gap-analyzer**: Deep comparison between the experience inventory and JD requirements. Returns strengths (talking points for interviews), partial matches, gaps, coverage percentages by category, and development areas. Deterministic — no LLM calls.
+21. **bullet-rewriter**: Rewrite specific resume bullets with a different emphasis (quantitative, leadership, technical, strategic). Maintains all evidence pointers and truthfulness guarantees while restructuring how the bullet leads.
+22. **resume-summary-variants**: Generate multiple professional summary variants, each with a different tone (executive, technical leader, transformation agent, data strategist, people leader). Lets you pick the best summary for each application.
+
+## WHEN TO USE CUSTOM RESUME TOOLS
+- After generating a standard resume, use **ats-keyword-optimizer** to check keyword coverage and identify gaps
+- Use **skills-gap-analyzer** before resume generation to understand which requirements you can/cannot support
+- Use **resume-style-selector** when a role calls for a specific format (e.g., executive brief for VP roles, functional for career pivots)
+- Use **bullet-rewriter** to fine-tune specific bullets after the initial resume is generated
+- Use **resume-summary-variants** to explore different professional summary angles before choosing one
 
 ## WHEN PARSING LINKEDIN JOB ALERT EMAILS
 LinkedIn job alert emails contain brief listings with ONLY: job title, company name, location, and a LinkedIn URL. They do NOT contain full job descriptions. Your job:
@@ -192,6 +211,11 @@ After all jobs are processed, assemble the comprehensive daily brief:
     contactDiscoveryTool,
     linkedInMessageTool,
     assembleDailyBriefTool,
+    resumeStyleSelectorTool,
+    atsKeywordOptimizerTool,
+    skillsGapAnalyzerTool,
+    bulletRewriterTool,
+    resumeSummaryVariantsTool,
     webSearch: openai.tools.webSearchPreview(),
   },
 });

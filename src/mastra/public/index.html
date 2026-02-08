@@ -593,6 +593,7 @@
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab('jobs')">Jobs</button>
+      <button class="tab" onclick="switchTab('resume-tools')">Resume Tools</button>
       <button class="tab" onclick="switchTab('runs')">Run History</button>
     </div>
 
@@ -638,6 +639,89 @@
           </thead>
           <tbody id="runsBody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-resume-tools">
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:600;margin-bottom:4px">Resume Tools</h2>
+        <p style="color:var(--text-dim);font-size:14px">Customize and optimize your resume for each job application.</p>
+      </div>
+
+      <!-- Job Selector -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">
+        <div class="label" style="margin-bottom:8px">Select Job</div>
+        <select id="rtJobSelect" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px" onchange="onResumeToolJobSelect()">
+          <option value="">-- Select a scored job --</option>
+        </select>
+        <div id="rtJobInfo" style="margin-top:12px;font-size:13px;color:var(--text-dim);display:none"></div>
+      </div>
+
+      <!-- Tool Cards Grid -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px">
+
+        <!-- Skills Gap Analyzer -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px">
+          <div style="font-size:15px;font-weight:600;margin-bottom:4px">Skills Gap Analyzer</div>
+          <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Deep comparison between your experience and JD requirements. Identifies strengths, partial matches, and gaps.</div>
+          <button class="btn btn-primary" id="rtGapBtn" onclick="runSkillsGap()" disabled>Analyze Gaps</button>
+        </div>
+
+        <!-- ATS Keyword Optimizer -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px">
+          <div style="font-size:15px;font-weight:600;margin-bottom:4px">ATS Keyword Optimizer</div>
+          <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Analyze keyword coverage and get actionable recommendations to improve ATS scoring.</div>
+          <button class="btn btn-primary" id="rtAtsBtn" onclick="runAtsOptimizer()" disabled>Optimize Keywords</button>
+        </div>
+
+        <!-- Resume Style Selector -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px">
+          <div style="font-size:15px;font-weight:600;margin-bottom:4px">Resume Style Selector</div>
+          <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px">Generate a resume in a specific format tailored to the role type.</div>
+          <select id="rtStyleSelect" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;margin-bottom:12px">
+            <option value="chronological">Chronological (date-ordered)</option>
+            <option value="functional">Functional (skills-based)</option>
+            <option value="hybrid" selected>Hybrid (relevance + skills)</option>
+            <option value="executive">Executive Brief (leadership-focused)</option>
+          </select>
+          <button class="btn btn-primary" id="rtStyleBtn" onclick="runStyleResume()" disabled>Generate Styled Resume</button>
+        </div>
+
+        <!-- Bullet Rewriter -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px">
+          <div style="font-size:15px;font-weight:600;margin-bottom:4px">Bullet Rewriter</div>
+          <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px">Rewrite resume bullets with a different emphasis while keeping all facts truthful.</div>
+          <select id="rtEmphasisSelect" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;margin-bottom:12px">
+            <option value="quantitative">Quantitative (metrics-forward)</option>
+            <option value="leadership">Leadership (people-forward)</option>
+            <option value="technical">Technical (architecture-forward)</option>
+            <option value="strategic">Strategic (business impact-forward)</option>
+          </select>
+          <button class="btn btn-primary" id="rtBulletBtn" onclick="runBulletRewriter()" disabled>Rewrite Bullets</button>
+        </div>
+
+        <!-- Summary Variants -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px">
+          <div style="font-size:15px;font-weight:600;margin-bottom:4px">Summary Variants</div>
+          <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px">Generate multiple professional summary options with different tones.</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+            <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" class="rt-tone" value="executive" checked> Executive</label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" class="rt-tone" value="technical_leader" checked> Technical</label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" class="rt-tone" value="transformation_agent" checked> Transformation</label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" class="rt-tone" value="data_strategist"> Data Strategist</label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" class="rt-tone" value="people_leader"> People Leader</label>
+          </div>
+          <button class="btn btn-primary" id="rtSummaryBtn" onclick="runSummaryVariants()" disabled>Generate Summaries</button>
+        </div>
+      </div>
+
+      <!-- Results Area -->
+      <div id="rtResults" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="font-size:16px;font-weight:600" id="rtResultsTitle">Results</h3>
+          <button class="btn" onclick="document.getElementById('rtResults').style.display='none'">Close Results</button>
+        </div>
+        <div id="rtResultsBody" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;max-height:600px;overflow-y:auto"></div>
       </div>
     </div>
   </div>
@@ -1111,6 +1195,375 @@
       document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
       document.getElementById('panel-' + tab).classList.add('active');
       if (tab === 'runs') loadRuns();
+      if (tab === 'resume-tools') loadResumeToolsJobList();
+    }
+
+    // ── Resume Tools Functions ─────────────────────────────────────
+
+    let rtSelectedJob = null;
+    let rtLastResume = null;
+
+    function loadResumeToolsJobList() {
+      const select = document.getElementById('rtJobSelect');
+      const scored = allJobs.filter(j => j.total_score != null).sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
+      const options = scored.map(j =>
+        `<option value="${j.job_id}">${esc(j.company || '?')} — ${esc(j.title || '?')} (Score: ${Math.round(j.total_score || 0)})</option>`
+      );
+      select.innerHTML = '<option value="">-- Select a scored job --</option>' + options.join('');
+    }
+
+    async function onResumeToolJobSelect() {
+      const jobId = document.getElementById('rtJobSelect').value;
+      const info = document.getElementById('rtJobInfo');
+      const btns = ['rtGapBtn', 'rtAtsBtn', 'rtStyleBtn', 'rtBulletBtn', 'rtSummaryBtn'];
+
+      if (!jobId) {
+        info.style.display = 'none';
+        rtSelectedJob = null;
+        btns.forEach(id => document.getElementById(id).disabled = true);
+        return;
+      }
+
+      try {
+        const data = await api('/jobs/' + jobId);
+        rtSelectedJob = data;
+        info.style.display = 'block';
+        info.innerHTML = `<strong>${esc(data.job.company)}</strong> — ${esc(data.job.title)} | ${esc(data.job.location || 'No location')} | Score: ${data.score ? Math.round(data.score.total_score) : 'N/A'} | ${data.artifact ? 'Has artifacts' : 'No artifacts yet'}`;
+        btns.forEach(id => document.getElementById(id).disabled = false);
+        if (!data.artifact) {
+          document.getElementById('rtAtsBtn').disabled = true;
+          document.getElementById('rtBulletBtn').disabled = true;
+        }
+      } catch (e) {
+        info.style.display = 'block';
+        info.innerHTML = '<span style="color:var(--red)">Failed to load job details</span>';
+      }
+    }
+
+    function showRtResults(title, html) {
+      document.getElementById('rtResultsTitle').textContent = title;
+      document.getElementById('rtResultsBody').innerHTML = html;
+      document.getElementById('rtResults').style.display = 'block';
+      document.getElementById('rtResults').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function setRtLoading(btnId, loading) {
+      const btn = document.getElementById(btnId);
+      if (loading) {
+        btn._origText = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Processing...';
+      } else {
+        btn.disabled = false;
+        btn.textContent = btn._origText || 'Run';
+      }
+    }
+
+    async function runSkillsGap() {
+      if (!rtSelectedJob) return;
+      setRtLoading('rtGapBtn', true);
+      try {
+        const res = await fetch('/api/resume-tools/skills-gap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_id: rtSelectedJob.job.job_id }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+          <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:8px">
+            <div style="font-size:28px;font-weight:700;color:${data.overall_fit_score >= 60 ? 'var(--green)' : data.overall_fit_score >= 40 ? 'var(--yellow)' : 'var(--red)'}">${data.overall_fit_score}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Fit Score</div>
+          </div>
+          <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:8px">
+            <div style="font-size:28px;font-weight:700;color:var(--green)">${data.summary.strong_match_count}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Strengths</div>
+          </div>
+          <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:8px">
+            <div style="font-size:28px;font-weight:700;color:var(--red)">${data.summary.gap_count}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Gaps</div>
+          </div>
+        </div>`;
+
+        html += `<div style="margin-bottom:16px"><strong>Coverage by Category</strong></div>`;
+        const cats = [
+          { key: 'must_have_coverage', label: 'Must-Have' },
+          { key: 'nice_to_have_coverage', label: 'Nice-to-Have' },
+          { key: 'tech_coverage', label: 'Technical' },
+          { key: 'leadership_coverage', label: 'Leadership' },
+        ];
+        cats.forEach(c => {
+          const pct = data.summary[c.key];
+          const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--red)';
+          html += `<div class="breakdown-bar"><div class="name">${c.label}</div><div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div><div class="score-val">${pct}%</div></div>`;
+        });
+
+        if (data.talking_points.length > 0) {
+          html += `<div style="margin-top:20px"><strong>Interview Talking Points</strong></div><ul style="margin:8px 0 0 20px;font-size:13px;line-height:1.8">`;
+          data.talking_points.forEach(tp => html += `<li>${esc(tp)}</li>`);
+          html += '</ul>';
+        }
+
+        if (data.development_areas.length > 0) {
+          html += `<div style="margin-top:16px"><strong>Development Areas</strong></div><ul style="margin:8px 0 0 20px;font-size:13px;line-height:1.8;color:var(--yellow)">`;
+          data.development_areas.forEach(da => html += `<li>${esc(da)}</li>`);
+          html += '</ul>';
+        }
+
+        if (data.gaps.length > 0) {
+          html += `<div style="margin-top:16px"><strong>Gaps (${data.gaps.length})</strong></div>`;
+          data.gaps.slice(0, 10).forEach(g => {
+            html += `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+              <span style="color:var(--red);font-weight:500">${esc(g.requirement)}</span>
+              <span style="color:var(--text-dim);margin-left:8px">(${g.category.replace('_',' ')})</span>
+              <div style="color:var(--text-dim);margin-top:2px">${esc(g.recommendation)}</div>
+            </div>`;
+          });
+        }
+
+        showRtResults('Skills Gap Analysis', html);
+        showToast('Skills gap analysis complete', 'success');
+      } catch (e) {
+        showToast('Skills gap analysis failed: ' + e.message, 'error');
+      } finally {
+        setRtLoading('rtGapBtn', false);
+      }
+    }
+
+    async function runAtsOptimizer() {
+      if (!rtSelectedJob || !rtSelectedJob.artifact) return;
+      setRtLoading('rtAtsBtn', true);
+      try {
+        const previewRes = await fetch(`/api/dashboard/preview/${rtSelectedJob.job.job_id}/resume`);
+        const previewHtml = await previewRes.text();
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = previewHtml;
+        const pageDiv = tempDiv.querySelector('.page');
+        const resumeText = pageDiv ? pageDiv.textContent : tempDiv.textContent;
+
+        const res = await fetch('/api/resume-tools/ats-optimize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_id: rtSelectedJob.job.job_id, resume_text: resumeText }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        const scoreColor = data.overall_ats_score >= 70 ? 'var(--green)' : data.overall_ats_score >= 40 ? 'var(--yellow)' : 'var(--red)';
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+          <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:8px">
+            <div style="font-size:28px;font-weight:700;color:${scoreColor}">${data.overall_ats_score}</div>
+            <div style="font-size:12px;color:var(--text-dim)">ATS Score</div>
+          </div>
+          <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:8px">
+            <div style="font-size:28px;font-weight:700">${data.total_keywords}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Total Keywords</div>
+          </div>
+          <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:8px">
+            <div style="font-size:28px;font-weight:700;color:var(--green)">${data.covered_keywords}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Covered</div>
+          </div>
+          <div style="text-align:center;padding:16px;background:var(--surface2);border-radius:8px">
+            <div style="font-size:28px;font-weight:700;color:var(--red)">${data.uncovered_keywords}</div>
+            <div style="font-size:12px;color:var(--text-dim)">Uncovered</div>
+          </div>
+        </div>`;
+
+        if (data.coverage_by_category) {
+          html += `<div style="margin-bottom:16px"><strong>Coverage by Category</strong></div>`;
+          Object.entries(data.coverage_by_category).forEach(([cat, vals]) => {
+            const pct = vals.percentage;
+            const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--red)';
+            html += `<div class="breakdown-bar"><div class="name">${cat.replace(/_/g, ' ')}</div><div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div><div class="score-val">${pct}%</div></div>`;
+          });
+        }
+
+        if (data.priority_actions && data.priority_actions.length > 0) {
+          html += `<div style="margin-top:20px"><strong>Priority Actions (${data.priority_actions.length})</strong></div>`;
+          data.priority_actions.slice(0, 15).forEach(a => {
+            const colors = { high: 'var(--red)', medium: 'var(--yellow)', low: 'var(--text-dim)' };
+            html += `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+              <span style="color:${colors[a.priority]};font-weight:600;text-transform:uppercase;font-size:11px;margin-right:8px">${a.priority}</span>
+              <strong>${esc(a.keyword)}</strong>
+              <div style="color:var(--text-dim);margin-top:2px">${esc(a.action)}</div>
+            </div>`;
+          });
+        }
+
+        showRtResults('ATS Keyword Optimization', html);
+        showToast('ATS optimization complete', 'success');
+      } catch (e) {
+        showToast('ATS optimization failed: ' + e.message, 'error');
+      } finally {
+        setRtLoading('rtAtsBtn', false);
+      }
+    }
+
+    async function runStyleResume() {
+      if (!rtSelectedJob) return;
+      const style = document.getElementById('rtStyleSelect').value;
+      setRtLoading('rtStyleBtn', true);
+      try {
+        const res = await fetch('/api/resume-tools/style-resume', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_id: rtSelectedJob.job.job_id, style }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        rtLastResume = data.resume;
+
+        let html = `<div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px">
+          <strong>Style:</strong> ${esc(data.style_label)} | <strong>Bullets:</strong> ${data.stats.total_bullets} | <strong>Evidence:</strong> ${data.stats.evidence_pointers} | <strong>ATS Keywords:</strong> ${data.stats.ats_keywords} | <strong>Gaps:</strong> ${data.stats.gap_notes}
+        </div>`;
+
+        html += `<div style="background:#fff;color:#1a1a1a;padding:32px;border-radius:8px;line-height:1.6;font-family:Calibri,Arial,sans-serif">`;
+        html += `<div style="text-align:center;margin-bottom:16px"><h2 style="margin:0;font-size:22px">${esc(data.resume.target_role)}</h2><div style="color:#666;font-size:14px">${esc(data.resume.target_company)}</div></div>`;
+        html += `<div style="margin-bottom:16px"><strong>Professional Summary</strong><p style="margin-top:4px;font-size:14px">${esc(data.resume.professional_summary)}</p></div>`;
+
+        html += `<div style="margin-bottom:16px"><strong>Experience</strong>`;
+        data.resume.experience.forEach(exp => {
+          html += `<div style="margin-top:12px"><div style="font-weight:600">${esc(exp.title)} — ${esc(exp.employer)}</div><div style="font-size:12px;color:#666">${esc(exp.start_date)} - ${esc(exp.end_date)} | ${esc(exp.location)}</div><ul style="margin:6px 0 0 20px;font-size:14px">`;
+          exp.bullets.forEach(b => {
+            html += `<li style="margin-bottom:4px">${esc(b.text)}</li>`;
+          });
+          html += '</ul></div>';
+        });
+        html += '</div>';
+
+        if (data.resume.skills) {
+          html += `<div style="margin-bottom:16px"><strong>Skills</strong><div style="font-size:14px;margin-top:4px">`;
+          if (data.resume.skills.technical?.length) html += `<div><strong>Technical:</strong> ${data.resume.skills.technical.map(esc).join(', ')}</div>`;
+          if (data.resume.skills.leadership?.length) html += `<div><strong>Leadership:</strong> ${data.resume.skills.leadership.map(esc).join(', ')}</div>`;
+          if (data.resume.skills.data_science?.length) html += `<div><strong>Data Science:</strong> ${data.resume.skills.data_science.map(esc).join(', ')}</div>`;
+          html += '</div></div>';
+        }
+
+        html += '</div>';
+
+        if (data.resume.gap_notes?.length > 0) {
+          html += `<div style="margin-top:16px"><strong>Gap Notes (${data.resume.gap_notes.length})</strong>`;
+          data.resume.gap_notes.forEach(g => {
+            html += `<div style="padding:6px 0;font-size:13px;color:var(--yellow)">- ${esc(g.requirement_text)}: ${esc(g.reason)}</div>`;
+          });
+          html += '</div>';
+        }
+
+        showRtResults(`${data.style_label} Resume`, html);
+        showToast('Styled resume generated', 'success');
+        document.getElementById('rtBulletBtn').disabled = false;
+      } catch (e) {
+        showToast('Style resume failed: ' + e.message, 'error');
+      } finally {
+        setRtLoading('rtStyleBtn', false);
+      }
+    }
+
+    async function runBulletRewriter() {
+      if (!rtSelectedJob) return;
+      const emphasis = document.getElementById('rtEmphasisSelect').value;
+      setRtLoading('rtBulletBtn', true);
+
+      try {
+        let bullets = [];
+        if (rtLastResume) {
+          rtLastResume.experience.forEach(exp => {
+            exp.bullets.forEach(b => {
+              bullets.push({ text: b.text, source_hash: b.source_hash, evidence_quote: b.evidence_quote });
+            });
+          });
+        }
+
+        if (bullets.length === 0) {
+          const previewRes = await fetch(`/api/dashboard/preview/${rtSelectedJob.job.job_id}/resume`);
+          const previewHtml = await previewRes.text();
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = previewHtml;
+          const lis = tempDiv.querySelectorAll('li');
+          lis.forEach((li, i) => {
+            bullets.push({ text: li.textContent.trim(), source_hash: `auto-${i}`, evidence_quote: li.textContent.trim() });
+          });
+        }
+
+        if (bullets.length === 0) throw new Error('No bullets found to rewrite. Generate a resume first.');
+
+        const res = await fetch('/api/resume-tools/rewrite-bullets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bullets: bullets.slice(0, 15),
+            emphasis,
+            target_role: rtSelectedJob.job.title,
+            target_company: rtSelectedJob.job.company,
+          }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        let html = `<div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px">
+          <strong>Emphasis:</strong> ${esc(data.emphasis_label)} | <strong>Bullets Rewritten:</strong> ${data.total_bullets}
+        </div>`;
+
+        data.rewritten_bullets.forEach((b, i) => {
+          html += `<div style="padding:12px 0;border-bottom:1px solid var(--border)">
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">Bullet ${i + 1}</div>
+            <div style="font-size:13px;color:var(--red);text-decoration:line-through;margin-bottom:4px">${esc(b.original_text)}</div>
+            <div style="font-size:13px;color:var(--green)">${esc(b.rewritten_text)}</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px">${esc(b.changes_made)}</div>
+          </div>`;
+        });
+
+        showRtResults('Rewritten Bullets', html);
+        showToast('Bullets rewritten', 'success');
+      } catch (e) {
+        showToast('Bullet rewrite failed: ' + e.message, 'error');
+      } finally {
+        setRtLoading('rtBulletBtn', false);
+      }
+    }
+
+    async function runSummaryVariants() {
+      if (!rtSelectedJob) return;
+      const tones = [...document.querySelectorAll('.rt-tone:checked')].map(cb => cb.value);
+      if (tones.length === 0) { showToast('Select at least one tone', 'error'); return; }
+      setRtLoading('rtSummaryBtn', true);
+
+      try {
+        const res = await fetch('/api/resume-tools/summary-variants', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_id: rtSelectedJob.job.job_id, tones }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        let html = `<div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px">
+          <strong>${data.total_variants} variants generated</strong> for ${esc(data.company)} — ${esc(data.title)}
+        </div>`;
+
+        data.variants.forEach((v, i) => {
+          html += `<div style="padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <strong>${esc(v.tone_label)}</strong>
+              <span style="font-size:12px;color:var(--text-dim)">${v.word_count} words</span>
+            </div>
+            <div style="font-size:14px;line-height:1.6;padding:12px;background:var(--bg);border-radius:6px">${esc(v.summary_text)}</div>
+            <div style="margin-top:8px;font-size:12px;color:var(--text-dim)">
+              <strong>Themes:</strong> ${v.key_themes.map(esc).join(', ')} |
+              <strong>Evidence:</strong> ${v.evidence_ids.map(esc).join(', ')}
+            </div>
+          </div>`;
+        });
+
+        showRtResults('Professional Summary Variants', html);
+        showToast('Summary variants generated', 'success');
+      } catch (e) {
+        showToast('Summary variants failed: ' + e.message, 'error');
+      } finally {
+        setRtLoading('rtSummaryBtn', false);
+      }
     }
 
     async function triggerWorkflow() {

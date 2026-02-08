@@ -3,6 +3,14 @@ import * as fs from "fs";
 import * as path from "path";
 import { workspacePath } from "./tools/paths";
 import mammoth from "mammoth";
+import { resumeStyleSelectorTool } from "./tools/resumeStyleSelectorTool";
+import { atsKeywordOptimizerTool } from "./tools/atsKeywordOptimizerTool";
+import { skillsGapAnalyzerTool } from "./tools/skillsGapAnalyzerTool";
+import { bulletRewriterTool } from "./tools/bulletRewriterTool";
+import { resumeSummaryVariantsTool } from "./tools/resumeSummaryVariantsTool";
+import { RESUME_STYLES } from "./tools/resumeStyleSelectorTool";
+import { EMPHASIS_MODES } from "./tools/bulletRewriterTool";
+import { SUMMARY_TONES } from "./tools/resumeSummaryVariantsTool";
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -394,6 +402,148 @@ export function getDashboardRoutes() {
           });
         } catch (err: any) {
           logger?.error(`❌ [dashboard] Download error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+
+    // ── Resume Tools API Routes ──────────────────────────────────────
+
+    {
+      path: "/api/resume-tools/config",
+      method: "GET" as const,
+      createHandler: async () => async (c: any) => {
+        return c.json({
+          styles: Object.entries(RESUME_STYLES).map(([key, val]) => ({
+            key,
+            label: val.label,
+            description: val.description,
+          })),
+          emphasis_modes: Object.entries(EMPHASIS_MODES).map(([key, val]) => ({
+            key,
+            label: val.label,
+          })),
+          summary_tones: Object.entries(SUMMARY_TONES).map(([key, val]) => ({
+            key,
+            label: val.label,
+          })),
+        });
+      },
+    },
+    {
+      path: "/api/resume-tools/style-resume",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          const body = await c.req.json();
+          const { job_id, style } = body;
+          if (!job_id || !style) {
+            return c.json({ error: "job_id and style are required" }, 400);
+          }
+          logger?.info(`🎨 [resumeTools] Style resume request: job=${job_id}, style=${style}`);
+          const result = await resumeStyleSelectorTool.execute({
+            context: { job_id: parseInt(job_id), style },
+            mastra,
+          });
+          return c.json(result);
+        } catch (err: any) {
+          logger?.error(`❌ [resumeTools] Style resume error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/resume-tools/ats-optimize",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          const body = await c.req.json();
+          const { job_id, resume_text } = body;
+          if (!job_id || !resume_text) {
+            return c.json({ error: "job_id and resume_text are required" }, 400);
+          }
+          logger?.info(`🔑 [resumeTools] ATS optimize request: job=${job_id}`);
+          const result = await atsKeywordOptimizerTool.execute({
+            context: { job_id: parseInt(job_id), resume_text },
+            mastra,
+          });
+          return c.json(result);
+        } catch (err: any) {
+          logger?.error(`❌ [resumeTools] ATS optimize error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/resume-tools/skills-gap",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          const body = await c.req.json();
+          const { job_id } = body;
+          if (!job_id) {
+            return c.json({ error: "job_id is required" }, 400);
+          }
+          logger?.info(`🔍 [resumeTools] Skills gap request: job=${job_id}`);
+          const result = await skillsGapAnalyzerTool.execute({
+            context: { job_id: parseInt(job_id) },
+            mastra,
+          });
+          return c.json(result);
+        } catch (err: any) {
+          logger?.error(`❌ [resumeTools] Skills gap error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/resume-tools/rewrite-bullets",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          const body = await c.req.json();
+          const { bullets, emphasis, target_role, target_company } = body;
+          if (!bullets || !emphasis) {
+            return c.json({ error: "bullets and emphasis are required" }, 400);
+          }
+          logger?.info(`✏️ [resumeTools] Bullet rewrite request: ${bullets.length} bullets, emphasis=${emphasis}`);
+          const result = await bulletRewriterTool.execute({
+            context: { bullets, emphasis, target_role, target_company },
+            mastra,
+          });
+          return c.json(result);
+        } catch (err: any) {
+          logger?.error(`❌ [resumeTools] Bullet rewrite error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/resume-tools/summary-variants",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          const body = await c.req.json();
+          const { job_id, tones } = body;
+          if (!job_id) {
+            return c.json({ error: "job_id is required" }, 400);
+          }
+          logger?.info(`📝 [resumeTools] Summary variants request: job=${job_id}`);
+          const result = await resumeSummaryVariantsTool.execute({
+            context: {
+              job_id: parseInt(job_id),
+              tones: tones || ["executive", "technical_leader", "transformation_agent"],
+            },
+            mastra,
+          });
+          return c.json(result);
+        } catch (err: any) {
+          logger?.error(`❌ [resumeTools] Summary variants error: ${err.message}`);
           return c.json({ error: err.message }, 500);
         }
       },
