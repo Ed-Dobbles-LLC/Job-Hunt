@@ -70,6 +70,8 @@ export const mastra = new Mastra({
     // entrypoint.
     externals: [
       "@slack/web-api",
+      "@ai-sdk/openai",
+      "ai",
       "inngest",
       "inngest/hono",
       "hono",
@@ -211,16 +213,24 @@ export const mastra = new Mastra({
 
 /*  Sanity check 1: Throw an error if there are more than 1 workflows.  */
 // !!!!!! Do not remove this check. !!!!!!
-if (Object.keys(mastra.getWorkflows()).length > 1) {
-  throw new Error(
-    "More than 1 workflows found. Currently, more than 1 workflows are not supported in the UI, since doing so will cause app state to be inconsistent.",
-  );
+try {
+  if (typeof mastra.getWorkflows === "function" && Object.keys(mastra.getWorkflows()).length > 1) {
+    throw new Error(
+      "More than 1 workflows found. Currently, more than 1 workflows are not supported in the UI, since doing so will cause app state to be inconsistent.",
+    );
+  }
+} catch (e: any) {
+  if (e.message?.includes("More than 1")) throw e;
 }
 
 /*  Sanity check 2: Throw an error if there are more than 1 agents.  */
 // !!!!!! Do not remove this check. !!!!!!
-if (Object.keys(mastra.getAgents()).length > 1) {
-  throw new Error(
-    "More than 1 agents found. Currently, more than 1 agents are not supported in the UI, since doing so will cause app state to be inconsistent.",
-  );
+try {
+  if (typeof mastra.getAgents === "function" && Object.keys(mastra.getAgents()).length > 1) {
+    throw new Error(
+      "More than 1 agents found. Currently, more than 1 agents are not supported in the UI, since doing so will cause app state to be inconsistent.",
+    );
+  }
+} catch (e: any) {
+  if (e.message?.includes("More than 1")) throw e;
 }

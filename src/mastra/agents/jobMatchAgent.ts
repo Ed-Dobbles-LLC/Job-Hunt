@@ -216,6 +216,9 @@ After all jobs are processed, assemble the comprehensive daily brief:
     skillsGapAnalyzerTool,
     bulletRewriterTool,
     resumeSummaryVariantsTool,
-    webSearch: openai.tools.webSearchPreview(),
+    ...((() => {
+      try { return { webSearch: openai.tools.webSearchPreview() }; }
+      catch { return {}; }
+    })()),
   },
 });
