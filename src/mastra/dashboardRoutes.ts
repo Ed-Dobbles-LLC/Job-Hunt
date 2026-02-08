@@ -16,28 +16,42 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function serveHtmlFile(filename: string) {
+  return async () => async (c: any) => {
+    const htmlPath = path.join(__dirname, "public", filename);
+    let html = "";
+    if (fs.existsSync(htmlPath)) {
+      html = fs.readFileSync(htmlPath, "utf-8");
+    } else {
+      const altPath = workspacePath(`src/mastra/public/${filename}`);
+      if (fs.existsSync(altPath)) {
+        html = fs.readFileSync(altPath, "utf-8");
+      } else {
+        return c.text("Page not found", 404);
+      }
+    }
+    return new Response(html, {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  };
+}
+
 export function getDashboardRoutes() {
   return [
     {
+      path: "/",
+      method: "GET" as const,
+      createHandler: serveHtmlFile("website.html"),
+    },
+    {
+      path: "/website",
+      method: "GET" as const,
+      createHandler: serveHtmlFile("website.html"),
+    },
+    {
       path: "/dashboard",
       method: "GET" as const,
-      createHandler: async () => async (c: any) => {
-        const htmlPath = path.join(__dirname, "public", "index.html");
-        let html = "";
-        if (fs.existsSync(htmlPath)) {
-          html = fs.readFileSync(htmlPath, "utf-8");
-        } else {
-          const altPath = workspacePath("src/mastra/public/index.html");
-          if (fs.existsSync(altPath)) {
-            html = fs.readFileSync(altPath, "utf-8");
-          } else {
-            return c.text("Dashboard not found", 404);
-          }
-        }
-        return new Response(html, {
-          headers: { "Content-Type": "text/html; charset=utf-8" },
-        });
-      },
+      createHandler: serveHtmlFile("index.html"),
     },
     {
       path: "/api/dashboard",
