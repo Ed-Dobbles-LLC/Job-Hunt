@@ -19,11 +19,12 @@ RUN npm install --ignore-scripts --production=false
 COPY . .
 
 # Build the Mastra project
-RUN npm run build
+RUN NODE_OPTIONS='--max-old-space-size=4096' npm run build
 
 # Production environment
 ENV NODE_ENV=production
 ENV PORT=5000
+ENV WORKSPACE_ROOT=/app
 
 EXPOSE 5000
 
