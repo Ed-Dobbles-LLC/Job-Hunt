@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jobmatch
+      POSTGRES_USER: jobmatch
+      POSTGRES_PASSWORD: jobmatch_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://jobmatch:jobmatch_secret@db:5432/jobmatch
+      NODE_ENV: production
+      WORKSPACE_ROOT: /app
+    volumes:
+      - ./output:/app/output
+      - ./experience_inventory.json:/app/experience_inventory.json:ro
+
+volumes:
+  pgdata:

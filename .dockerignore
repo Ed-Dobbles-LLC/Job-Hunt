@@ -1,0 +1,13 @@
+node_modules
+.mastra
+.env
+.env.*
+!.env.example
+output
+dist
+*.db
+*.db-*
+.DS_Store
+.git
+.replit
+.replit_integration_files

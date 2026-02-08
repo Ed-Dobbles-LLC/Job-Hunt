@@ -84,7 +84,8 @@ export const buildOutputTool = createTool({
     const inventory = loadInventory();
     const profile = inventory.profile || {};
     const files: string[] = [];
-    const truthPass = context.verifierResult?.pass ?? context.verifierResult?.overallPass ?? false;
+    const vr = context.verifierResult as Record<string, unknown>;
+    const truthPass = Boolean(vr?.pass ?? vr?.overallPass ?? false);
 
     logger?.info(`📄 [buildOutput] Rendering resume DOCX from TailoredResume JSON...`);
     logger?.info(`📄 [buildOutput] Resume has ${context.resume.experience.length} experience entries, ${context.resume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0)} bullets`);

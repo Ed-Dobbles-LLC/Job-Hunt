@@ -14,7 +14,7 @@ function loadInventory(): ExperienceInventory {
 const MatchedReqSchema = z.object({
   requirement: z.string(),
   confidence: z.number(),
-  matched: z.literal(true),
+  matched: z.boolean(),
   match_strength: z.number(),
   evidence_id: z.string(),
   evidence_quote: z.string(),

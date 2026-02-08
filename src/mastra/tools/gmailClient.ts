@@ -1,8 +1,38 @@
 import { google } from "googleapis";
 
+// ---------------------------------------------------------------------------
+// Direct Google OAuth Client (portable – works anywhere)
+// ---------------------------------------------------------------------------
+// Requires: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
+function getDirectGmailClient() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    return null;
+  }
+
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+  return google.gmail({ version: "v1", auth: oauth2Client });
+}
+
+// ---------------------------------------------------------------------------
+// Replit Connector Client (only used inside Replit)
+// ---------------------------------------------------------------------------
 let connectionSettings: any;
 
-async function getAccessToken() {
+async function getReplitAccessToken(): Promise<string> {
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  if (!hostname) {
+    throw new Error(
+      "Replit connector unavailable: REPLIT_CONNECTORS_HOSTNAME not set. " +
+      "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN instead.",
+    );
+  }
+
   if (
     connectionSettings &&
     connectionSettings.settings.expires_at &&
@@ -11,7 +41,6 @@ async function getAccessToken() {
     return connectionSettings.settings.access_token;
   }
 
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
     ? "repl " + process.env.REPL_IDENTITY
     : process.env.WEB_REPL_RENEWAL
@@ -19,7 +48,10 @@ async function getAccessToken() {
       : null;
 
   if (!xReplitToken) {
-    throw new Error("X_REPLIT_TOKEN not found for repl/depl");
+    throw new Error(
+      "Replit connector unavailable: no REPL_IDENTITY or WEB_REPL_RENEWAL token. " +
+      "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN instead.",
+    );
   }
 
   const rawResponse = await fetch(
@@ -41,37 +73,40 @@ async function getAccessToken() {
     connectionSettings.settings?.oauth?.credentials?.access_token;
 
   if (!connectionSettings || !accessToken) {
-    throw new Error("Gmail not connected");
+    throw new Error("Gmail not connected via Replit connector");
   }
   return accessToken;
 }
 
-export async function getUncachableGmailClient() {
-  const accessToken = await getAccessToken();
-
+async function getReplitGmailClient() {
+  const accessToken = await getReplitAccessToken();
   const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({
-    access_token: accessToken,
-  });
-
+  oauth2Client.setCredentials({ access_token: accessToken });
   return google.gmail({ version: "v1", auth: oauth2Client });
 }
 
-function getDirectGmailClient() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-
-  if (!clientId || !clientSecret || !refreshToken) {
-    return null;
+// ---------------------------------------------------------------------------
+// Unified Gmail client accessor (tries direct first, then Replit)
+// ---------------------------------------------------------------------------
+async function getGmailClient() {
+  const direct = getDirectGmailClient();
+  if (direct) {
+    console.log(`📧 [Gmail] Using direct Google Cloud API credentials`);
+    return direct;
   }
 
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-  return google.gmail({ version: "v1", auth: oauth2Client });
+  console.log(`📧 [Gmail] Direct API not configured, trying Replit connector`);
+  return getReplitGmailClient();
 }
 
+// For backwards-compat with code that explicitly calls Replit path
+export async function getUncachableGmailClient() {
+  return getGmailClient();
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
 export interface RawEmail {
   id: string;
   subject: string;
@@ -158,141 +193,83 @@ async function fetchMessagesFromGmail(
   return emails;
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 export async function fetchEmailsFromLabel(
   labelName: string,
   maxResults: number = 20,
 ): Promise<RawEmail[]> {
-  const directGmail = getDirectGmailClient();
+  const gmail = await getGmailClient();
 
-  if (directGmail) {
-    console.log(`📧 [Gmail] Using direct Google Cloud API credentials`);
-    try {
-      const labelsResponse = await directGmail.users.labels.list({ userId: "me" });
-      const labels = labelsResponse.data.labels || [];
-      const targetLabel = labels.find(
-        (l) => l.name?.toUpperCase() === labelName.toUpperCase(),
-      );
+  try {
+    const labelsResponse = await gmail.users.labels.list({ userId: "me" });
+    const labels = labelsResponse.data.labels || [];
+    const targetLabel = labels.find(
+      (l) => l.name?.toUpperCase() === labelName.toUpperCase(),
+    );
 
-      if (targetLabel) {
-        console.log(`📧 [Gmail] Found label "${labelName}" (${targetLabel.id})`);
-        const labelResponse = await directGmail.users.messages.list({
-          userId: "me",
-          labelIds: [targetLabel.id!],
-          maxResults,
-        });
-        const labelMsgIds = labelResponse.data.messages || [];
-        console.log(`📧 [Gmail] Found ${labelMsgIds.length} emails in label "${labelName}"`);
-        if (labelMsgIds.length > 0) {
-          const labelEmails: RawEmail[] = [];
-          for (const msg of labelMsgIds) {
-            try {
-              const full = await directGmail.users.messages.get({
-                userId: "me",
-                id: msg.id!,
-                format: "full",
-              });
-              const headers = full.data.payload?.headers || [];
-              const subject = headers.find((h: any) => h.name === "Subject")?.value || "No Subject";
-              const from = headers.find((h: any) => h.name === "From")?.value || "Unknown";
-              const date = headers.find((h: any) => h.name === "Date")?.value || new Date().toISOString();
-              const body = extractBodyFromPayload(full.data.payload);
-              labelEmails.push({ id: msg.id!, subject, from, date, body });
-            } catch (err) {
-              console.error(`Failed to fetch message ${msg.id}:`, err);
-            }
-          }
-          if (labelEmails.length > 0) {
-            console.log(`📧 [Gmail] Fetched ${labelEmails.length} emails from label "${labelName}"`);
-            return labelEmails;
+    if (targetLabel) {
+      console.log(`📧 [Gmail] Found label "${labelName}" (${targetLabel.id})`);
+      const labelResponse = await gmail.users.messages.list({
+        userId: "me",
+        labelIds: [targetLabel.id!],
+        maxResults,
+      });
+      const labelMsgIds = labelResponse.data.messages || [];
+      console.log(`📧 [Gmail] Found ${labelMsgIds.length} emails in label "${labelName}"`);
+      if (labelMsgIds.length > 0) {
+        const labelEmails: RawEmail[] = [];
+        for (const msg of labelMsgIds) {
+          try {
+            const full = await gmail.users.messages.get({
+              userId: "me",
+              id: msg.id!,
+              format: "full",
+            });
+            const headers = full.data.payload?.headers || [];
+            const subject = headers.find((h: any) => h.name === "Subject")?.value || "No Subject";
+            const from = headers.find((h: any) => h.name === "From")?.value || "Unknown";
+            const date = headers.find((h: any) => h.name === "Date")?.value || new Date().toISOString();
+            const body = extractBodyFromPayload(full.data.payload);
+            labelEmails.push({ id: msg.id!, subject, from, date, body });
+          } catch (err) {
+            console.error(`Failed to fetch message ${msg.id}:`, err);
           }
         }
-      } else {
-        console.log(
-          `📧 [Gmail] Label "${labelName}" not found. Available: ${labels.map((l) => l.name).join(", ")}`,
-        );
+        if (labelEmails.length > 0) {
+          console.log(`📧 [Gmail] Fetched ${labelEmails.length} emails from label "${labelName}"`);
+          return labelEmails;
+        }
       }
-
-      console.log(`📧 [Gmail] Searching for LinkedIn job alert emails`);
-      const searchQuery = 'from:(jobalerts-noreply@linkedin.com OR jobs-noreply@linkedin.com OR indeed.com) subject:(job OR jobs OR alert) is:unread';
-      const searchEmails = await fetchMessagesFromGmail(directGmail, searchQuery, maxResults, false);
-
-      if (searchEmails.length > 0) {
-        console.log(`📧 [Gmail] Found ${searchEmails.length} job alert emails via search`);
-        return searchEmails;
-      }
-
-      const recentQuery = 'from:(jobalerts-noreply@linkedin.com OR jobs-noreply@linkedin.com OR indeed.com) newer_than:3d';
-      const recentEmails = await fetchMessagesFromGmail(directGmail, recentQuery, maxResults, false);
-      if (recentEmails.length > 0) {
-        console.log(`📧 [Gmail] Found ${recentEmails.length} recent job alert emails (last 3 days)`);
-        return recentEmails;
-      }
-
-      console.log(`📧 [Gmail] No job alert emails found via direct API`);
-      return [];
-    } catch (err: any) {
-      console.error(`📧 [Gmail] Direct API error: ${err.message}`);
-      console.log(`📧 [Gmail] Falling back to Replit connector`);
+    } else {
+      console.log(
+        `📧 [Gmail] Label "${labelName}" not found. Available: ${labels.map((l) => l.name).join(", ")}`,
+      );
     }
-  }
 
-  console.log(`📧 [Gmail] Using Replit connector (addon scopes)`);
-  const gmail = await getUncachableGmailClient();
-
-  const labelsResponse = await gmail.users.labels.list({ userId: "me" });
-  const labels = labelsResponse.data.labels || [];
-  const targetLabel = labels.find(
-    (l) => l.name?.toUpperCase() === labelName.toUpperCase(),
-  );
-
-  if (!targetLabel) {
-    console.log(
-      `📧 Label "${labelName}" not found. Available labels: ${labels.map((l) => l.name).join(", ")}`,
-    );
-    console.log(
-      `📧 Falling back to search for LinkedIn job alert emails`,
-    );
+    console.log(`📧 [Gmail] Searching for LinkedIn job alert emails`);
     const searchQuery = 'from:(jobalerts-noreply@linkedin.com OR jobs-noreply@linkedin.com OR indeed.com) subject:(job OR jobs OR alert) is:unread';
-    return fetchMessagesFromGmail(gmail, searchQuery, maxResults, true);
-  }
+    const searchEmails = await fetchMessagesFromGmail(gmail, searchQuery, maxResults, false);
 
-  const messagesResponse = await gmail.users.messages.list({
-    userId: "me",
-    labelIds: [targetLabel.id!],
-    maxResults,
-    q: "is:unread",
-  });
-
-  const messageIds = messagesResponse.data.messages || [];
-  if (messageIds.length === 0) {
-    return [];
-  }
-
-  const emails: RawEmail[] = [];
-  for (const msg of messageIds) {
-    try {
-      const full = await gmail.users.messages.get({
-        userId: "me",
-        id: msg.id!,
-        format: "full",
-      });
-      const headers = full.data.payload?.headers || [];
-      const subject = headers.find((h: any) => h.name === "Subject")?.value || "No Subject";
-      const from = headers.find((h: any) => h.name === "From")?.value || "Unknown";
-      const date = headers.find((h: any) => h.name === "Date")?.value || new Date().toISOString();
-      const body = extractBodyFromPayload(full.data.payload);
-      emails.push({ id: msg.id!, subject, from, date, body });
-
-      await gmail.users.messages.modify({
-        userId: "me",
-        id: msg.id!,
-        requestBody: { removeLabelIds: ["UNREAD"] },
-      });
-    } catch (err) {
-      console.error(`Failed to fetch message ${msg.id}:`, err);
+    if (searchEmails.length > 0) {
+      console.log(`📧 [Gmail] Found ${searchEmails.length} job alert emails via search`);
+      return searchEmails;
     }
+
+    const recentQuery = 'from:(jobalerts-noreply@linkedin.com OR jobs-noreply@linkedin.com OR indeed.com) newer_than:3d';
+    const recentEmails = await fetchMessagesFromGmail(gmail, recentQuery, maxResults, false);
+    if (recentEmails.length > 0) {
+      console.log(`📧 [Gmail] Found ${recentEmails.length} recent job alert emails (last 3 days)`);
+      return recentEmails;
+    }
+
+    console.log(`📧 [Gmail] No job alert emails found`);
+    return [];
+  } catch (err: any) {
+    console.error(`📧 [Gmail] API error: ${err.message}`);
+    throw err;
   }
-  return emails;
 }
 
 export async function sendEmail(
@@ -300,7 +277,7 @@ export async function sendEmail(
   subject: string,
   htmlBody: string,
 ): Promise<void> {
-  const gmail = await getUncachableGmailClient();
+  const gmail = await getGmailClient();
 
   const message = [
     `To: ${to}`,
