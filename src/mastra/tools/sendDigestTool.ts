@@ -201,12 +201,14 @@ export const sendDigestTool = createTool({
       logger?.info(`📋 [sendDigest] Using DailyBrief format`);
 
       try {
+        const { RuntimeContext } = await import("@mastra/core/runtime-context");
         const briefResult = await assembleDailyBriefTool.execute({
           context: { dateOverride: today },
           mastra: mastra as any,
           runId: "send-digest-brief",
           threadId: undefined,
           resourceId: undefined,
+          runtimeContext: new RuntimeContext(),
         });
 
         if (!briefResult.success || !briefResult.brief) {

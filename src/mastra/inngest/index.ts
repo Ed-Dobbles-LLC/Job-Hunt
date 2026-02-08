@@ -136,7 +136,7 @@ export function registerCronWorkflow(cronExpression: string, workflow: any) {
 
   const cronFunction = inngest.createFunction(
     { id: "cron-trigger" },
-    [{ event: "replit/cron.trigger" }, { cron: cronExpression }],
+    [{ event: "app/cron.trigger" }, { cron: cronExpression }],
     async ({ event, step }) => {
       return await step.run("execute-cron-workflow", async () => {
         console.log("🚀 [Cron Trigger] Starting scheduled workflow execution", {
@@ -194,8 +194,14 @@ export function inngestServe({
 }): ReturnType<typeof originalInngestServe> {
   let serveHost: string | undefined = undefined;
   if (process.env.NODE_ENV === "production") {
-    if (process.env.REPLIT_DOMAINS) {
+    if (process.env.PUBLIC_URL) {
+      serveHost = process.env.PUBLIC_URL;
+    } else if (process.env.REPLIT_DOMAINS) {
       serveHost = `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`;
+    } else if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+      serveHost = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+    } else if (process.env.RENDER_EXTERNAL_URL) {
+      serveHost = process.env.RENDER_EXTERNAL_URL;
     }
   } else {
     serveHost = "http://localhost:5000";
