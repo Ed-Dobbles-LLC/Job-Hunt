@@ -1,6 +1,8 @@
 version: "3.8"
 
 services:
+  # Local Postgres — only used if you DON'T have Neon.
+  # Comment out (or remove) this block if using Neon.
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -12,18 +14,21 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    profiles:
+      - local-db
 
   app:
     build: .
     restart: unless-stopped
     ports:
       - "5000:5000"
-    depends_on:
-      - db
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://jobmatch:jobmatch_secret@db:5432/jobmatch
+      # DATABASE_URL comes from .env (your Neon URL).
+      # To use the local Postgres instead, uncomment the next line
+      # and run: docker compose --profile local-db up --build
+      # DATABASE_URL: postgresql://jobmatch:jobmatch_secret@db:5432/jobmatch
       NODE_ENV: production
       WORKSPACE_ROOT: /app
     volumes:
