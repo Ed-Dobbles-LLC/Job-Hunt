@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { classifyExecutionMode } from "../src/mastra/tools/scoreJobsTool";
 
 const FIXTURES = {
@@ -43,92 +44,67 @@ const FIXTURES = {
   `,
 };
 
-function runTests() {
-  let passed = 0;
-  let failed = 0;
+describe("ExecutionModeMatch", () => {
+  describe("Positive (Strategy-Led) Cases", () => {
+    it("strategy-led AI transformation", () => {
+      const result = classifyExecutionMode(FIXTURES.positiveStrategyLed);
+      expect(result.score).toBeGreaterThanOrEqual(5);
+      expect(result.score).toBeLessThanOrEqual(10);
+      expect(result.reason.length).toBeGreaterThan(0);
+    });
 
-  function assert(
-    name: string,
-    result: { score: number; reason: string },
-    expectedScoreRange: [number, number],
-  ) {
-    const inRange =
-      result.score >= expectedScoreRange[0] &&
-      result.score <= expectedScoreRange[1];
-    const reasonPresent = result.reason.length > 0;
-
-    if (inRange && reasonPresent) {
-      console.log(
-        `  PASS: ${name} → score=${result.score} (expected ${expectedScoreRange[0]} to ${expectedScoreRange[1]})`,
+    it("business acceleration / CDO role", () => {
+      const result = classifyExecutionMode(
+        FIXTURES.positiveBusinessAcceleration,
       );
-      console.log(`        reason: "${result.reason}"`);
-      passed++;
-    } else {
-      console.log(
-        `  FAIL: ${name} → score=${result.score} (expected ${expectedScoreRange[0]} to ${expectedScoreRange[1]})`,
+      expect(result.score).toBeGreaterThanOrEqual(5);
+      expect(result.score).toBeLessThanOrEqual(10);
+      expect(result.reason.length).toBeGreaterThan(0);
+    });
+
+    it("mixed but leans strategy", () => {
+      const result = classifyExecutionMode(FIXTURES.positiveMixedLeanStrategy);
+      expect(result.score).toBeGreaterThanOrEqual(0);
+      expect(result.score).toBeLessThanOrEqual(10);
+      expect(result.reason.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("Negative (Engineering/Infra-Heavy) Cases", () => {
+    it("MLOps/Infra ownership", () => {
+      const result = classifyExecutionMode(FIXTURES.negativeMLOpsInfra);
+      expect(result.score).toBeGreaterThanOrEqual(-20);
+      expect(result.score).toBeLessThanOrEqual(-10);
+      expect(result.reason.length).toBeGreaterThan(0);
+    });
+
+    it("Staff+ engineering depth (agentic, CI/CD, agents)", () => {
+      const result = classifyExecutionMode(FIXTURES.negativeStaffEngineering);
+      expect(result.score).toBe(-20);
+      expect(result.reason.length).toBeGreaterThan(0);
+    });
+
+    it("platform-heavy AI Director", () => {
+      const result = classifyExecutionMode(FIXTURES.negativePlatformHeavy);
+      expect(result.score).toBeGreaterThanOrEqual(-20);
+      expect(result.score).toBeLessThanOrEqual(-10);
+      expect(result.reason.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("Edge Cases", () => {
+    it("empty JD returns neutral", () => {
+      const result = classifyExecutionMode("");
+      expect(result.score).toBe(0);
+      expect(result.reason.length).toBeGreaterThan(0);
+    });
+
+    it("generic neutral JD", () => {
+      const result = classifyExecutionMode(
+        "We are hiring a data analyst to join the team. SQL and Excel required.",
       );
-      console.log(`        reason: "${result.reason}"`);
-      if (!reasonPresent) console.log(`        ERROR: reason string is empty`);
-      failed++;
-    }
-  }
-
-  console.log("\n=== ExecutionModeMatch Unit Tests ===\n");
-
-  console.log("--- Positive (Strategy-Led) Cases ---");
-
-  assert(
-    "Strategy-led AI transformation",
-    classifyExecutionMode(FIXTURES.positiveStrategyLed),
-    [5, 10],
-  );
-
-  assert(
-    "Business acceleration / CDO role",
-    classifyExecutionMode(FIXTURES.positiveBusinessAcceleration),
-    [5, 10],
-  );
-
-  assert(
-    "Mixed but leans strategy",
-    classifyExecutionMode(FIXTURES.positiveMixedLeanStrategy),
-    [0, 10],
-  );
-
-  console.log("\n--- Negative (Engineering/Infra-Heavy) Cases ---");
-
-  assert(
-    "MLOps/Infra ownership",
-    classifyExecutionMode(FIXTURES.negativeMLOpsInfra),
-    [-20, -10],
-  );
-
-  assert(
-    "Staff+ engineering depth (agentic, CI/CD, agents)",
-    classifyExecutionMode(FIXTURES.negativeStaffEngineering),
-    [-20, -20],
-  );
-
-  assert(
-    "Platform-heavy AI Director",
-    classifyExecutionMode(FIXTURES.negativePlatformHeavy),
-    [-20, -10],
-  );
-
-  console.log("\n--- Edge Cases ---");
-
-  const emptyResult = classifyExecutionMode("");
-  assert("Empty JD → neutral", emptyResult, [0, 0]);
-
-  const neutralJD =
-    "We are hiring a data analyst to join the team. SQL and Excel required.";
-  assert("Generic neutral JD", classifyExecutionMode(neutralJD), [0, 0]);
-
-  console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
-
-  if (failed > 0) {
-    process.exit(1);
-  }
-}
-
-runTests();
+      expect(result.score).toBe(0);
+      expect(result.reason.length).toBeGreaterThan(0);
+    });
+  });
+});

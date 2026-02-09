@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import {
   scoreSingleJob,
   prettyPrintReport,
@@ -5,7 +6,14 @@ import {
 } from "../src/mastra/tools/scoreJobsTool";
 import { SCORING_PROFILES } from "../src/mastra/tools/scoringConfig";
 
-function makeJob(overrides: Partial<{ title: string; jd_raw_text: string; location: string; remote_hybrid: string }>) {
+function makeJob(
+  overrides: Partial<{
+    title: string;
+    jd_raw_text: string;
+    location: string;
+    remote_hybrid: string;
+  }>,
+) {
   return {
     title: overrides.title || "Data Analyst",
     jd_raw_text: overrides.jd_raw_text || "",
@@ -52,152 +60,287 @@ const STRATEGY_JD = `
   Revenue growth, retention, and customer lifetime value focus.
 `;
 
-function runTests() {
-  let passed = 0;
-  let failed = 0;
-
-  function assert(name: string, actual: any, expected: any) {
-    if (JSON.stringify(actual) === JSON.stringify(expected)) {
-      console.log(`  PASS: ${name}`);
-      passed++;
-    } else {
-      console.log(`  FAIL: ${name}`);
-      console.log(`    expected: ${JSON.stringify(expected)}`);
-      console.log(`    actual:   ${JSON.stringify(actual)}`);
-      failed++;
-    }
-  }
-
-  function assertIncludes(name: string, arr: any[], item: any) {
-    const found = arr.some((a) => JSON.stringify(a) === JSON.stringify(item));
-    if (found) {
-      console.log(`  PASS: ${name}`);
-      passed++;
-    } else {
-      console.log(`  FAIL: ${name} — item not found in array`);
-      console.log(`    looking for: ${JSON.stringify(item)}`);
-      console.log(`    in: ${JSON.stringify(arr)}`);
-      failed++;
-    }
-  }
-
+describe("Score Report", () => {
   const precisionProfile = SCORING_PROFILES.precision;
   const recallProfile = SCORING_PROFILES.recall;
 
-  console.log("\n=== Score Report Snapshot Tests ===\n");
+  describe("Report Structure: SVP Precision", () => {
+    const svpJob = makeJob({
+      title: "SVP, Data & AI",
+      jd_raw_text: SVP_JD,
+      location: "Chicago",
+      remote_hybrid: "hybrid",
+    });
+    const svpResult = scoreSingleJob(svpJob, INVENTORY, precisionProfile);
+    const r = svpResult.report;
 
-  console.log("--- Report Structure: SVP Precision ---");
-  const svpJob = makeJob({ title: "SVP, Data & AI", jd_raw_text: SVP_JD, location: "Chicago", remote_hybrid: "hybrid" });
-  const svpResult = scoreSingleJob(svpJob, INVENTORY, precisionProfile);
-  const r = svpResult.report;
+    it("report.total matches return total", () => {
+      expect(r.total).toBe(svpResult.total);
+    });
 
-  assert("report.total matches return total", r.total, svpResult.total);
-  assert("report.mode is precision", r.mode, "precision");
-  assert("report has 12 categories", Object.keys(r.categories).length, 12);
+    it("report.mode is precision", () => {
+      expect(r.mode).toBe("precision");
+    });
 
-  const expectedOrder = [
-    "role_level_match", "leadership_scope", "domain_relevance",
-    "ai_strategy_stack", "ai_engineering_stack", "dominance_adjustment",
-    "location_fit", "compensation", "transformation_mandate",
-    "company_preference", "execution_mode_match", "spec_inflation_penalty",
-  ];
-  assert("categories in display order", Object.keys(r.categories), expectedOrder);
+    it("report has 12 categories", () => {
+      expect(Object.keys(r.categories).length).toBe(12);
+    });
 
-  console.log("\n--- Snapshot: SVP Precision Categories ---");
-  assert("role_level_match score", r.categories.role_level_match.score, 20);
-  assert("role_level_match maxPoints", r.categories.role_level_match.maxPoints, 20);
-  assert("role_level_match phrases", r.categories.role_level_match.matchedPhrases, ["svp", "vp"]);
-
-  assert("leadership_scope score", r.categories.leadership_scope.score, 15);
-  assert("leadership_scope phrases (sorted, capped 5)", r.categories.leadership_scope.matchedPhrases, ["board", "budget", "executive", "lead a team", "manage"]);
-
-  assert("ai_strategy_stack score", r.categories.ai_strategy_stack.score, 8);
-  assert("ai_strategy_stack phrases include nlp", r.categories.ai_strategy_stack.matchedPhrases.includes("nlp"), true);
-
-  assert("ai_engineering_stack score", r.categories.ai_engineering_stack.score, 7);
-  assert("location_fit score", r.categories.location_fit.score, 8);
-  assert("location_fit phrases", r.categories.location_fit.matchedPhrases, ["chicago", "hybrid"]);
-
-  assert("compensation score", r.categories.compensation.score, 8);
-  assert("compensation phrases", r.categories.compensation.matchedPhrases, ["$350,000 - $450,000"]);
-
-  assert("dominance_adjustment score", r.categories.dominance_adjustment.score, 0);
-
-  console.log("\n--- Snapshot: SVP Precision Totals ---");
-  assert("rawTotal", r.rawTotal, svpResult.breakdown._raw_total);
-  assert("maxPossible", r.maxPossible, 101);
-
-  console.log("\n--- Snapshot: Engineering-Heavy VP (Penalties + Risk Flags) ---");
-  const engJob = makeJob({ title: "VP of AI Platform", jd_raw_text: ENG_HEAVY_JD });
-  const engResult = scoreSingleJob(engJob, INVENTORY, precisionProfile);
-  const er = engResult.report;
-
-  assert("eng VP has penalties", er.penalties.length > 0, true);
-  assertIncludes("dominance penalty present", er.penalties, {
-    key: "dominance_adjustment",
-    score: -5,
-    reason: "Engineering stack exceeds strategy stack for VP+ role",
+    it("categories in display order", () => {
+      const expectedOrder = [
+        "role_level_match",
+        "leadership_scope",
+        "domain_relevance",
+        "ai_strategy_stack",
+        "ai_engineering_stack",
+        "dominance_adjustment",
+        "location_fit",
+        "compensation",
+        "transformation_mandate",
+        "company_preference",
+        "execution_mode_match",
+        "spec_inflation_penalty",
+      ];
+      expect(Object.keys(r.categories)).toEqual(expectedOrder);
+    });
   });
 
-  const execPenalty = er.penalties.find((p) => p.key === "execution_mode_match");
-  assert("execution_mode_match penalty exists", execPenalty !== undefined, true);
-  assert("execution_mode_match penalty is negative", (execPenalty?.score ?? 0) < 0, true);
+  describe("SVP Precision Categories", () => {
+    const svpJob = makeJob({
+      title: "SVP, Data & AI",
+      jd_raw_text: SVP_JD,
+      location: "Chicago",
+      remote_hybrid: "hybrid",
+    });
+    const svpResult = scoreSingleJob(svpJob, INVENTORY, precisionProfile);
+    const r = svpResult.report;
 
-  const specPenalty = er.penalties.find((p) => p.key === "spec_inflation_penalty");
-  assert("spec_inflation_penalty exists", specPenalty !== undefined, true);
+    it("role_level_match score and maxPoints", () => {
+      expect(r.categories.role_level_match.score).toBe(20);
+      expect(r.categories.role_level_match.maxPoints).toBe(20);
+      expect(r.categories.role_level_match.matchedPhrases).toEqual([
+        "svp",
+        "vp",
+      ]);
+    });
 
-  assert("risk flags sorted", er.riskFlags, [...er.riskFlags].sort());
-  assert("has engineering-heavy flag", er.riskFlags.includes("Engineering-heavy AI execution expected"), true);
-  assert("has dominance flag", er.riskFlags.includes("Engineering-heavy AI execution expected for a strategy-level title"), true);
-  assert("has buzzword flag", er.riskFlags.includes("High buzzword density with weak business grounding"), true);
-  assert("has location flag", er.riskFlags.includes("No preferred location match (not Chicago/remote/hybrid)"), true);
+    it("leadership_scope phrases sorted and capped at 5", () => {
+      expect(r.categories.leadership_scope.score).toBe(15);
+      expect(r.categories.leadership_scope.matchedPhrases).toEqual([
+        "board",
+        "budget",
+        "executive",
+        "lead a team",
+        "manage",
+      ]);
+    });
 
-  console.log("\n--- Snapshot: Strategy-Led Role (No Penalties, No Risk Flags) ---");
-  const stratJob = makeJob({ title: "VP of Data Strategy", jd_raw_text: STRATEGY_JD, location: "Remote" });
-  const stratResult = scoreSingleJob(stratJob, INVENTORY, precisionProfile);
-  const sr = stratResult.report;
+    it("ai_strategy_stack includes nlp", () => {
+      expect(r.categories.ai_strategy_stack.score).toBe(8);
+      expect(r.categories.ai_strategy_stack.matchedPhrases).toContain("nlp");
+    });
 
-  assert("strategy VP has zero penalties", sr.penalties.length, 0);
-  assert("strategy VP has no engineering risk flags",
-    sr.riskFlags.filter((f) => f.includes("Engineering")).length, 0);
-  assert("strategy VP has no buzzword flag",
-    sr.riskFlags.includes("High buzzword density with weak business grounding"), false);
+    it("ai_engineering_stack score", () => {
+      expect(r.categories.ai_engineering_stack.score).toBe(7);
+    });
 
-  console.log("\n--- Snapshot: Recall Mode Differences ---");
-  const svpRecall = scoreSingleJob(svpJob, INVENTORY, recallProfile);
-  const rr = svpRecall.report;
-  assert("recall report mode", rr.mode, "recall");
-  assert("recall maxPossible differs from precision", rr.maxPossible, 90);
+    it("location_fit score and phrases", () => {
+      expect(r.categories.location_fit.score).toBe(8);
+      expect(r.categories.location_fit.matchedPhrases).toEqual([
+        "chicago",
+        "hybrid",
+      ]);
+    });
 
-  const engRecall = scoreSingleJob(engJob, INVENTORY, recallProfile);
-  const engRecallDom = engRecall.report.penalties.find((p) => p.key === "dominance_adjustment");
-  assert("recall mode: no dominance penalty", engRecallDom, undefined);
+    it("compensation score and phrases", () => {
+      expect(r.categories.compensation.score).toBe(8);
+      expect(r.categories.compensation.matchedPhrases).toEqual([
+        "$350,000 - $450,000",
+      ]);
+    });
 
-  console.log("\n--- Snapshot: Empty JD ---");
-  const emptyJob = makeJob({ title: "Unknown", jd_raw_text: "" });
-  const emptyResult = scoreSingleJob(emptyJob, INVENTORY, precisionProfile);
-  const emptyR = emptyResult.report;
-  assert("empty JD total >= 0", emptyR.total >= 0, true);
-  assert("empty JD all category phrases are arrays", Object.values(emptyR.categories).every((c) => Array.isArray(c.matchedPhrases)), true);
-  assert("empty JD location risk flag",
-    emptyR.riskFlags.includes("No preferred location match (not Chicago/remote/hybrid)"), true);
+    it("dominance_adjustment score is 0", () => {
+      expect(r.categories.dominance_adjustment.score).toBe(0);
+    });
+  });
 
-  console.log("\n--- Pretty Print Smoke Test ---");
-  const pretty = prettyPrintReport(er, "VP of AI Platform @ TestCorp");
-  assert("pretty print contains SCORE REPORT", pretty.includes("SCORE REPORT"), true);
-  assert("pretty print contains CATEGORY BREAKDOWN", pretty.includes("CATEGORY BREAKDOWN"), true);
-  assert("pretty print contains PENALTIES APPLIED", pretty.includes("PENALTIES APPLIED"), true);
-  assert("pretty print contains RISK FLAGS", pretty.includes("RISK FLAGS"), true);
-  assert("pretty print contains job label", pretty.includes("VP of AI Platform @ TestCorp"), true);
+  describe("SVP Precision Totals", () => {
+    const svpJob = makeJob({
+      title: "SVP, Data & AI",
+      jd_raw_text: SVP_JD,
+      location: "Chicago",
+      remote_hybrid: "hybrid",
+    });
+    const svpResult = scoreSingleJob(svpJob, INVENTORY, precisionProfile);
+    const r = svpResult.report;
 
-  const prettyNoRisk = prettyPrintReport(sr, "VP of Data Strategy");
-  assert("strategy pretty has no PENALTIES section", prettyNoRisk.includes("PENALTIES APPLIED"), false);
+    it("rawTotal matches breakdown", () => {
+      expect(r.rawTotal).toBe(svpResult.breakdown._raw_total);
+    });
 
-  console.log(`\n--- Pretty Print Output Sample ---`);
-  console.log(pretty);
+    it("maxPossible is 101", () => {
+      expect(r.maxPossible).toBe(101);
+    });
+  });
 
-  console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
-  if (failed > 0) process.exit(1);
-}
+  describe("Engineering-Heavy VP (Penalties + Risk Flags)", () => {
+    const engJob = makeJob({
+      title: "VP of AI Platform",
+      jd_raw_text: ENG_HEAVY_JD,
+    });
+    const engResult = scoreSingleJob(engJob, INVENTORY, precisionProfile);
+    const er = engResult.report;
 
-runTests();
+    it("has penalties", () => {
+      expect(er.penalties.length).toBeGreaterThan(0);
+    });
+
+    it("dominance penalty present", () => {
+      expect(er.penalties).toContainEqual({
+        key: "dominance_adjustment",
+        score: -5,
+        reason: "Engineering stack exceeds strategy stack for VP+ role",
+      });
+    });
+
+    it("execution_mode_match penalty exists and is negative", () => {
+      const execPenalty = er.penalties.find(
+        (p) => p.key === "execution_mode_match",
+      );
+      expect(execPenalty).toBeDefined();
+      expect(execPenalty!.score).toBeLessThan(0);
+    });
+
+    it("spec_inflation_penalty exists", () => {
+      const specPenalty = er.penalties.find(
+        (p) => p.key === "spec_inflation_penalty",
+      );
+      expect(specPenalty).toBeDefined();
+    });
+
+    it("risk flags sorted and contain expected flags", () => {
+      expect(er.riskFlags).toEqual([...er.riskFlags].sort());
+      expect(er.riskFlags).toContain("Engineering-heavy AI execution expected");
+      expect(er.riskFlags).toContain(
+        "Engineering-heavy AI execution expected for a strategy-level title",
+      );
+      expect(er.riskFlags).toContain(
+        "High buzzword density with weak business grounding",
+      );
+      expect(er.riskFlags).toContain(
+        "No preferred location match (not Chicago/remote/hybrid)",
+      );
+    });
+  });
+
+  describe("Strategy-Led Role (No Penalties, No Risk Flags)", () => {
+    const stratJob = makeJob({
+      title: "VP of Data Strategy",
+      jd_raw_text: STRATEGY_JD,
+      location: "Remote",
+    });
+    const stratResult = scoreSingleJob(stratJob, INVENTORY, precisionProfile);
+    const sr = stratResult.report;
+
+    it("has zero penalties", () => {
+      expect(sr.penalties.length).toBe(0);
+    });
+
+    it("has no engineering risk flags", () => {
+      expect(sr.riskFlags.filter((f) => f.includes("Engineering")).length).toBe(
+        0,
+      );
+    });
+
+    it("has no buzzword flag", () => {
+      expect(sr.riskFlags).not.toContain(
+        "High buzzword density with weak business grounding",
+      );
+    });
+  });
+
+  describe("Recall Mode Differences", () => {
+    const svpJob = makeJob({
+      title: "SVP, Data & AI",
+      jd_raw_text: SVP_JD,
+      location: "Chicago",
+      remote_hybrid: "hybrid",
+    });
+
+    it("recall report mode and maxPossible", () => {
+      const svpRecall = scoreSingleJob(svpJob, INVENTORY, recallProfile);
+      expect(svpRecall.report.mode).toBe("recall");
+      expect(svpRecall.report.maxPossible).toBe(90);
+    });
+
+    it("recall mode: no dominance penalty", () => {
+      const engJob = makeJob({
+        title: "VP of AI Platform",
+        jd_raw_text: ENG_HEAVY_JD,
+      });
+      const engRecall = scoreSingleJob(engJob, INVENTORY, recallProfile);
+      const engRecallDom = engRecall.report.penalties.find(
+        (p) => p.key === "dominance_adjustment",
+      );
+      expect(engRecallDom).toBeUndefined();
+    });
+  });
+
+  describe("Empty JD", () => {
+    const emptyJob = makeJob({ title: "Unknown", jd_raw_text: "" });
+    const emptyResult = scoreSingleJob(emptyJob, INVENTORY, precisionProfile);
+    const emptyR = emptyResult.report;
+
+    it("total >= 0", () => {
+      expect(emptyR.total).toBeGreaterThanOrEqual(0);
+    });
+
+    it("all category phrases are arrays", () => {
+      expect(
+        Object.values(emptyR.categories).every((c) =>
+          Array.isArray(c.matchedPhrases),
+        ),
+      ).toBe(true);
+    });
+
+    it("location risk flag present", () => {
+      expect(emptyR.riskFlags).toContain(
+        "No preferred location match (not Chicago/remote/hybrid)",
+      );
+    });
+  });
+
+  describe("Pretty Print", () => {
+    const engJob = makeJob({
+      title: "VP of AI Platform",
+      jd_raw_text: ENG_HEAVY_JD,
+    });
+    const engResult = scoreSingleJob(engJob, INVENTORY, precisionProfile);
+    const stratJob = makeJob({
+      title: "VP of Data Strategy",
+      jd_raw_text: STRATEGY_JD,
+      location: "Remote",
+    });
+    const stratResult = scoreSingleJob(stratJob, INVENTORY, precisionProfile);
+
+    it("contains expected sections", () => {
+      const pretty = prettyPrintReport(
+        engResult.report,
+        "VP of AI Platform @ TestCorp",
+      );
+      expect(pretty).toContain("SCORE REPORT");
+      expect(pretty).toContain("CATEGORY BREAKDOWN");
+      expect(pretty).toContain("PENALTIES APPLIED");
+      expect(pretty).toContain("RISK FLAGS");
+      expect(pretty).toContain("VP of AI Platform @ TestCorp");
+    });
+
+    it("strategy pretty has no PENALTIES section", () => {
+      const prettyNoRisk = prettyPrintReport(
+        stratResult.report,
+        "VP of Data Strategy",
+      );
+      expect(prettyNoRisk).not.toContain("PENALTIES APPLIED");
+    });
+  });
+});
