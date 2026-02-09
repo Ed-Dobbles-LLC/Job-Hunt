@@ -87,6 +87,21 @@ export async function initDatabase(): Promise<void> {
         message_draft TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS profile_sessions (
+        session_id TEXT PRIMARY KEY,
+        status TEXT NOT NULL DEFAULT 'parsing',
+        raw_resume_text TEXT,
+        resume_filename TEXT,
+        resume_format TEXT,
+        current_draft JSONB,
+        gaps JSONB DEFAULT '[]'::jsonb,
+        qa_history JSONB DEFAULT '[]'::jsonb,
+        interview_round INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        finalized_at TIMESTAMPTZ
+      );
+
       CREATE TABLE IF NOT EXISTS digests (
         digest_id SERIAL PRIMARY KEY,
         run_date DATE NOT NULL DEFAULT CURRENT_DATE,
