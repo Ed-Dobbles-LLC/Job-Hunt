@@ -40,15 +40,29 @@ Do NOT ask about things that have already been answered in the previous Q&A.`;
 
   const userPrompt = `Current draft:\n${JSON.stringify(draft, null, 2)}\n\nGaps:\n${JSON.stringify(gaps, null, 2)}\n\nPrevious Q&A:\n${JSON.stringify(previousQA, null, 2)}`;
 
-  const { object } = await generateObject({
-    model: openai("gpt-4o"),
-    schema: GenerateQuestionsOutputSchema,
-    system: systemPrompt,
-    prompt: userPrompt,
-    temperature: 0.4,
-  });
+  try {
+    const { object } = await generateObject({
+      model: openai("gpt-4o"),
+      schema: GenerateQuestionsOutputSchema,
+      system: systemPrompt,
+      prompt: userPrompt,
+      temperature: 0.4,
+    });
 
-  return object.questions;
+    return object.questions;
+  } catch (firstError: any) {
+    console.error(`[profileInterview] Question generation failed: ${firstError.message}. Retrying...`);
+
+    const { object } = await generateObject({
+      model: openai("gpt-4o"),
+      schema: GenerateQuestionsOutputSchema,
+      system: systemPrompt + `\n\nIMPORTANT: Return a JSON object with a "questions" array. Each question must have: "id" (string), "question" (string), "targetField" (string), "priority" (one of "high", "medium", "low").`,
+      prompt: userPrompt,
+      temperature: 0.2,
+    });
+
+    return object.questions;
+  }
 }
 
 /* ── Process answers and update the draft ────────────────────────── */
@@ -82,17 +96,37 @@ Rules:
 
   const userPrompt = `Current draft:\n${JSON.stringify(draft, null, 2)}\n\nCurrent gaps:\n${JSON.stringify(gaps, null, 2)}\n\nNew Q&A:\n${JSON.stringify(newAnswers, null, 2)}`;
 
-  const { object } = await generateObject({
-    model: openai("gpt-4o"),
-    schema: ProcessAnswersOutputSchema,
-    system: systemPrompt,
-    prompt: userPrompt,
-    temperature: 0.2,
-  });
+  try {
+    const { object } = await generateObject({
+      model: openai("gpt-4o"),
+      schema: ProcessAnswersOutputSchema,
+      system: systemPrompt,
+      prompt: userPrompt,
+      temperature: 0.2,
+    });
 
-  return {
-    updatedDraft: object.updatedDraft,
-    remainingGaps: object.remainingGaps,
-    isComplete: object.isComplete,
-  };
+    return {
+      updatedDraft: object.updatedDraft,
+      remainingGaps: object.remainingGaps,
+      isComplete: object.isComplete,
+    };
+  } catch (firstError: any) {
+    console.error(`[profileInterview] First attempt failed: ${firstError.message}. Retrying with stricter prompt...`);
+
+    const retrySystemPrompt = systemPrompt + `\n\nIMPORTANT: Follow the JSON schema EXACTLY. Every object must include all required fields. Use empty strings "" for unknown text fields, empty arrays [] for unknown array fields. Do not add fields not in the schema. The "priority" field for gaps must be exactly one of: "high", "medium", "low". Every experience entry needs "id", "employer", "title", "start_date", "end_date", "location", "bullets". Every bullet needs "id", "text", "metrics", "tools". Profile needs "name", "current_title", "email", "phone", "location", "linkedin", "summary".`;
+
+    const { object } = await generateObject({
+      model: openai("gpt-4o"),
+      schema: ProcessAnswersOutputSchema,
+      system: retrySystemPrompt,
+      prompt: userPrompt,
+      temperature: 0.1,
+    });
+
+    return {
+      updatedDraft: object.updatedDraft,
+      remainingGaps: object.remainingGaps,
+      isComplete: object.isComplete,
+    };
+  }
 }
