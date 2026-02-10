@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { workspacePath, findPublicFile } from "./tools/paths";
 import mammoth from "mammoth";
-import { inngest } from "./inngest/client";
+import { runWorkflowDirectly } from "./workflows/jobMatchWorkflow";
 
 let dbReady = false;
 
@@ -172,21 +172,17 @@ export function getDashboardRoutes() {
       method: "POST" as const,
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
-        logger?.info("🚀 [dashboard] Triggering workflow via Inngest");
-        try {
-          const result = await inngest.send({
-            name: "workflow.job-match-workflow",
-            data: {
-              runId: `manual-${Date.now()}`,
-              inputData: {},
-            },
-          });
-          logger?.info(`🚀 [dashboard] Inngest event sent: ${JSON.stringify(result)}`);
-          return c.json({ success: true, eventId: result });
-        } catch (err: any) {
-          logger?.error(`❌ [dashboard] Trigger error: ${err.message}`);
-          return c.json({ error: err.message }, 500);
-        }
+        logger?.info("🚀 [dashboard] Triggering workflow directly (no Inngest)");
+
+        // Return immediately, run workflow in background
+        const runPromise = runWorkflowDirectly(mastra).then((result) => {
+          logger?.info(`✅ [dashboard] Workflow completed: ${result.summary}`);
+        }).catch((err) => {
+          logger?.error(`❌ [dashboard] Workflow failed: ${err.message}`);
+        });
+
+        // Don't await — let it run in background
+        return c.json({ success: true, message: "Workflow started in background" });
       },
     },
     {
