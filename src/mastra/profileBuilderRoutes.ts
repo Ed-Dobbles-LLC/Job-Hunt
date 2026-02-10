@@ -115,7 +115,7 @@ export function getProfileBuilderRoutes() {
 
           // 2. Structure with LLM
           logger?.info("[profileBuilder] Structuring resume with LLM...");
-          const { draft, gaps } = await structureResume(rawText);
+          const { draft, gaps } = await structureResume(rawText, interviewFocus);
 
           // 3. Generate first round of questions (role-aware)
           const questions = await generateInterviewQuestions(draft, gaps, [], { targetRole, interviewFocus });

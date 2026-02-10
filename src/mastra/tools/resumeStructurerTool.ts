@@ -20,7 +20,24 @@ const StructuredResumeOutputSchema = z.object({
  */
 export async function structureResume(
   rawText: string,
+  interviewFocus?: string,
 ): Promise<{ draft: ExperienceInventory; gaps: Gap[] }> {
+  let gapPriorityRule: string;
+  if (interviewFocus === "leadership") {
+    gapPriorityRule = `10. Prioritize gaps for a LEADERSHIP/EXECUTIVE profile:
+   - "high": Missing quantified business outcomes (revenue, cost savings, growth %), missing team/org scope (team size, budget, direct reports), missing stakeholder context (C-suite, board, partners)
+   - "medium": Missing dates or vague timelines, missing strategic context for initiatives
+   - "low": Missing tools/technologies (only flag if strategically relevant like "led Snowflake migration"), missing certifications
+   Do NOT mark missing tools/tech as "high" priority — this person needs leadership stories, not tech inventories.`;
+  } else if (interviewFocus === "technical") {
+    gapPriorityRule = `10. Prioritize gaps for a TECHNICAL profile:
+   - "high": Missing metrics on bullet points, missing tools/languages/frameworks per role, missing technical architecture details
+   - "medium": Missing dates, missing team size
+   - "low": Additional certifications, nice-to-have details`;
+  } else {
+    gapPriorityRule = `10. Prioritize gaps: "high" for missing metrics on bullet points, "medium" for missing tools/technologies and missing dates, "low" for nice-to-have enhancements.`;
+  }
+
   const systemPrompt = `You are an expert resume parser. Given raw text extracted from a resume document, produce a structured JSON object following the ExperienceInventory schema exactly.
 
 Rules:
@@ -33,7 +50,7 @@ Rules:
 7. Assign "edu-001", "edu-002", etc. for education and "cert-001", "cert-002", etc. for certifications.
 8. If information is ambiguous or missing, leave the field as an empty string rather than guessing.
 9. In the gaps array, list every field where information is missing, incomplete, or could be strengthened with more detail.
-10. Prioritize gaps: "high" for missing metrics on bullet points and missing tools/technologies per role, "medium" for missing dates or vague details, "low" for nice-to-have enhancements.
+${gapPriorityRule}
 11. Write the summary as a 1-3 sentence professional overview based on the resume content.
 12. Do NOT fabricate any information. Only include what is explicitly stated or clearly implied in the resume text.`;
 
