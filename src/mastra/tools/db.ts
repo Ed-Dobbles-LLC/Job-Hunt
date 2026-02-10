@@ -102,6 +102,19 @@ export async function initDatabase(): Promise<void> {
         finalized_at TIMESTAMPTZ
       );
 
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS compensation TEXT DEFAULT '';
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_action TEXT DEFAULT '';
+
+      CREATE TABLE IF NOT EXISTS imported_emails (
+        id SERIAL PRIMARY KEY,
+        subject TEXT,
+        from_address TEXT,
+        date_received TIMESTAMPTZ,
+        body TEXT,
+        processed BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS digests (
         digest_id SERIAL PRIMARY KEY,
         run_date DATE NOT NULL DEFAULT CURRENT_DATE,
