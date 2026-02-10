@@ -113,6 +113,13 @@ export const mastra = new Mastra({
       },
     ],
     apiRoutes: [
+      {
+        path: "/api/health",
+        method: "GET",
+        createHandler: async () => async (c: any) => {
+          return c.json({ status: "ok", timestamp: new Date().toISOString() });
+        },
+      },
       ...getDashboardRoutes(),
       ...getProfileBuilderRoutes(),
       ...getJobSourceRoutes(),
