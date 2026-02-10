@@ -39,13 +39,25 @@ Rules:
 
   const userPrompt = `Here is the raw resume text to parse:\n\n${rawText}`;
 
-  const { object } = await generateObject({
-    model: openai("gpt-4o"),
-    schema: StructuredResumeOutputSchema,
-    system: systemPrompt,
-    prompt: userPrompt,
-    temperature: 0.2,
-  });
-
-  return { draft: object.draft, gaps: object.gaps };
+  try {
+    const { object } = await generateObject({
+      model: openai("gpt-4o"),
+      schema: StructuredResumeOutputSchema,
+      system: systemPrompt,
+      prompt: userPrompt,
+      temperature: 0.2,
+    });
+    return { draft: object.draft, gaps: object.gaps };
+  } catch (firstError: any) {
+    // Retry with mode: "json" as fallback — more lenient parsing
+    console.error(`[resumeStructurer] First attempt failed: ${firstError.message}. Retrying...`);
+    const { object } = await generateObject({
+      model: openai("gpt-4o"),
+      schema: StructuredResumeOutputSchema,
+      system: systemPrompt + "\n\nIMPORTANT: Follow the JSON schema EXACTLY. Every field must be present. Use empty strings and empty arrays for missing data. The skills object MUST have exactly these keys: leadership, technical, data_science, domains — each as an array of strings.",
+      prompt: userPrompt,
+      temperature: 0.1,
+    });
+    return { draft: object.draft, gaps: object.gaps };
+  }
 }

@@ -13,10 +13,10 @@ export const ExperienceEntrySchema = z.object({
   id: z.string().describe('Sequential ID like "exp-001"'),
   employer: z.string(),
   title: z.string(),
-  start_date: z.string().describe('YYYY-MM format, e.g. "2021-03"'),
-  end_date: z.string().describe('"present" or YYYY-MM'),
-  location: z.string(),
-  bullets: z.array(BulletSchema),
+  start_date: z.string().default("").describe('YYYY-MM format, e.g. "2021-03"'),
+  end_date: z.string().default("").describe('"present" or YYYY-MM'),
+  location: z.string().default(""),
+  bullets: z.array(BulletSchema).default([]),
 });
 
 /* ── Education entry ────────────────────────────────────────────── */
@@ -36,30 +36,30 @@ export const CertificationSchema = z.object({
 
 /* ── Skills ─────────────────────────────────────────────────────── */
 export const SkillsSchema = z.object({
-  leadership: z.array(z.string()),
-  technical: z.array(z.string()),
-  data_science: z.array(z.string()),
-  domains: z.array(z.string()),
-});
+  leadership: z.array(z.string()).default([]),
+  technical: z.array(z.string()).default([]),
+  data_science: z.array(z.string()).default([]),
+  domains: z.array(z.string()).default([]),
+}).passthrough();
 
 /* ── Profile header ─────────────────────────────────────────────── */
 export const ProfileSchema = z.object({
   name: z.string(),
-  current_title: z.string(),
-  email: z.string(),
-  phone: z.string(),
-  location: z.string(),
-  linkedin: z.string(),
-  summary: z.string().describe("1-3 sentence professional summary"),
+  current_title: z.string().default(""),
+  email: z.string().default(""),
+  phone: z.string().default(""),
+  location: z.string().default(""),
+  linkedin: z.string().default(""),
+  summary: z.string().default("").describe("1-3 sentence professional summary"),
 });
 
 /* ── Full experience inventory (= experience_inventory.json) ───── */
 export const ExperienceInventorySchema = z.object({
   profile: ProfileSchema,
-  experience: z.array(ExperienceEntrySchema),
-  education: z.array(EducationEntrySchema),
-  skills: SkillsSchema,
-  certifications: z.array(CertificationSchema),
+  experience: z.array(ExperienceEntrySchema).default([]),
+  education: z.array(EducationEntrySchema).default([]),
+  skills: SkillsSchema.default({ leadership: [], technical: [], data_science: [], domains: [] }),
+  certifications: z.array(CertificationSchema).default([]),
 });
 
 export type ExperienceInventory = z.infer<typeof ExperienceInventorySchema>;

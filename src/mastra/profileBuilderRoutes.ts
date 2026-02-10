@@ -13,6 +13,28 @@ import type { ExperienceInventory, Gap } from "./tools/profileSchemas";
 const MAX_INTERVIEW_ROUNDS = 4;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
+let dbInitialized = false;
+async function ensureProfileTable() {
+  if (dbInitialized) return;
+  await query(`
+    CREATE TABLE IF NOT EXISTS profile_sessions (
+      session_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'parsing',
+      raw_resume_text TEXT,
+      resume_filename TEXT,
+      resume_format TEXT,
+      current_draft JSONB,
+      gaps JSONB DEFAULT '[]'::jsonb,
+      qa_history JSONB DEFAULT '[]'::jsonb,
+      interview_round INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      finalized_at TIMESTAMPTZ
+    )
+  `);
+  dbInitialized = true;
+}
+
 export function getProfileBuilderRoutes() {
   return [
     /* ── Debug: show what paths the server is trying ────────────── */
@@ -56,6 +78,7 @@ export function getProfileBuilderRoutes() {
         logger?.info("[profileBuilder] Upload request received");
 
         try {
+          await ensureProfileTable();
           const body = await c.req.parseBody();
           const file = body["resume"];
 
