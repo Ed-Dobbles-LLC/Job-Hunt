@@ -1,5 +1,20 @@
 import * as path from "path";
 import * as fs from "fs";
+import { fileURLToPath } from "url";
+
+/**
+ * Get current file's directory, compatible with both ESM and CJS.
+ */
+function getCurrentDir(): string {
+  try {
+    // ESM: use import.meta.url
+    return path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    // CJS fallback (Mastra bundler may define __dirname)
+    if (typeof __dirname !== "undefined") return __dirname;
+    return process.cwd();
+  }
+}
 
 /**
  * Detect the real project root. Mastra's bundler runs code from
@@ -7,8 +22,7 @@ import * as fs from "fs";
  * We find the project root by looking for package.json walking up.
  */
 function detectProjectRoot(): string {
-  // Try walking up from __dirname to find package.json
-  let dir = __dirname;
+  let dir = getCurrentDir();
   for (let i = 0; i < 10; i++) {
     if (fs.existsSync(path.join(dir, "package.json"))) {
       return dir;
