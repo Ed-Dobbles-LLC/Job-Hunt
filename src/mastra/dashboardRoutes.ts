@@ -1,7 +1,7 @@
 import { query } from "./tools/db";
 import * as fs from "fs";
 import * as path from "path";
-import { workspacePath } from "./tools/paths";
+import { workspacePath, findPublicFile } from "./tools/paths";
 import mammoth from "mammoth";
 
 function escapeHtml(str: string): string {
@@ -14,18 +14,11 @@ export function getDashboardRoutes() {
       path: "/dashboard",
       method: "GET" as const,
       createHandler: async () => async (c: any) => {
-        const htmlPath = path.join(__dirname, "public", "index.html");
-        let html = "";
-        if (fs.existsSync(htmlPath)) {
-          html = fs.readFileSync(htmlPath, "utf-8");
-        } else {
-          const altPath = workspacePath("src/mastra/public/index.html");
-          if (fs.existsSync(altPath)) {
-            html = fs.readFileSync(altPath, "utf-8");
-          } else {
-            return c.text("Dashboard not found", 404);
-          }
+        const found = findPublicFile("index.html");
+        if (!found) {
+          return c.text("Dashboard not found", 404);
         }
+        const html = fs.readFileSync(found, "utf-8");
         return new Response(html, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });

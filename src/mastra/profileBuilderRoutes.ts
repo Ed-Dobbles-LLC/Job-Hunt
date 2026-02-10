@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as crypto from "crypto";
 import { query } from "./tools/db";
-import { workspacePath } from "./tools/paths";
+import { workspacePath, findPublicFile } from "./tools/paths";
 import { parseResumeBuffer } from "./tools/resumeParserTool";
 import { structureResume } from "./tools/resumeStructurerTool";
 import {
@@ -9,7 +9,6 @@ import {
   processAnswers,
 } from "./tools/profileInterviewTool";
 import type { ExperienceInventory, Gap } from "./tools/profileSchemas";
-import * as path from "path";
 
 const MAX_INTERVIEW_ROUNDS = 4;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -21,18 +20,11 @@ export function getProfileBuilderRoutes() {
       path: "/profile",
       method: "GET" as const,
       createHandler: async () => async (c: any) => {
-        const htmlPath = path.join(__dirname, "public", "profile.html");
-        let html = "";
-        if (fs.existsSync(htmlPath)) {
-          html = fs.readFileSync(htmlPath, "utf-8");
-        } else {
-          const altPath = workspacePath("src/mastra/public/profile.html");
-          if (fs.existsSync(altPath)) {
-            html = fs.readFileSync(altPath, "utf-8");
-          } else {
-            return c.text("Profile builder page not found", 404);
-          }
+        const found = findPublicFile("profile.html");
+        if (!found) {
+          return c.text("Profile builder page not found", 404);
         }
+        const html = fs.readFileSync(found, "utf-8");
         return new Response(html, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
