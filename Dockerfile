@@ -29,4 +29,5 @@ ENV WORKSPACE_ROOT=/app
 EXPOSE 5000
 
 # Run the built Mastra output
-CMD ["sh", "-c", "cd .mastra/output && node index.mjs"]
+WORKDIR /app/.mastra/output
+CMD ["node", "index.mjs"]
