@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { workspacePath, findPublicFile } from "./tools/paths";
 import mammoth from "mammoth";
+import { inngest } from "./inngest/client";
 
 let dbReady = false;
 
@@ -171,16 +172,17 @@ export function getDashboardRoutes() {
       method: "POST" as const,
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
-        logger?.info("🚀 [dashboard] Triggering workflow");
+        logger?.info("🚀 [dashboard] Triggering workflow via Inngest");
         try {
-          const resp = await fetch("http://localhost:5000/api/workflows/job-match-workflow/start-async", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ inputData: {} }),
+          const result = await inngest.send({
+            name: "workflow.job-match-workflow",
+            data: {
+              runId: `manual-${Date.now()}`,
+              inputData: {},
+            },
           });
-          const data = await resp.json();
-          logger?.info(`🚀 [dashboard] Workflow triggered: ${JSON.stringify(data)}`);
-          return c.json({ success: true, ...data });
+          logger?.info(`🚀 [dashboard] Inngest event sent: ${JSON.stringify(result)}`);
+          return c.json({ success: true, eventId: result });
         } catch (err: any) {
           logger?.error(`❌ [dashboard] Trigger error: ${err.message}`);
           return c.json({ error: err.message }, 500);
