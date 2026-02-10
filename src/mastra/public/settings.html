@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Job Hunt</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    .header { background: #1e293b; border-bottom: 1px solid #334155; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header a { color: #60a5fa; text-decoration: none; font-size: 14px; }
+    .header a:hover { text-decoration: underline; }
+    .container { max-width: 720px; margin: 32px auto; padding: 0 24px; }
+    .status-bar { padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-size: 14px; display: none; }
+    .status-bar.success { display: block; background: #064e3b; border: 1px solid #065f46; color: #6ee7b7; }
+    .status-bar.error { display: block; background: #7f1d1d; border: 1px solid #991b1b; color: #fca5a5; }
+    .group { margin-bottom: 32px; }
+    .group-title { font-size: 16px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #334155; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 14px; font-weight: 500; color: #cbd5e1; margin-bottom: 4px; }
+    .field .source { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+    .field input { width: 100%; padding: 10px 12px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font-size: 14px; font-family: 'SF Mono', 'Fira Code', monospace; }
+    .field input:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96,165,250,0.2); }
+    .field input::placeholder { color: #475569; }
+    .actions { display: flex; gap: 12px; margin-top: 32px; }
+    .btn { padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-primary:disabled { background: #475569; cursor: not-allowed; }
+    .btn-secondary { background: #334155; color: #cbd5e1; }
+    .btn-secondary:hover { background: #475569; }
+    .loading { text-align: center; padding: 48px; color: #64748b; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; margin-left: 8px; }
+    .badge.db { background: #1e3a5f; color: #60a5fa; }
+    .badge.env { background: #1a3329; color: #6ee7b7; }
+    .badge.unset { background: #3b1818; color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Settings</h1>
+    <a href="/api/dashboard">Dashboard</a>
+    <a href="/api/profile">Profile Builder</a>
+  </div>
+
+  <div class="container">
+    <div id="status" class="status-bar"></div>
+    <div id="content"><div class="loading">Loading settings...</div></div>
+  </div>
+
+  <script>
+    let settingsData = [];
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings/list');
+        const data = await res.json();
+        settingsData = data.settings;
+        render();
+      } catch (err) {
+        showStatus('Failed to load settings: ' + err.message, 'error');
+      }
+    }
+
+    function render() {
+      const groups = {};
+      for (const s of settingsData) {
+        if (!groups[s.group]) groups[s.group] = [];
+        groups[s.group].push(s);
+      }
+
+      let html = '';
+      for (const [groupName, fields] of Object.entries(groups)) {
+        html += `<div class="group"><div class="group-title">${groupName}</div>`;
+        for (const f of fields) {
+          const badgeClass = f.source === 'database' ? 'db' : f.source === 'environment' ? 'env' : 'unset';
+          const badgeText = f.source === 'database' ? 'DB' : f.source === 'environment' ? 'ENV' : 'Not Set';
+          const inputType = f.secret ? 'password' : 'text';
+          const placeholder = f.secret ? (f.hasValue ? '(hidden — enter new value to change)' : 'Enter value...') : 'Enter value...';
+          const displayValue = f.secret ? '' : f.value;
+          html += `
+            <div class="field">
+              <label>${f.label} <span class="badge ${badgeClass}">${badgeText}</span></label>
+              <input type="${inputType}" id="setting-${f.key}" data-key="${f.key}"
+                     value="${displayValue}" placeholder="${placeholder}">
+            </div>`;
+        }
+        html += '</div>';
+      }
+
+      html += `
+        <div class="actions">
+          <button class="btn btn-primary" onclick="saveSettings()" id="saveBtn">Save Settings</button>
+          <button class="btn btn-secondary" onclick="loadSettings()">Reset</button>
+        </div>`;
+
+      document.getElementById('content').innerHTML = html;
+    }
+
+    async function saveSettings() {
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      const updates = {};
+      const inputs = document.querySelectorAll('input[data-key]');
+      for (const input of inputs) {
+        const key = input.dataset.key;
+        const val = input.value.trim();
+        // Only send non-empty values (skip unchanged secret fields)
+        if (val) {
+          updates[key] = val;
+        }
+      }
+
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ settings: updates }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showStatus(`Saved ${data.updated} setting(s). Note: some settings (like API keys) take effect on next request. Others (like cron schedule) require a redeploy.`, 'success');
+          await loadSettings();
+        } else {
+          showStatus('Failed to save: ' + (data.error || 'Unknown error'), 'error');
+        }
+      } catch (err) {
+        showStatus('Failed to save: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Settings';
+      }
+    }
+
+    function showStatus(msg, type) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = 'status-bar ' + type;
+      setTimeout(() => { el.className = 'status-bar'; }, 8000);
+    }
+
+    loadSettings();
+  </script>
+</body>
+</html>

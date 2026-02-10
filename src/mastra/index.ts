@@ -15,6 +15,7 @@ import { jobMatchAgent } from "./agents/jobMatchAgent";
 import { getDashboardRoutes } from "./dashboardRoutes";
 import { getProfileBuilderRoutes } from "./profileBuilderRoutes";
 import { getJobSourceRoutes } from "./jobSourceRoutes";
+import { getSettingsRoutes } from "./settingsRoutes";
 
 registerCronTrigger({
   cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "30 12 * * *",
@@ -115,6 +116,7 @@ export const mastra = new Mastra({
       ...getDashboardRoutes(),
       ...getProfileBuilderRoutes(),
       ...getJobSourceRoutes(),
+      ...getSettingsRoutes(),
       {
         path: "/api/inngest",
         method: "ALL",
