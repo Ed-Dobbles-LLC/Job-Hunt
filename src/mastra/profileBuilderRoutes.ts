@@ -20,16 +20,14 @@ export function getProfileBuilderRoutes() {
       path: "/api/profile/debug-paths",
       method: "GET" as const,
       createHandler: async () => async (c: any) => {
-        const path = await import("path");
-        const candidates = [
-          { label: "__dirname", value: __dirname },
-          { label: "process.cwd()", value: process.cwd() },
-          { label: "WORKSPACE_ROOT", value: workspacePath() },
-          { label: "__dirname/public/profile.html", value: path.join(__dirname, "public", "profile.html"), exists: fs.existsSync(path.join(__dirname, "public", "profile.html")) },
-          { label: "workspacePath(src/mastra/public/profile.html)", value: workspacePath("src", "mastra", "public", "profile.html"), exists: fs.existsSync(workspacePath("src", "mastra", "public", "profile.html")) },
-          { label: "cwd/src/mastra/public/profile.html", value: path.join(process.cwd(), "src", "mastra", "public", "profile.html"), exists: fs.existsSync(path.join(process.cwd(), "src", "mastra", "public", "profile.html")) },
-        ];
-        return c.json({ candidates });
+        const resolved = findPublicFile("profile.html");
+        return c.json({
+          __dirname,
+          cwd: process.cwd(),
+          WORKSPACE_ROOT: workspacePath(),
+          resolvedFile: resolved,
+          exists: resolved ? fs.existsSync(resolved) : false,
+        });
       },
     },
 
