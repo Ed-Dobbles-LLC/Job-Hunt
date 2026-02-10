@@ -79,7 +79,8 @@ Generate 3-5 questions per round. Be specific — reference the exact role and a
 Example (leadership): "As VP of Data at Acme Financial, you led a data platform migration. How large was the team you managed, what was the budget, and what business KPIs improved as a result?"
 Example (leadership): "You mentioned driving $2M in cost savings. Can you walk me through the strategic decision that led to this and which senior stakeholders you partnered with?"
 
-Do NOT ask about things that have already been answered in the previous Q&A.`;
+Do NOT ask about things that have already been answered in the previous Q&A.
+If a question was answered with "[SKIPPED]", the user deliberately chose not to answer it — do NOT re-ask the same question or rephrase it. Move on to different topics entirely.`;
 
   const userPrompt = `Current draft:\n${JSON.stringify(draft, null, 2)}\n\nGaps:\n${JSON.stringify(gaps, null, 2)}\n\nPrevious Q&A:\n${JSON.stringify(previousQA, null, 2)}`;
 

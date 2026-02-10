@@ -627,14 +627,21 @@
         return;
       }
 
-      const answers = currentQuestions.map((q, i) => {
+      const allResponses = currentQuestions.map((q, i) => {
         const textarea = document.getElementById('answer-' + i);
         return {
           questionId: q.id,
           question: q.question,
           answer: textarea ? textarea.value.trim() : '',
         };
-      }).filter(a => a.answer.length > 0);
+      });
+
+      const answers = allResponses.filter(a => a.answer.length > 0);
+      const skipped = allResponses.filter(a => a.answer.length === 0).map(a => ({
+        questionId: a.questionId,
+        question: a.question,
+        answer: '[SKIPPED]',
+      }));
 
       if (answers.length === 0) {
         showToast('Please answer at least one question, or skip to review.', 'error');
@@ -647,7 +654,7 @@
         const res = await fetch(`/api/profile/interview/${sessionId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ answers }),
+          body: JSON.stringify({ answers, skipped }),
         });
         const data = await res.json();
 
