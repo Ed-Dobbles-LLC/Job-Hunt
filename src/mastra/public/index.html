@@ -1123,13 +1123,31 @@
 
       try {
         const data = await api('/trigger', { method: 'POST' });
-        showToast('Workflow triggered successfully!', 'success');
-        setTimeout(() => {
-          refreshData();
-        }, 5000);
+        showToast('Workflow triggered successfully! Switching to Run History...', 'success');
+        // Switch to Run History tab so user can see progress
+        switchTab('runs');
+        // Poll for updates every 10 seconds while workflow is running
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          await loadRuns();
+          await loadDashboard();
+          // Stop polling after 5 minutes or when no "running" status
+          if (pollCount > 30) clearInterval(pollInterval);
+          try {
+            const runData = await api('/runs');
+            const hasRunning = runData.runs?.some(r => r.status === 'running');
+            if (!hasRunning && pollCount > 2) {
+              clearInterval(pollInterval);
+              showToast('Workflow completed! Refreshing jobs...', 'success');
+              loadJobs();
+              btn.disabled = false;
+              btn.textContent = 'Run Workflow';
+            }
+          } catch(e) { /* ignore poll errors */ }
+        }, 10000);
       } catch (e) {
         showToast('Failed to trigger workflow', 'error');
-      } finally {
         btn.disabled = false;
         btn.textContent = 'Run Workflow';
       }
