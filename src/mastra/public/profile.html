@@ -449,13 +449,29 @@
         <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt">
         <div class="file-selected" id="fileSelected" style="display:none">
           <span class="file-name" id="fileName"></span>
-          <button class="btn btn-primary" id="uploadBtn" onclick="event.stopPropagation(); uploadResume()">Parse &amp; Build Profile</button>
+        </div>
+      </div>
+
+      <!-- Target role context -->
+      <div style="margin-top:24px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px;" onclick="event.stopPropagation()">
+        <label for="targetRole" style="display:block; font-size:15px; font-weight:600; margin-bottom:8px;">What kind of role are you targeting?</label>
+        <input type="text" id="targetRole" placeholder="e.g. VP of Data &amp; Analytics, Chief Data Officer, SVP Operations" style="width:100%; padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-family:inherit; font-size:14px;">
+        <div style="margin-top:12px;">
+          <label for="interviewFocus" style="display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px;">Interview focus (what should we emphasize?)</label>
+          <select id="interviewFocus" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-family:inherit; font-size:14px;">
+            <option value="leadership">Leadership &amp; Strategy (team size, budget, outcomes, stakeholder management)</option>
+            <option value="balanced">Balanced (mix of leadership and technical depth)</option>
+            <option value="technical">Technical Depth (tools, architecture, hands-on contributions)</option>
+          </select>
+        </div>
+        <div style="margin-top:16px; text-align:right;">
+          <button class="btn btn-primary" id="uploadBtn" onclick="uploadResume()" style="font-size:15px; padding:10px 24px;">Parse &amp; Build Profile</button>
         </div>
       </div>
 
       <div style="text-align:center; margin-top:24px; color:var(--text-dim); font-size:14px">
         Your resume will be parsed by AI and structured into a professional profile.<br>
-        You'll then be interviewed for additional details to strengthen your profile.
+        The interview questions will be tailored to the role you're targeting.
       </div>
     </div>
 
@@ -549,11 +565,16 @@
     });
 
     async function uploadResume() {
-      if (!fileInput.files.length) return;
+      if (!fileInput.files.length) {
+        showToast('Please select a resume file first.', 'error');
+        return;
+      }
 
       showLoading('Parsing your resume...');
       const formData = new FormData();
       formData.append('resume', fileInput.files[0]);
+      formData.append('targetRole', document.getElementById('targetRole').value.trim());
+      formData.append('interviewFocus', document.getElementById('interviewFocus').value);
 
       try {
         const res = await fetch('/api/profile/upload', { method: 'POST', body: formData });

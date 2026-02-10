@@ -7,6 +7,7 @@ import { structureResume } from "./tools/resumeStructurerTool";
 import {
   generateInterviewQuestions,
   processAnswers,
+  type RoleContext,
 } from "./tools/profileInterviewTool";
 import type { ExperienceInventory, Gap } from "./tools/profileSchemas";
 
@@ -23,6 +24,8 @@ async function ensureProfileTable() {
       raw_resume_text TEXT,
       resume_filename TEXT,
       resume_format TEXT,
+      target_role TEXT DEFAULT '',
+      interview_focus TEXT DEFAULT 'leadership',
       current_draft JSONB,
       gaps JSONB DEFAULT '[]'::jsonb,
       qa_history JSONB DEFAULT '[]'::jsonb,
@@ -32,6 +35,9 @@ async function ensureProfileTable() {
       finalized_at TIMESTAMPTZ
     )
   `);
+  // Add columns if table already exists (idempotent migration)
+  await query(`ALTER TABLE profile_sessions ADD COLUMN IF NOT EXISTS target_role TEXT DEFAULT ''`).catch(() => {});
+  await query(`ALTER TABLE profile_sessions ADD COLUMN IF NOT EXISTS interview_focus TEXT DEFAULT 'leadership'`).catch(() => {});
   dbInitialized = true;
 }
 
@@ -94,8 +100,10 @@ export function getProfileBuilderRoutes() {
           const buffer = Buffer.from(arrayBuffer);
           const fileName = file.name || "resume.txt";
           const sessionId = crypto.randomUUID();
+          const targetRole = typeof body["targetRole"] === "string" ? body["targetRole"] : "";
+          const interviewFocus = typeof body["interviewFocus"] === "string" ? body["interviewFocus"] : "leadership";
 
-          logger?.info(`[profileBuilder] Parsing resume: ${fileName} (${buffer.length} bytes)`);
+          logger?.info(`[profileBuilder] Parsing resume: ${fileName} (${buffer.length} bytes), targetRole="${targetRole}", focus="${interviewFocus}"`);
 
           // 1. Extract raw text
           const { rawText, format } = await parseResumeBuffer(buffer, fileName);
@@ -109,19 +117,21 @@ export function getProfileBuilderRoutes() {
           logger?.info("[profileBuilder] Structuring resume with LLM...");
           const { draft, gaps } = await structureResume(rawText);
 
-          // 3. Generate first round of questions
-          const questions = await generateInterviewQuestions(draft, gaps, []);
+          // 3. Generate first round of questions (role-aware)
+          const questions = await generateInterviewQuestions(draft, gaps, [], { targetRole, interviewFocus });
 
           // 4. Save session to DB
           await query(
-            `INSERT INTO profile_sessions (session_id, status, raw_resume_text, resume_filename, resume_format, current_draft, gaps, qa_history, interview_round)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, '[]'::jsonb, 1)`,
+            `INSERT INTO profile_sessions (session_id, status, raw_resume_text, resume_filename, resume_format, target_role, interview_focus, current_draft, gaps, qa_history, interview_round)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, '[]'::jsonb, 1)`,
             [
               sessionId,
               "interviewing",
               rawText,
               fileName,
               format,
+              targetRole,
+              interviewFocus,
               JSON.stringify(draft),
               JSON.stringify(gaps),
             ],
@@ -208,11 +218,14 @@ export function getProfileBuilderRoutes() {
           const gaps: Gap[] = session.gaps;
           const qaHistory: Array<{ questionId: string; question: string; answer: string }> = session.qa_history || [];
           const round = session.interview_round || 1;
+          const targetRole = session.target_role || "";
+          const interviewFocus = session.interview_focus || "leadership";
+          const roleContext = { targetRole, interviewFocus };
 
           logger?.info(`[profileBuilder] Processing ${answers.length} answers for session ${sessionId} (round ${round})`);
 
-          // Process answers
-          const { updatedDraft, remainingGaps, isComplete } = await processAnswers(draft, gaps, answers);
+          // Process answers (role-aware)
+          const { updatedDraft, remainingGaps, isComplete } = await processAnswers(draft, gaps, answers, roleContext);
 
           // Update Q&A history
           const updatedQA = [...qaHistory, ...answers];
@@ -224,9 +237,9 @@ export function getProfileBuilderRoutes() {
             newStatus = "review";
             logger?.info(`[profileBuilder] Interview complete for session ${sessionId}`);
           } else {
-            // Generate next round of questions
+            // Generate next round of questions (role-aware)
             const qaForLLM = updatedQA.map((qa) => ({ question: qa.question, answer: qa.answer }));
-            nextQuestions = await generateInterviewQuestions(updatedDraft, remainingGaps, qaForLLM);
+            nextQuestions = await generateInterviewQuestions(updatedDraft, remainingGaps, qaForLLM, roleContext);
             logger?.info(`[profileBuilder] Generated ${nextQuestions.length} questions for round ${nextRound}`);
           }
 

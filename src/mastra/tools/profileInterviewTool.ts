@@ -13,6 +13,13 @@ const openai = createOpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
 
+/* ── Role context for tailored questions ────────────────────────── */
+
+export interface RoleContext {
+  targetRole: string;
+  interviewFocus: "leadership" | "balanced" | "technical" | string;
+}
+
 /* ── Generate follow-up interview questions ─────────────────────── */
 
 const GenerateQuestionsOutputSchema = z.object({
@@ -23,18 +30,54 @@ export async function generateInterviewQuestions(
   draft: ExperienceInventory,
   gaps: Gap[],
   previousQA: Array<{ question: string; answer: string }>,
+  roleContext?: RoleContext,
 ): Promise<z.infer<typeof InterviewQuestionSchema>[]> {
-  const systemPrompt = `You are a career interview assistant helping build a comprehensive professional profile. Given a structured resume draft and a list of gaps, generate targeted follow-up questions to fill missing information.
+  const focus = roleContext?.interviewFocus || "leadership";
+  const targetRole = roleContext?.targetRole || "";
 
-Priority rules:
-- HIGH: Missing metrics/numbers for bullet points (these are critical for the job application system to generate tailored resumes)
-- HIGH: Missing tools/technologies per role
+  // Build focus-specific priority rules
+  let priorityRules: string;
+  if (focus === "leadership") {
+    priorityRules = `Priority rules (LEADERSHIP focus — this person is targeting senior/executive roles):
+- HIGH: Quantified business outcomes — revenue generated, cost savings, efficiency gains, growth percentages
+- HIGH: Team and organizational scope — team size, number of direct reports, cross-functional teams led, budget managed
+- HIGH: Strategic initiatives — what they drove, why, and the measurable impact
+- HIGH: Stakeholder management — who they influenced (C-suite, board, external partners) and how
+- MEDIUM: Organizational change — transformations led, culture shifts, processes redesigned
+- MEDIUM: Hiring, mentoring, and talent development track record
+- LOW: Specific tools or technologies (only ask if a role explicitly lists them)
+- LOW: Technical implementation details (skip unless directly relevant to the target role)
+
+DO NOT ask about specific programming languages, frameworks, or tool versions unless the target role description explicitly requires them. Focus on WHAT was achieved and at WHAT scale, not HOW it was built technically.`;
+  } else if (focus === "technical") {
+    priorityRules = `Priority rules (TECHNICAL focus):
+- HIGH: Missing metrics/numbers for bullet points
+- HIGH: Specific tools, languages, frameworks, and architectures used
+- HIGH: Technical challenges overcome and engineering decisions made
+- MEDIUM: Team size and scope
 - MEDIUM: Missing dates or vague date ranges
-- MEDIUM: Team size, budget, or scope details not yet captured
-- LOW: Additional skills, certifications, or talking points that could strengthen the profile
+- LOW: Additional certifications or skills`;
+  } else {
+    priorityRules = `Priority rules (BALANCED focus):
+- HIGH: Quantified business outcomes and metrics
+- HIGH: Team size, scope, and leadership responsibilities
+- MEDIUM: Key tools and technologies used
+- MEDIUM: Strategic decisions and stakeholder management
+- LOW: Missing dates, additional certifications`;
+  }
 
-Generate 3-5 questions per round. Be specific — reference the exact role and bullet point.
-Example: "In your role as VP of Data at Acme Financial, you mentioned driving cost savings. Can you quantify the dollar amount saved and which technologies were used?"
+  const roleLine = targetRole
+    ? `\nThe candidate is targeting roles like: "${targetRole}". Tailor your questions to surface information that would be most compelling for that type of position.`
+    : "";
+
+  const systemPrompt = `You are a career interview assistant helping build a comprehensive professional profile. Given a structured resume draft and a list of gaps, generate targeted follow-up questions to fill missing information.
+${roleLine}
+
+${priorityRules}
+
+Generate 3-5 questions per round. Be specific — reference the exact role and achievement.
+Example (leadership): "As VP of Data at Acme Financial, you led a data platform migration. How large was the team you managed, what was the budget, and what business KPIs improved as a result?"
+Example (leadership): "You mentioned driving $2M in cost savings. Can you walk me through the strategic decision that led to this and which senior stakeholders you partnered with?"
 
 Do NOT ask about things that have already been answered in the previous Q&A.`;
 
@@ -77,12 +120,29 @@ export async function processAnswers(
   draft: ExperienceInventory,
   gaps: Gap[],
   newAnswers: Array<{ questionId: string; question: string; answer: string }>,
+  roleContext?: RoleContext,
 ): Promise<{
   updatedDraft: ExperienceInventory;
   remainingGaps: Gap[];
   isComplete: boolean;
 }> {
+  const focus = roleContext?.interviewFocus || "leadership";
+  const targetRole = roleContext?.targetRole || "";
+
+  let focusGuidance = "";
+  if (focus === "leadership") {
+    focusGuidance = `\nThis profile is being built for LEADERSHIP roles${targetRole ? ` (targeting: "${targetRole}")` : ""}. When extracting information from answers:
+- Prioritize business outcomes, revenue impact, cost savings, and growth metrics
+- Emphasize team size, org scope, budget, and stakeholder relationships
+- Frame bullet points in terms of leadership impact, not technical implementation
+- For the "metrics" field, focus on business KPIs (revenue, headcount, budget, efficiency %)
+- For the "tools" field, only include tools that are strategic/platform-level, not low-level technical details`;
+  } else if (focus === "technical") {
+    focusGuidance = `\nThis profile is being built for TECHNICAL roles${targetRole ? ` (targeting: "${targetRole}")` : ""}. Emphasize tools, architectures, and technical achievements.`;
+  }
+
   const systemPrompt = `You are updating a structured professional profile based on interview answers. Given the current draft, a set of Q&A pairs, merge the new information into the draft.
+${focusGuidance}
 
 Rules:
 1. Only modify fields that the answers provide information about.
