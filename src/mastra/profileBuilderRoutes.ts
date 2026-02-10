@@ -210,6 +210,7 @@ export function getProfileBuilderRoutes() {
 
           const body = await c.req.json();
           const answers: Array<{ questionId: string; question: string; answer: string }> = body.answers || [];
+          const skipped: Array<{ questionId: string; question: string; answer: string }> = body.skipped || [];
           if (answers.length === 0) {
             return c.json({ error: "No answers provided" }, 400);
           }
@@ -222,13 +223,13 @@ export function getProfileBuilderRoutes() {
           const interviewFocus = session.interview_focus || "leadership";
           const roleContext = { targetRole, interviewFocus };
 
-          logger?.info(`[profileBuilder] Processing ${answers.length} answers for session ${sessionId} (round ${round})`);
+          logger?.info(`[profileBuilder] Processing ${answers.length} answers (${skipped.length} skipped) for session ${sessionId} (round ${round})`);
 
-          // Process answers (role-aware)
+          // Process only real answers (not skipped ones)
           const { updatedDraft, remainingGaps, isComplete } = await processAnswers(draft, gaps, answers, roleContext);
 
-          // Update Q&A history
-          const updatedQA = [...qaHistory, ...answers];
+          // Update Q&A history — include skipped questions so AI won't re-ask them
+          const updatedQA = [...qaHistory, ...answers, ...skipped];
           const nextRound = round + 1;
           let nextQuestions: any[] = [];
           let newStatus = "interviewing";
