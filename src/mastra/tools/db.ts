@@ -93,6 +93,8 @@ export async function initDatabase(): Promise<void> {
         raw_resume_text TEXT,
         resume_filename TEXT,
         resume_format TEXT,
+        target_role TEXT DEFAULT '',
+        interview_focus TEXT DEFAULT 'leadership',
         current_draft JSONB,
         gaps JSONB DEFAULT '[]'::jsonb,
         qa_history JSONB DEFAULT '[]'::jsonb,
@@ -101,6 +103,9 @@ export async function initDatabase(): Promise<void> {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         finalized_at TIMESTAMPTZ
       );
+
+      ALTER TABLE profile_sessions ADD COLUMN IF NOT EXISTS target_role TEXT DEFAULT '';
+      ALTER TABLE profile_sessions ADD COLUMN IF NOT EXISTS interview_focus TEXT DEFAULT '';
 
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS compensation TEXT DEFAULT '';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_action TEXT DEFAULT '';

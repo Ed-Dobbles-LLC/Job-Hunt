@@ -77,6 +77,11 @@ export const mastra = new Mastra({
       "inngest/hono",
       "hono",
       "hono/streaming",
+      "mammoth",
+      "pdf-parse",
+      "docx",
+      "googleapis",
+      "pg",
     ],
     // sourcemaps are good for debugging.
     sourcemap: true,
