@@ -3,7 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "cd .mastra/output && node index.mjs"
+startCommand = "node /app/.mastra/output/index.mjs"
 healthcheckPath = "/api/dashboard"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
