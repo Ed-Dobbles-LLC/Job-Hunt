@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile Builder</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242734;
+      --border: #2e3140;
+      --text: #e4e6ef;
+      --text-dim: #8b8fa3;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --blue: #3b82f6;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    header h1 span { font-size: 24px; }
+
+    .header-actions { display: flex; gap: 12px; align-items: center; }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.15s;
+      text-decoration: none;
+    }
+
+    .btn:hover { border-color: var(--accent); background: var(--surface); }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-success {
+      background: var(--green);
+      border-color: var(--green);
+      color: white;
+    }
+
+    .container { max-width: 900px; margin: 0 auto; padding: 32px; }
+
+    /* ── Steps indicator ────────────────────────────────────── */
+    .steps {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 40px;
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+
+    .step .num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--border);
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .step.active .num {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .step.done .num {
+      background: var(--green);
+      border-color: var(--green);
+      color: white;
+    }
+
+    .step.active { color: var(--text); }
+    .step.done { color: var(--green); }
+
+    .step-line {
+      width: 48px;
+      height: 2px;
+      background: var(--border);
+      margin: 0 12px;
+    }
+
+    .step-line.done { background: var(--green); }
+
+    /* ── Panels ─────────────────────────────────────────────── */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Upload area ────────────────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 64px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--surface);
+    }
+
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.05);
+    }
+
+    .upload-zone .icon { font-size: 48px; margin-bottom: 16px; }
+    .upload-zone .title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .upload-zone .sub { color: var(--text-dim); font-size: 14px; }
+
+    .upload-zone input[type="file"] { display: none; }
+
+    .file-selected {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .file-name {
+      padding: 8px 16px;
+      background: var(--surface2);
+      border-radius: 8px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+    }
+
+    /* ── Interview ──────────────────────────────────────────── */
+    .interview-header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .interview-header .round {
+      font-size: 13px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .interview-header .gaps-count {
+      font-size: 13px;
+      color: var(--yellow);
+    }
+
+    .question-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .question-card .priority {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .priority-high { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+    .priority-medium { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+    .priority-low { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
+
+    .question-card .question-text {
+      font-size: 15px;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .question-card textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+      transition: border-color 0.15s;
+    }
+
+    .question-card textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .interview-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 24px;
+    }
+
+    /* ── Review ─────────────────────────────────────────────── */
+    .profile-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .profile-card h3 {
+      font-size: 16px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 8px;
+      padding: 6px 0;
+    }
+
+    .field-label {
+      font-size: 13px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .field-value { font-size: 14px; }
+
+    .exp-entry {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .exp-entry .exp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .exp-entry .exp-title { font-weight: 600; font-size: 15px; }
+    .exp-entry .exp-company { color: var(--text-dim); font-size: 14px; }
+    .exp-entry .exp-dates { color: var(--text-dim); font-size: 13px; }
+
+    .exp-entry ul {
+      margin: 8px 0 0 20px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .exp-entry .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 8px;
+    }
+
+    .tag {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      background: rgba(99, 102, 241, 0.12);
+      color: var(--accent);
+    }
+
+    .tag.metric {
+      background: rgba(34, 197, 94, 0.12);
+      color: var(--green);
+    }
+
+    .skill-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .skill-pill {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Loading overlay ────────────────────────────────────── */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 17, 23, 0.85);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .loading-overlay.active { display: flex; }
+
+    .loading-overlay .spinner-lg {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--surface2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-overlay .loading-text {
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 14px;
+      z-index: 200;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s;
+    }
+
+    .toast.visible { opacity: 1; transform: translateY(0); }
+    .toast.success { border-color: var(--green); }
+    .toast.error { border-color: var(--red); }
+
+    /* ── Done screen ────────────────────────────────────────── */
+    .done-screen {
+      text-align: center;
+      padding: 64px 32px;
+    }
+
+    .done-screen .icon { font-size: 64px; margin-bottom: 16px; }
+    .done-screen h2 { font-size: 24px; margin-bottom: 8px; }
+    .done-screen p { color: var(--text-dim); font-size: 16px; margin-bottom: 32px; }
+
+    @media (max-width: 768px) {
+      .container { padding: 16px; }
+      header { padding: 12px 16px; }
+      .field-row { grid-template-columns: 1fr; }
+      .steps { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span>&#x1F464;</span> Profile Builder</h1>
+    <div class="header-actions">
+      <a class="btn" href="/dashboard">Back to Dashboard</a>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Steps indicator -->
+    <div class="steps">
+      <div class="step active" id="step-1">
+        <div class="num">1</div>
+        <span>Upload Resume</span>
+      </div>
+      <div class="step-line" id="line-1"></div>
+      <div class="step" id="step-2">
+        <div class="num">2</div>
+        <span>Interview</span>
+      </div>
+      <div class="step-line" id="line-2"></div>
+      <div class="step" id="step-3">
+        <div class="num">3</div>
+        <span>Review &amp; Save</span>
+      </div>
+    </div>
+
+    <!-- Panel 1: Upload -->
+    <div class="panel active" id="panel-upload">
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">&#x1F4C4;</div>
+        <div class="title">Upload Your Resume</div>
+        <div class="sub">Drag & drop or click to select. Supports PDF, DOCX, and TXT files.</div>
+        <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt">
+        <div class="file-selected" id="fileSelected" style="display:none">
+          <span class="file-name" id="fileName"></span>
+        </div>
+      </div>
+
+      <!-- Target role context -->
+      <div style="margin-top:24px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px;" onclick="event.stopPropagation()">
+        <label for="targetRole" style="display:block; font-size:15px; font-weight:600; margin-bottom:8px;">What kind of role are you targeting?</label>
+        <input type="text" id="targetRole" placeholder="e.g. VP of Data &amp; Analytics, Chief Data Officer, SVP Operations" style="width:100%; padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-family:inherit; font-size:14px;">
+        <div style="margin-top:12px;">
+          <label for="interviewFocus" style="display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px;">Interview focus (what should we emphasize?)</label>
+          <select id="interviewFocus" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-family:inherit; font-size:14px;">
+            <option value="leadership">Leadership &amp; Strategy (team size, budget, outcomes, stakeholder management)</option>
+            <option value="balanced">Balanced (mix of leadership and technical depth)</option>
+            <option value="technical">Technical Depth (tools, architecture, hands-on contributions)</option>
+          </select>
+        </div>
+        <div style="margin-top:16px; text-align:right;">
+          <button class="btn btn-primary" id="uploadBtn" onclick="uploadResume()" style="font-size:15px; padding:10px 24px;">Parse &amp; Build Profile</button>
+        </div>
+      </div>
+
+      <div style="text-align:center; margin-top:24px; color:var(--text-dim); font-size:14px">
+        Your resume will be parsed by AI and structured into a professional profile.<br>
+        The interview questions will be tailored to the role you're targeting.
+      </div>
+    </div>
+
+    <!-- Panel 2: Interview -->
+    <div class="panel" id="panel-interview">
+      <div class="interview-header">
+        <div>
+          <div class="round" id="interviewRound">Round 1 of 4</div>
+          <div style="font-size:15px; font-weight:500; margin-top:4px">Let's strengthen your profile</div>
+        </div>
+        <div class="gaps-count" id="gapsCount">0 gaps remaining</div>
+      </div>
+
+      <div id="questionsContainer"></div>
+
+      <div class="interview-actions">
+        <button class="btn" onclick="skipInterview()">Skip &amp; Go to Review</button>
+        <button class="btn btn-primary" id="submitAnswersBtn" onclick="submitAnswers()">Submit Answers &amp; Continue</button>
+      </div>
+    </div>
+
+    <!-- Panel 3: Review -->
+    <div class="panel" id="panel-review">
+      <div id="reviewContent"></div>
+
+      <div style="display:flex; justify-content:space-between; margin-top:24px">
+        <button class="btn" onclick="goToPanel('interview')" id="backToInterviewBtn" style="display:none">Back to Interview</button>
+        <div></div>
+        <button class="btn btn-success" id="finalizeBtn" onclick="finalizeProfile()" style="font-size:16px; padding: 12px 32px">
+          Save Profile &amp; Activate
+        </button>
+      </div>
+    </div>
+
+    <!-- Panel 4: Done -->
+    <div class="panel" id="panel-done">
+      <div class="done-screen">
+        <div class="icon">&#x2705;</div>
+        <h2>Profile Saved!</h2>
+        <p id="doneMessage">Your profile is now active. The job match system will use it to generate tailored applications.</p>
+        <div style="display:flex; gap:12px; justify-content:center">
+          <a class="btn btn-primary" href="/dashboard">Go to Dashboard</a>
+          <button class="btn" onclick="startOver()">Build Another Profile</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-lg"></div>
+    <div class="loading-text" id="loadingText">Parsing your resume...</div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let sessionId = null;
+    let currentDraft = null;
+    let currentGaps = [];
+    let currentQuestions = [];
+    let interviewRound = 1;
+
+    /* ── Upload handling ──────────────────────────────────── */
+    const fileInput = document.getElementById('fileInput');
+    const uploadZone = document.getElementById('uploadZone');
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        document.getElementById('fileName').textContent = fileInput.files[0].name;
+        document.getElementById('fileSelected').style.display = 'flex';
+      }
+    });
+
+    uploadZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadZone.classList.add('dragover');
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+      uploadZone.classList.remove('dragover');
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        document.getElementById('fileName').textContent = e.dataTransfer.files[0].name;
+        document.getElementById('fileSelected').style.display = 'flex';
+      }
+    });
+
+    async function uploadResume() {
+      if (!fileInput.files.length) {
+        showToast('Please select a resume file first.', 'error');
+        return;
+      }
+
+      showLoading('Parsing your resume...');
+      const formData = new FormData();
+      formData.append('resume', fileInput.files[0]);
+      formData.append('targetRole', document.getElementById('targetRole').value.trim());
+      formData.append('interviewFocus', document.getElementById('interviewFocus').value);
+
+      try {
+        const res = await fetch('/api/profile/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Upload failed');
+        }
+
+        sessionId = data.sessionId;
+        currentDraft = data.draft;
+        currentGaps = data.gaps || [];
+        currentQuestions = data.questions || [];
+        interviewRound = data.interviewRound || 1;
+
+        hideLoading();
+        goToPanel('interview');
+        renderQuestions();
+      } catch (err) {
+        hideLoading();
+        showToast(err.message, 'error');
+      }
+    }
+
+    /* ── Interview ────────────────────────────────────────── */
+    function renderQuestions() {
+      document.getElementById('interviewRound').textContent = `Round ${interviewRound} of 4`;
+      document.getElementById('gapsCount').textContent = `${currentGaps.length} gap${currentGaps.length !== 1 ? 's' : ''} remaining`;
+
+      const container = document.getElementById('questionsContainer');
+      if (currentQuestions.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding:32px; color:var(--text-dim)">No more questions. You can review and save your profile.</div>';
+        document.getElementById('submitAnswersBtn').textContent = 'Go to Review';
+        return;
+      }
+
+      container.innerHTML = currentQuestions.map((q, i) => `
+        <div class="question-card" data-qid="${esc(q.id)}">
+          <div class="priority priority-${q.priority}">${q.priority}</div>
+          <div class="question-text">${esc(q.question)}</div>
+          <textarea id="answer-${i}" placeholder="Type your answer here..."></textarea>
+        </div>
+      `).join('');
+    }
+
+    async function submitAnswers() {
+      if (currentQuestions.length === 0) {
+        goToPanel('review');
+        renderReview();
+        return;
+      }
+
+      const answers = currentQuestions.map((q, i) => {
+        const textarea = document.getElementById('answer-' + i);
+        return {
+          questionId: q.id,
+          question: q.question,
+          answer: textarea ? textarea.value.trim() : '',
+        };
+      }).filter(a => a.answer.length > 0);
+
+      if (answers.length === 0) {
+        showToast('Please answer at least one question, or skip to review.', 'error');
+        return;
+      }
+
+      showLoading('Processing your answers...');
+
+      try {
+        const res = await fetch(`/api/profile/interview/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Interview submission failed');
+        }
+
+        currentDraft = data.draft;
+        currentGaps = data.gaps || [];
+        currentQuestions = data.questions || [];
+        interviewRound = data.interviewRound || interviewRound + 1;
+
+        hideLoading();
+
+        if (data.isComplete || data.status === 'review') {
+          goToPanel('review');
+          renderReview();
+        } else {
+          renderQuestions();
+          showToast('Answers saved! Here are some follow-up questions.', 'success');
+        }
+      } catch (err) {
+        hideLoading();
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function skipInterview() {
+      if (!sessionId) return;
+      showLoading('Preparing review...');
+
+      try {
+        const res = await fetch(`/api/profile/skip-interview/${sessionId}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Skip failed');
+
+        hideLoading();
+        goToPanel('review');
+        renderReview();
+      } catch (err) {
+        hideLoading();
+        showToast(err.message, 'error');
+      }
+    }
+
+    /* ── Review ───────────────────────────────────────────── */
+    function renderReview() {
+      if (!currentDraft) return;
+      const d = currentDraft;
+      const p = d.profile || {};
+
+      let html = '';
+
+      // Profile header
+      html += `<div class="profile-card">
+        <h3>Contact Information</h3>
+        <div class="field-row"><div class="field-label">Name</div><div class="field-value">${esc(p.name)}</div></div>
+        <div class="field-row"><div class="field-label">Title</div><div class="field-value">${esc(p.current_title)}</div></div>
+        <div class="field-row"><div class="field-label">Email</div><div class="field-value">${esc(p.email)}</div></div>
+        <div class="field-row"><div class="field-label">Phone</div><div class="field-value">${esc(p.phone)}</div></div>
+        <div class="field-row"><div class="field-label">Location</div><div class="field-value">${esc(p.location)}</div></div>
+        <div class="field-row"><div class="field-label">LinkedIn</div><div class="field-value">${esc(p.linkedin)}</div></div>
+        <div class="field-row"><div class="field-label">Summary</div><div class="field-value">${esc(p.summary)}</div></div>
+      </div>`;
+
+      // Experience
+      if (d.experience && d.experience.length > 0) {
+        html += `<div class="profile-card"><h3>Experience (${d.experience.length} roles)</h3>`;
+        d.experience.forEach(exp => {
+          html += `<div class="exp-entry">
+            <div class="exp-header">
+              <div>
+                <div class="exp-title">${esc(exp.title)}</div>
+                <div class="exp-company">${esc(exp.employer)}${exp.location ? ' &middot; ' + esc(exp.location) : ''}</div>
+              </div>
+              <div class="exp-dates">${esc(exp.start_date)} &ndash; ${esc(exp.end_date)}</div>
+            </div>
+            <ul>${(exp.bullets || []).map(b => `<li>${esc(b.text)}</li>`).join('')}</ul>
+            <div class="tags">
+              ${(exp.bullets || []).flatMap(b => (b.metrics || []).map(m => `<span class="tag metric">${esc(m)}</span>`)).join('')}
+              ${(exp.bullets || []).flatMap(b => (b.tools || []).map(t => `<span class="tag">${esc(t)}</span>`)).join('')}
+            </div>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      // Education
+      if (d.education && d.education.length > 0) {
+        html += `<div class="profile-card"><h3>Education</h3>`;
+        d.education.forEach(edu => {
+          html += `<div class="exp-entry">
+            <div class="exp-header">
+              <div>
+                <div class="exp-title">${esc(edu.degree)}</div>
+                <div class="exp-company">${esc(edu.institution)}</div>
+              </div>
+              <div class="exp-dates">${esc(edu.year)}</div>
+            </div>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+
+      // Skills
+      if (d.skills) {
+        html += `<div class="profile-card"><h3>Skills</h3>`;
+        const categories = [
+          { key: 'leadership', label: 'Leadership' },
+          { key: 'technical', label: 'Technical' },
+          { key: 'data_science', label: 'Data Science / ML' },
+          { key: 'domains', label: 'Domains' },
+        ];
+        categories.forEach(cat => {
+          const skills = d.skills[cat.key] || [];
+          if (skills.length > 0) {
+            html += `<div style="margin-bottom:12px">
+              <div class="field-label" style="margin-bottom:8px">${cat.label}</div>
+              <div class="skill-pills">${skills.map(s => `<span class="skill-pill">${esc(s)}</span>`).join('')}</div>
+            </div>`;
+          }
+        });
+        html += `</div>`;
+      }
+
+      // Certifications
+      if (d.certifications && d.certifications.length > 0) {
+        html += `<div class="profile-card"><h3>Certifications</h3>`;
+        d.certifications.forEach(cert => {
+          html += `<div class="field-row"><div class="field-label">${esc(cert.year)}</div><div class="field-value">${esc(cert.name)}</div></div>`;
+        });
+        html += `</div>`;
+      }
+
+      // Remaining gaps
+      if (currentGaps.length > 0) {
+        html += `<div class="profile-card" style="border-color: var(--yellow)">
+          <h3 style="color: var(--yellow)">${currentGaps.length} Gaps Remaining</h3>
+          <div style="font-size:13px; color:var(--text-dim); margin-bottom:12px">These can be addressed later or ignored.</div>
+          ${currentGaps.map(g => `<div style="padding:6px 0; border-bottom: 1px solid var(--border); font-size:14px">
+            <span class="priority priority-${g.priority}" style="margin-right:8px">${g.priority}</span>
+            ${esc(g.description)}
+          </div>`).join('')}
+        </div>`;
+      }
+
+      document.getElementById('reviewContent').innerHTML = html;
+    }
+
+    /* ── Finalize ─────────────────────────────────────────── */
+    async function finalizeProfile() {
+      if (!sessionId) return;
+      showLoading('Saving your profile...');
+
+      try {
+        const res = await fetch(`/api/profile/finalize/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Finalize failed');
+
+        hideLoading();
+        document.getElementById('doneMessage').textContent = data.message || 'Profile saved successfully!';
+        goToPanel('done');
+      } catch (err) {
+        hideLoading();
+        showToast(err.message, 'error');
+      }
+    }
+
+    function startOver() {
+      sessionId = null;
+      currentDraft = null;
+      currentGaps = [];
+      currentQuestions = [];
+      interviewRound = 1;
+      fileInput.value = '';
+      document.getElementById('fileSelected').style.display = 'none';
+      goToPanel('upload');
+    }
+
+    /* ── Navigation ───────────────────────────────────────── */
+    function goToPanel(name) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('panel-' + name).classList.add('active');
+
+      const stepMap = { upload: 1, interview: 2, review: 3, done: 3 };
+      const current = stepMap[name] || 1;
+
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById('step-' + i);
+        el.classList.remove('active', 'done');
+        if (i < current) el.classList.add('done');
+        else if (i === current) el.classList.add('active');
+      }
+
+      for (let i = 1; i <= 2; i++) {
+        const line = document.getElementById('line-' + i);
+        line.classList.toggle('done', i < current);
+      }
+
+      if (name === 'review') {
+        renderReview();
+        const btn = document.getElementById('backToInterviewBtn');
+        btn.style.display = (interviewRound <= 4 && currentQuestions.length > 0) ? 'inline-block' : 'none';
+      }
+    }
+
+    /* ── Utilities ────────────────────────────────────────── */
+    function showLoading(text) {
+      document.getElementById('loadingText').textContent = text;
+      document.getElementById('loadingOverlay').classList.add('active');
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingOverlay').classList.remove('active');
+    }
+
+    function showToast(msg, type) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast visible ' + type;
+      setTimeout(() => el.className = 'toast', 4000);
+    }
+
+    function esc(str) {
+      if (str == null) return '';
+      const d = document.createElement('div');
+      d.textContent = String(str);
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>
