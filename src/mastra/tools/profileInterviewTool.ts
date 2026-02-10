@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { z } from "zod";
 import {
   ExperienceInventorySchema,
@@ -110,12 +110,6 @@ Do NOT ask about things that have already been answered in the previous Q&A.`;
 
 /* ── Process answers and update the draft ────────────────────────── */
 
-const ProcessAnswersOutputSchema = z.object({
-  updatedDraft: ExperienceInventorySchema,
-  remainingGaps: z.array(GapSchema),
-  isComplete: z.boolean().describe("True when all high-priority gaps are resolved"),
-});
-
 export async function processAnswers(
   draft: ExperienceInventory,
   gaps: Gap[],
@@ -152,41 +146,40 @@ Rules:
 5. Maintain the sequential ID scheme (exp-001, exp-001-b1, edu-001, cert-001, etc.).
 6. Update the remainingGaps array to remove resolved items and add any new gaps discovered.
 7. Set isComplete=true ONLY when all "high" priority gaps are resolved. It's OK to have some "medium" and "low" gaps remaining.
-8. Do NOT fabricate any information. Only include what the user has explicitly stated.`;
+8. Do NOT fabricate any information. Only include what the user has explicitly stated.
+
+Respond with ONLY a JSON object (no markdown fences, no explanation) with this structure:
+{
+  "updatedDraft": { "profile": {...}, "experience": [...], "education": [...], "skills": {...}, "certifications": [...] },
+  "remainingGaps": [{ "field": "...", "description": "...", "priority": "high|medium|low" }],
+  "isComplete": true/false
+}`;
 
   const userPrompt = `Current draft:\n${JSON.stringify(draft, null, 2)}\n\nCurrent gaps:\n${JSON.stringify(gaps, null, 2)}\n\nNew Q&A:\n${JSON.stringify(newAnswers, null, 2)}`;
 
-  try {
-    const { object } = await generateObject({
-      model: openai("gpt-4o"),
-      schema: ProcessAnswersOutputSchema,
-      system: systemPrompt,
-      prompt: userPrompt,
-      temperature: 0.2,
-    });
+  const { text } = await generateText({
+    model: openai("gpt-4o"),
+    system: systemPrompt,
+    prompt: userPrompt,
+    temperature: 0.2,
+  });
 
-    return {
-      updatedDraft: object.updatedDraft,
-      remainingGaps: object.remainingGaps,
-      isComplete: object.isComplete,
-    };
-  } catch (firstError: any) {
-    console.error(`[profileInterview] First attempt failed: ${firstError.message}. Retrying with stricter prompt...`);
-
-    const retrySystemPrompt = systemPrompt + `\n\nIMPORTANT: Follow the JSON schema EXACTLY. Every object must include all required fields. Use empty strings "" for unknown text fields, empty arrays [] for unknown array fields. Do not add fields not in the schema. The "priority" field for gaps must be exactly one of: "high", "medium", "low". Every experience entry needs "id", "employer", "title", "start_date", "end_date", "location", "bullets". Every bullet needs "id", "text", "metrics", "tools". Profile needs "name", "current_title", "email", "phone", "location", "linkedin", "summary".`;
-
-    const { object } = await generateObject({
-      model: openai("gpt-4o"),
-      schema: ProcessAnswersOutputSchema,
-      system: retrySystemPrompt,
-      prompt: userPrompt,
-      temperature: 0.1,
-    });
-
-    return {
-      updatedDraft: object.updatedDraft,
-      remainingGaps: object.remainingGaps,
-      isComplete: object.isComplete,
-    };
+  // Extract JSON from the response (strip markdown fences if present)
+  let jsonStr = text.trim();
+  if (jsonStr.startsWith("```")) {
+    jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
   }
+
+  const parsed = JSON.parse(jsonStr);
+
+  // Safely extract with fallbacks
+  const updatedDraft = parsed.updatedDraft || parsed.updated_draft || draft;
+  const remainingGaps = (parsed.remainingGaps || parsed.remaining_gaps || []).map((g: any) => ({
+    field: g.field || "",
+    description: g.description || "",
+    priority: ["high", "medium", "low"].includes(g.priority) ? g.priority : "medium",
+  }));
+  const isComplete = parsed.isComplete ?? parsed.is_complete ?? false;
+
+  return { updatedDraft, remainingGaps, isComplete };
 }
