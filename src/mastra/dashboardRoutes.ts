@@ -7,6 +7,14 @@ import { runWorkflowDirectly } from "./workflows/jobMatchWorkflow";
 import { extractJDRequirementsTool } from "./tools/extractJDRequirementsTool";
 import { generateVerifiedPacketTool } from "./tools/generateVerifiedPacketTool";
 import { buildOutputTool } from "./tools/buildOutputTool";
+import { scoreJobsTool } from "./tools/scoreJobsTool";
+import {
+  normalizeText,
+  computeHash,
+  computeSimhash,
+  classifyLevel,
+  extractKeywords,
+} from "./tools/jobPostingSchema";
 
 let dbReady = false;
 
@@ -519,6 +527,166 @@ export function getDashboardRoutes() {
           });
         } catch (err: any) {
           logger?.error(`❌ [generate-packet] Error: ${err.message}`);
+          return c.json({ error: err.message, stack: err.stack?.split('\n').slice(0, 5) }, 500);
+        }
+      },
+    },
+    /* ── Excel/CSV import ───────────────────────────────────── */
+    {
+      path: "/api/dashboard/import-excel",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        logger?.info(`📥 [import-excel] Starting file import`);
+
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          const contentType = c.req.header("content-type") || "";
+          let rows: Record<string, any>[] = [];
+
+          if (contentType.includes("multipart/form-data")) {
+            // File upload via form
+            const formData = await c.req.formData();
+            const file = formData.get("file") as File | null;
+            if (!file) {
+              return c.json({ error: "No file uploaded. Include a 'file' field." }, 400);
+            }
+
+            const buffer = Buffer.from(await file.arrayBuffer());
+            const XLSX = await import("xlsx");
+            const workbook = XLSX.read(buffer, { type: "buffer" });
+            const sheetName = workbook.SheetNames[0];
+            if (!sheetName) {
+              return c.json({ error: "Workbook has no sheets" }, 400);
+            }
+            rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+            logger?.info(`📥 [import-excel] Parsed ${rows.length} rows from sheet "${sheetName}"`);
+          } else if (contentType.includes("application/json")) {
+            // JSON array of job objects
+            const body = await c.req.json();
+            rows = Array.isArray(body) ? body : body.jobs || [body];
+            logger?.info(`📥 [import-excel] Received ${rows.length} jobs via JSON`);
+          } else {
+            return c.json({ error: "Unsupported content type. Use multipart/form-data (file upload) or application/json." }, 400);
+          }
+
+          if (rows.length === 0) {
+            return c.json({ error: "No data rows found in file" }, 400);
+          }
+
+          // Map columns flexibly (handle various header names)
+          const newJobIds: number[] = [];
+          let duplicateCount = 0;
+          let skippedCount = 0;
+
+          for (const row of rows) {
+            const company = (row.Company || row.company || row.company_name || row.Organization || "").toString().trim();
+            const title = (row.Title || row.title || row.job_title || row["Job Title"] || row.Role || row.role || "").toString().trim();
+            const location = (row.Location || row.location || row.City || row.city || "").toString().trim();
+            const postingUrl = (row.URL || row.url || row.posting_url || row["Posting URL"] || row.Link || row.link || row["Job URL"] || "").toString().trim();
+            const jdText = (row["Job Description"] || row.Description || row.description || row.jd_text || row.JD || row.jd || "").toString().trim();
+            const compensation = (row.Compensation || row.compensation || row.Salary || row.salary || row.Pay || "").toString().trim();
+            const remoteHybrid = (row["Remote/Hybrid"] || row.remote_hybrid || row.Remote || row.remote || row["Work Type"] || "").toString().trim();
+            const source = (row.Source || row.source || "excel-import").toString().trim();
+
+            if (!company && !title) {
+              skippedCount++;
+              logger?.warn(`📥 [import-excel] Skipping row with no company or title`);
+              continue;
+            }
+
+            // Dedup check
+            const hashInput = jdText || `${company}|${title}|${location}|${postingUrl}`;
+            const jdHash = computeHash(hashInput);
+
+            const existingByHash = await query(
+              "SELECT job_id FROM jobs WHERE jd_hash = $1",
+              [jdHash],
+            );
+            if (existingByHash.rows.length > 0) {
+              duplicateCount++;
+              continue;
+            }
+
+            // Also check by company+title for recent dupes
+            if (company && title) {
+              const normalizedCompany = normalizeText(company).replace(/\s/g, "");
+              const normalizedTitle = normalizeText(title).replace(/\s/g, "");
+              const existingBySimilar = await query(
+                `SELECT job_id FROM jobs
+                 WHERE LOWER(REPLACE(company, ' ', '')) = $1
+                 AND LOWER(REPLACE(title, ' ', '')) = $2
+                 AND date_ingested > NOW() - INTERVAL '14 days'`,
+                [normalizedCompany, normalizedTitle],
+              );
+              if (existingBySimilar.rows.length > 0) {
+                duplicateCount++;
+                continue;
+              }
+            }
+
+            const simhash = computeSimhash(jdText);
+            const level = classifyLevel(title);
+            const jobKeywords = extractKeywords(jdText);
+
+            const insertResult = await query(
+              `INSERT INTO jobs (source, source_message_id, company, title, location, remote_hybrid, level, posting_url, date_posted, jd_raw_text, jd_hash, simhash, keywords, url_canonical, status, compensation)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+               RETURNING job_id`,
+              [
+                source,
+                `excel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                company,
+                title,
+                location,
+                remoteHybrid || "Unknown",
+                level,
+                postingUrl,
+                new Date().toISOString().split("T")[0],
+                jdText,
+                jdHash,
+                simhash,
+                JSON.stringify(jobKeywords),
+                postingUrl || null,
+                jdText.length > 100 ? "new" : "new",
+                compensation,
+              ],
+            );
+
+            newJobIds.push(insertResult.rows[0].job_id);
+            logger?.info(`📥 [import-excel] Imported: ${company} — ${title} (ID: ${insertResult.rows[0].job_id})`);
+          }
+
+          logger?.info(`📥 [import-excel] Done: ${newJobIds.length} new, ${duplicateCount} dupes, ${skippedCount} skipped`);
+
+          // Auto-score the newly imported jobs
+          let scoringResult: any = null;
+          if (newJobIds.length > 0) {
+            try {
+              logger?.info(`📊 [import-excel] Auto-scoring ${newJobIds.length} imported jobs...`);
+              scoringResult = await scoreJobsTool.execute!({
+                context: { jobIds: newJobIds, topN: newJobIds.length },
+                mastra,
+              } as any);
+              logger?.info(`✅ [import-excel] Scoring complete: ${scoringResult.totalScored} jobs scored`);
+            } catch (scoreErr: any) {
+              logger?.error(`⚠️ [import-excel] Scoring failed: ${scoreErr.message}`);
+            }
+          }
+
+          return c.json({
+            success: true,
+            imported: newJobIds.length,
+            duplicates: duplicateCount,
+            skipped: skippedCount,
+            totalRows: rows.length,
+            jobIds: newJobIds,
+            scored: scoringResult ? scoringResult.totalScored : 0,
+            message: `Imported ${newJobIds.length} jobs (${duplicateCount} duplicates, ${skippedCount} skipped). ${scoringResult ? scoringResult.totalScored + ' scored.' : ''}`,
+          });
+        } catch (err: any) {
+          logger?.error(`❌ [import-excel] Error: ${err.message}`);
           return c.json({ error: err.message, stack: err.stack?.split('\n').slice(0, 5) }, 500);
         }
       },

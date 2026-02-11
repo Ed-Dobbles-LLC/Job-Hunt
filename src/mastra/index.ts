@@ -76,6 +76,7 @@ export const mastra = new Mastra({
       "docx",
       "googleapis",
       "pg",
+      "xlsx",
     ],
     // sourcemaps are good for debugging.
     sourcemap: true,

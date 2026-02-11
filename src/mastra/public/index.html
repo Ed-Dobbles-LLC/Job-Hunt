@@ -739,6 +739,90 @@
     .job-cards.compact .jc-reasons { display: none; }
     .job-cards.compact .jc-score-big { width: 42px; height: 42px; font-size: 15px; border-width: 2px; }
 
+    /* ── Upload Drop Zone ─────────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--surface2);
+      margin-bottom: 16px;
+    }
+
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .upload-zone .uz-icon { font-size: 40px; margin-bottom: 10px; opacity: 0.7; }
+    .upload-zone .uz-text { font-size: 14px; color: var(--text-dim); }
+    .upload-zone .uz-text strong { color: var(--accent); }
+    .upload-zone input[type="file"] { display: none; }
+
+    .upload-progress {
+      display: none;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .upload-progress .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--surface3);
+      border-radius: 3px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .upload-progress .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 0.3s;
+      animation: progress-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes progress-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .upload-result {
+      display: none;
+      padding: 16px;
+      border-radius: 12px;
+      margin-top: 12px;
+    }
+
+    .upload-result.success { background: var(--green-soft); border: 1px solid var(--green); }
+    .upload-result.error { background: var(--red-soft); border: 1px solid var(--red); }
+
+    .upload-result .ur-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .upload-result .ur-stat {
+      text-align: center;
+    }
+
+    .upload-result .ur-stat .num {
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .upload-result .ur-stat .lbl {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .upload-result.success .ur-stat .num { color: var(--green); }
+
     /* ── Responsive ───────────────────────────────────────── */
     @media (max-width: 1024px) {
       .sidebar { display: none; }
@@ -822,10 +906,10 @@
             <div class="tile-label">Settings</div>
             <div class="tile-desc">Configure API keys, sources & preferences</div>
           </a>
-          <div class="launch-tile" onclick="switchTab('runs')">
-            <div class="tile-icon blue">&#x1F4CA;</div>
-            <div class="tile-label">Run History</div>
-            <div class="tile-desc">View past workflow runs & results</div>
+          <div class="launch-tile" onclick="openImportModal()">
+            <div class="tile-icon blue">&#x1F4E5;</div>
+            <div class="tile-label">Import Jobs</div>
+            <div class="tile-desc">Upload Excel/CSV file with job listings</div>
           </div>
         </div>
 
@@ -907,6 +991,54 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!-- Import Modal -->
+  <div class="modal-overlay" id="importOverlay" onclick="closeImportModal(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:600px">
+      <div class="modal-header">
+        <div>
+          <h2>Import Jobs</h2>
+          <div class="sub">Upload an Excel (.xlsx) or CSV file with job listings</div>
+        </div>
+        <button class="close-btn" onclick="closeImportModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="importUploadZone" class="upload-zone" onclick="document.getElementById('importFileInput').click()"
+             ondragover="event.preventDefault(); this.classList.add('dragover')"
+             ondragleave="this.classList.remove('dragover')"
+             ondrop="event.preventDefault(); this.classList.remove('dragover'); handleImportFile(event.dataTransfer.files[0])">
+          <div class="uz-icon">&#x1F4E5;</div>
+          <div class="uz-text">
+            <strong>Click to upload</strong> or drag & drop<br>
+            Supports .xlsx, .xls, .csv
+          </div>
+          <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" onchange="handleImportFile(this.files[0])">
+        </div>
+
+        <div class="upload-progress" id="importProgress">
+          <div class="spinner" style="width:24px;height:24px;border-width:3px;margin:0 auto 12px"></div>
+          <div id="importProgressText" style="font-size:14px;font-weight:600">Importing and scoring jobs...</div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:80%"></div>
+          </div>
+        </div>
+
+        <div class="upload-result" id="importResult">
+          <div id="importResultMsg" style="font-size:14px;font-weight:600"></div>
+          <div class="ur-stats" id="importResultStats"></div>
+        </div>
+
+        <div style="margin-top:16px;padding:16px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:700;margin-bottom:8px">Expected columns:</div>
+          <div style="font-size:12px;color:var(--text-dim);line-height:1.6">
+            <strong>Company</strong> (required), <strong>Title</strong> (required),
+            Location, URL, Job Description, Compensation, Remote/Hybrid, Source<br>
+            <span style="color:var(--text-muted)">Column names are flexible — e.g. "company_name", "Job Title", "posting_url" all work.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
     const API = '/api/dashboard';
@@ -1533,8 +1665,83 @@
       return d.innerHTML;
     }
 
+    // ── Import Modal ──────────────────────────────────────
+    function openImportModal() {
+      document.getElementById('importOverlay').classList.add('active');
+      // Reset state
+      document.getElementById('importUploadZone').style.display = 'block';
+      document.getElementById('importProgress').style.display = 'none';
+      document.getElementById('importResult').style.display = 'none';
+      document.getElementById('importFileInput').value = '';
+    }
+
+    function closeImportModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('importOverlay').classList.remove('active');
+    }
+
+    async function handleImportFile(file) {
+      if (!file) return;
+
+      const validExts = ['.xlsx', '.xls', '.csv'];
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!validExts.includes(ext)) {
+        showToast('Unsupported file type. Please upload .xlsx, .xls, or .csv', 'error');
+        return;
+      }
+
+      // Show progress
+      document.getElementById('importUploadZone').style.display = 'none';
+      document.getElementById('importProgress').style.display = 'block';
+      document.getElementById('importResult').style.display = 'none';
+      document.getElementById('importProgressText').textContent = `Importing ${file.name}...`;
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch('/api/dashboard/import-excel', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+
+        document.getElementById('importProgress').style.display = 'none';
+
+        const resultEl = document.getElementById('importResult');
+        resultEl.style.display = 'block';
+
+        if (data.success) {
+          resultEl.className = 'upload-result success';
+          document.getElementById('importResultMsg').textContent = data.message;
+          document.getElementById('importResultStats').innerHTML = `
+            <div class="ur-stat"><div class="num">${data.imported}</div><div class="lbl">Imported</div></div>
+            <div class="ur-stat"><div class="num">${data.scored}</div><div class="lbl">Scored</div></div>
+            <div class="ur-stat"><div class="num">${data.duplicates}</div><div class="lbl">Duplicates</div></div>
+            <div class="ur-stat"><div class="num">${data.skipped}</div><div class="lbl">Skipped</div></div>
+          `;
+          showToast(`Imported ${data.imported} jobs!`, 'success');
+          // Refresh dashboard data
+          setTimeout(() => { refreshData(); }, 1000);
+        } else {
+          resultEl.className = 'upload-result error';
+          document.getElementById('importResultMsg').textContent = 'Import failed: ' + (data.error || 'Unknown error');
+          document.getElementById('importResultStats').innerHTML = '';
+          showToast('Import failed: ' + (data.error || 'Unknown'), 'error');
+        }
+      } catch (err) {
+        document.getElementById('importProgress').style.display = 'none';
+        const resultEl = document.getElementById('importResult');
+        resultEl.style.display = 'block';
+        resultEl.className = 'upload-result error';
+        document.getElementById('importResultMsg').textContent = 'Import failed: ' + err.message;
+        document.getElementById('importResultStats').innerHTML = '';
+        showToast('Import failed: ' + err.message, 'error');
+      }
+    }
+
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Escape') { closeModal(); closeImportModal(); }
     });
 
     refreshData();
