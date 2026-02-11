@@ -1015,10 +1015,33 @@
           <button class="action-btn undo" onclick="event.stopPropagation(); setJobAction(${j.job_id}, null)">Undo</button>
         </div>`;
       }
+      const genBtn = j.has_artifacts ? '' :
+        `<button class="action-btn" style="background:var(--accent-soft);border-color:var(--accent);color:var(--accent)" onclick="event.stopPropagation(); generatePacket(${j.job_id})" id="gen-${j.job_id}">Generate</button>`;
       return `<div class="action-btns">
+        ${genBtn}
         <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'applied')">Applied</button>
         <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'deleted')">Dismiss</button>
       </div>`;
+    }
+
+    async function generatePacket(jobId) {
+      const btn = document.getElementById('gen-' + jobId);
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+      showToast('Generating application packet... This may take 1-2 minutes.', 'success');
+      try {
+        const data = await api('/generate-packet/' + jobId, { method: 'POST' });
+        if (data.success) {
+          showToast(`Packet generated! ${data.resume_roles} roles, ${data.resume_bullets} bullets, ${data.evidence_count} evidence entries. Truth: ${data.truth_pass ? 'PASS' : 'REVIEW'}`, 'success');
+          loadJobs();
+          loadDashboard();
+        } else {
+          showToast('Generation failed: ' + (data.error || 'Unknown'), 'error');
+          if (btn) { btn.disabled = false; btn.textContent = 'Generate'; }
+        }
+      } catch (e) {
+        showToast('Generation failed: ' + e.message, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate'; }
+      }
     }
 
     async function setJobAction(jobId, action) {
@@ -1168,15 +1191,25 @@
           </div>
         </div>`;
 
+        const hasArtifact = !!a;
+        const genBtnHtml = hasArtifact ? '' :
+          `<button class="btn btn-primary" onclick="generatePacket(${j.job_id}); closeModal();" id="modal-gen-${j.job_id}">&#x26A1; Generate Application Packet</button>`;
+
         if (j.posting_url) {
           const searchUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((j.title || '') + ' ' + (j.company || ''))}`;
           html += `<div style="margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap">
+            ${genBtnHtml}
             <a href="${esc(j.posting_url)}" target="_blank" class="btn" style="text-decoration:none;display:inline-flex">View Original Posting &#x2197;</a>
             <a href="${searchUrl}" target="_blank" class="btn" style="text-decoration:none;display:inline-flex">Search on LinkedIn &#x1F50D;</a>
           </div>`;
         } else if (j.company || j.title) {
           const searchUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((j.title || '') + ' ' + (j.company || ''))}`;
-          html += `<div style="margin-bottom:20px"><a href="${searchUrl}" target="_blank" class="btn" style="text-decoration:none;display:inline-flex">Search on LinkedIn &#x1F50D;</a></div>`;
+          html += `<div style="margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap">
+            ${genBtnHtml}
+            <a href="${searchUrl}" target="_blank" class="btn" style="text-decoration:none;display:inline-flex">Search on LinkedIn &#x1F50D;</a>
+          </div>`;
+        } else if (!hasArtifact) {
+          html += `<div style="margin-bottom:20px">${genBtnHtml}</div>`;
         }
 
         if (s && s.breakdown_json) {
