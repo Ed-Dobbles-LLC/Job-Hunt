@@ -6,47 +6,155 @@
   <title>Settings - Job Hunt</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
-    .header { background: #1e293b; border-bottom: 1px solid #334155; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
-    .header h1 { font-size: 20px; font-weight: 600; }
-    .header a { color: #60a5fa; text-decoration: none; font-size: 14px; }
-    .header a:hover { text-decoration: underline; }
-    .container { max-width: 720px; margin: 32px auto; padding: 0 24px; }
-    .status-bar { padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-size: 14px; display: none; }
-    .status-bar.success { display: block; background: #064e3b; border: 1px solid #065f46; color: #6ee7b7; }
-    .status-bar.error { display: block; background: #7f1d1d; border: 1px solid #991b1b; color: #fca5a5; }
+
+    :root {
+      --bg: #0c1421;
+      --surface: #132035;
+      --surface2: #1a2a42;
+      --surface3: #213350;
+      --border: #1e3554;
+      --text: #e8ecf1;
+      --text-dim: #7a8ba5;
+      --text-muted: #4e6380;
+      --accent: #e85d4a;
+      --accent-hover: #f06b59;
+      --accent-soft: rgba(232, 93, 74, 0.12);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.12);
+      --red: #ef4444;
+      --red-soft: rgba(239, 68, 68, 0.12);
+      --blue: #3b82f6;
+      --blue-soft: rgba(59, 130, 246, 0.12);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .layout { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 240px; background: var(--surface); border-right: 1px solid var(--border);
+      padding: 24px 0; position: fixed; top: 0; bottom: 0; left: 0; z-index: 50;
+      display: flex; flex-direction: column;
+    }
+    .sidebar-brand { padding: 0 20px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .sidebar-brand h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .sidebar-brand .tagline { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+    .nav-section { padding: 0 12px; margin-bottom: 24px; }
+    .nav-section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); padding: 0 8px; margin-bottom: 6px; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+      color: var(--text-dim); text-decoration: none; font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--accent-soft); color: var(--accent); }
+    .nav-item .nav-icon { width: 20px; text-align: center; font-size: 16px; }
+
+    .sidebar-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); }
+    .sidebar-footer .version { font-size: 11px; color: var(--text-muted); }
+
+    .main { flex: 1; margin-left: 240px; min-height: 100vh; }
+
+    .topbar {
+      padding: 20px 32px; display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .topbar h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+    .topbar .sub { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+
+    .container { max-width: 720px; margin: 32px auto; padding: 0 32px; }
+
+    .status-bar {
+      padding: 14px 18px; border-radius: 12px; margin-bottom: 24px; font-size: 14px;
+      font-weight: 500; display: none;
+    }
+    .status-bar.success { display: block; background: var(--green-soft); border: 1px solid var(--green); color: var(--green); }
+    .status-bar.error { display: block; background: var(--red-soft); border: 1px solid var(--red); color: var(--red); }
+
     .group { margin-bottom: 32px; }
-    .group-title { font-size: 16px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #334155; }
+    .group-title {
+      font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.6px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+
     .field { margin-bottom: 16px; }
-    .field label { display: block; font-size: 14px; font-weight: 500; color: #cbd5e1; margin-bottom: 4px; }
-    .field .source { font-size: 12px; color: #64748b; margin-bottom: 4px; }
-    .field input { width: 100%; padding: 10px 12px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; font-size: 14px; font-family: 'SF Mono', 'Fira Code', monospace; }
-    .field input:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96,165,250,0.2); }
-    .field input::placeholder { color: #475569; }
+    .field label { display: block; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+
+    .field input {
+      width: 100%; padding: 11px 14px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 14px;
+      font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+      transition: border-color 0.15s;
+    }
+    .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .field input::placeholder { color: var(--text-muted); }
+
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 6px; font-size: 11px;
+      font-weight: 700; margin-left: 8px; letter-spacing: 0.3px;
+    }
+    .badge.db { background: var(--blue-soft); color: var(--blue); }
+    .badge.env { background: var(--green-soft); color: var(--green); }
+    .badge.unset { background: var(--red-soft); color: var(--red); }
+
     .actions { display: flex; gap: 12px; margin-top: 32px; }
-    .btn { padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
-    .btn-primary { background: #3b82f6; color: white; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-primary:disabled { background: #475569; cursor: not-allowed; }
-    .btn-secondary { background: #334155; color: #cbd5e1; }
-    .btn-secondary:hover { background: #475569; }
-    .loading { text-align: center; padding: 48px; color: #64748b; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; margin-left: 8px; }
-    .badge.db { background: #1e3a5f; color: #60a5fa; }
-    .badge.env { background: #1a3329; color: #6ee7b7; }
-    .badge.unset { background: #3b1818; color: #f87171; }
+
+    .btn {
+      padding: 10px 24px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--border); transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+    }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { background: var(--surface3); border-color: var(--border); color: var(--text-muted); cursor: not-allowed; }
+    .btn-secondary { background: var(--surface2); color: var(--text); }
+    .btn-secondary:hover { background: var(--surface3); border-color: var(--accent); }
+
+    .loading { text-align: center; padding: 48px; color: var(--text-dim); font-size: 15px; }
+
+    @media (max-width: 1024px) { .sidebar { display: none; } .main { margin-left: 0; } }
+    @media (max-width: 768px) { .container { padding: 0 16px; } .topbar { padding: 16px; } }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Settings</h1>
-    <a href="/dashboard">Dashboard</a>
-    <a href="/profile">Profile Builder</a>
-  </div>
+  <div class="layout">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <div class="sidebar-brand">
+        <h1>Job Hunt</h1>
+        <div class="tagline">AI-Powered Job Search</div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Main</div>
+        <a class="nav-item" href="/dashboard"><span class="nav-icon">&#x1F3E0;</span> Dashboard</a>
+        <a class="nav-item" href="/profile"><span class="nav-icon">&#x1F464;</span> Profile Builder</a>
+        <a class="nav-item active" href="/api/settings"><span class="nav-icon">&#x2699;&#xFE0F;</span> Settings</a>
+      </div>
+      <div class="sidebar-footer"><div class="version">Job Hunt v1.0</div></div>
+    </nav>
 
-  <div class="container">
-    <div id="status" class="status-bar"></div>
-    <div id="content"><div class="loading">Loading settings...</div></div>
+    <!-- Main Content -->
+    <div class="main">
+      <div class="topbar">
+        <div>
+          <h2>Settings</h2>
+          <div class="sub">Configure API keys, job sources, and preferences</div>
+        </div>
+        <a class="btn btn-secondary" href="/dashboard">Back to Dashboard</a>
+      </div>
+
+      <div class="container">
+        <div id="status" class="status-bar"></div>
+        <div id="content"><div class="loading">Loading settings...</div></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -77,7 +185,7 @@
           const badgeClass = f.source === 'database' ? 'db' : f.source === 'environment' ? 'env' : 'unset';
           const badgeText = f.source === 'database' ? 'DB' : f.source === 'environment' ? 'ENV' : 'Not Set';
           const inputType = f.secret ? 'password' : 'text';
-          const placeholder = f.secret ? (f.hasValue ? '(hidden — enter new value to change)' : 'Enter value...') : 'Enter value...';
+          const placeholder = f.secret ? (f.hasValue ? '(hidden - enter new value to change)' : 'Enter value...') : 'Enter value...';
           const displayValue = f.secret ? '' : f.value;
           html += `
             <div class="field">
@@ -108,10 +216,7 @@
       for (const input of inputs) {
         const key = input.dataset.key;
         const val = input.value.trim();
-        // Only send non-empty values (skip unchanged secret fields)
-        if (val) {
-          updates[key] = val;
-        }
+        if (val) updates[key] = val;
       }
 
       try {
@@ -122,7 +227,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          showStatus(`Saved ${data.updated} setting(s). Note: some settings (like API keys) take effect on next request. Others (like cron schedule) require a redeploy.`, 'success');
+          showStatus(`Saved ${data.updated} setting(s). Some settings take effect on next request; others require a redeploy.`, 'success');
           await loadSettings();
         } else {
           showStatus('Failed to save: ' + (data.error || 'Unknown error'), 'error');

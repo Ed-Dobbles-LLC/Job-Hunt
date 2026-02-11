@@ -3,66 +3,186 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Job Match Dashboard</title>
+  <title>Job Hunt Dashboard</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #242734;
-      --border: #2e3140;
-      --text: #e4e6ef;
-      --text-dim: #8b8fa3;
-      --accent: #6366f1;
-      --accent-hover: #818cf8;
+      --bg: #0c1421;
+      --surface: #132035;
+      --surface2: #1a2a42;
+      --surface3: #213350;
+      --border: #1e3554;
+      --text: #e8ecf1;
+      --text-dim: #7a8ba5;
+      --text-muted: #4e6380;
+      --accent: #e85d4a;
+      --accent-hover: #f06b59;
+      --accent-soft: rgba(232, 93, 74, 0.12);
       --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.12);
       --yellow: #eab308;
+      --yellow-soft: rgba(234, 179, 8, 0.12);
       --red: #ef4444;
+      --red-soft: rgba(239, 68, 68, 0.12);
       --blue: #3b82f6;
+      --blue-soft: rgba(59, 130, 246, 0.12);
+      --indigo: #6366f1;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
     }
 
-    header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 32px;
+    /* ── Sidebar Nav ─────────────────────────────────────── */
+    .layout {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
+      min-height: 100vh;
     }
 
-    header h1 {
-      font-size: 20px;
+    .sidebar {
+      width: 240px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-brand {
+      padding: 0 20px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .sidebar-brand h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+
+    .sidebar-brand .tagline {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .nav-section {
+      padding: 0 12px;
+      margin-bottom: 24px;
+    }
+
+    .nav-section-label {
+      font-size: 11px;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      padding: 0 8px;
+      margin-bottom: 6px;
+    }
+
+    .nav-item {
       display: flex;
       align-items: center;
       gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
     }
 
-    header h1 span { font-size: 24px; }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--accent-soft); color: var(--accent); }
 
-    .header-actions { display: flex; gap: 12px; align-items: center; }
+    .nav-item .nav-icon {
+      width: 20px;
+      text-align: center;
+      font-size: 16px;
+    }
 
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .sidebar-footer .version {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* ── Main Content ────────────────────────────────────── */
+    .main {
+      flex: 1;
+      margin-left: 240px;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      padding: 20px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .greeting h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .greeting .date {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .topbar-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .container { max-width: 1280px; margin: 0 auto; padding: 28px 32px; }
+
+    /* ── Buttons ──────────────────────────────────────────── */
     .btn {
-      padding: 8px 16px;
-      border-radius: 8px;
+      padding: 9px 18px;
+      border-radius: 10px;
       border: 1px solid var(--border);
       background: var(--surface2);
       color: var(--text);
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
+      font-size: 13px;
+      font-weight: 600;
       transition: all 0.15s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .btn:hover { border-color: var(--accent); background: var(--surface); }
+    .btn:hover { border-color: var(--accent); background: var(--surface3); }
 
     .btn-primary {
       background: var(--accent);
@@ -70,59 +190,127 @@
       color: white;
     }
 
-    .btn-primary:hover { background: var(--accent-hover); }
-
+    .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+    /* ── Quick Launch ─────────────────────────────────────── */
+    .quick-launch {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
 
+    .launch-tile {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .launch-tile:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .launch-tile .tile-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+
+    .tile-icon.coral { background: var(--accent-soft); }
+    .tile-icon.navy { background: var(--surface3); }
+    .tile-icon.green { background: var(--green-soft); }
+    .tile-icon.blue { background: var(--blue-soft); }
+
+    .launch-tile .tile-label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .launch-tile .tile-desc {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    /* ── Stats Cards ──────────────────────────────────────── */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
     }
 
     .stat-card {
       background: var(--surface);
       border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .stat-card .stat-icon {
+      width: 48px;
+      height: 48px;
       border-radius: 12px;
-      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
     }
 
     .stat-card .label {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--text-dim);
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     }
 
     .stat-card .value {
-      font-size: 32px;
-      font-weight: 700;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
     }
 
+    /* ── Tabs ─────────────────────────────────────────────── */
     .tabs {
       display: flex;
       gap: 4px;
       margin-bottom: 20px;
       background: var(--surface);
       padding: 4px;
-      border-radius: 10px;
+      border-radius: 12px;
       border: 1px solid var(--border);
       width: fit-content;
     }
 
     .tab {
-      padding: 8px 20px;
-      border-radius: 8px;
+      padding: 9px 22px;
+      border-radius: 10px;
       border: none;
       background: transparent;
       color: var(--text-dim);
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
+      font-size: 13px;
+      font-weight: 600;
       transition: all 0.15s;
     }
 
@@ -132,143 +320,7 @@
     .panel { display: none; }
     .panel.active { display: block; }
 
-    .table-wrap {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    th {
-      text-align: left;
-      padding: 12px 16px;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-dim);
-      border-bottom: 1px solid var(--border);
-      background: var(--surface2);
-    }
-
-    td {
-      padding: 12px 16px;
-      font-size: 14px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(99, 102, 241, 0.05); }
-
-    .score-badge {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .score-high { background: rgba(34, 197, 94, 0.15); color: var(--green); }
-    .score-mid { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
-    .score-low { background: rgba(239, 68, 68, 0.15); color: var(--red); }
-
-    .status-badge {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .status-new { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
-    .status-scored { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
-    .status-generated { background: rgba(34, 197, 94, 0.15); color: var(--green); }
-    .status-running { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
-    .status-completed { background: rgba(34, 197, 94, 0.15); color: var(--green); }
-    .status-failed { background: rgba(239, 68, 68, 0.15); color: var(--red); }
-
-    .shape-badge {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-    }
-
-    .shape-A { background: rgba(34, 197, 94, 0.15); color: var(--green); }
-    .shape-B { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
-    .shape-C { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
-    .shape-D { background: rgba(239, 68, 68, 0.15); color: var(--red); }
-
-    .gate-badge {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .gate-PASS { background: rgba(34, 197, 94, 0.15); color: var(--green); }
-    .gate-REVIEW { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
-    .gate-NO { background: rgba(239, 68, 68, 0.15); color: var(--red); }
-
-    .flag-list {
-      margin: 8px 0 16px 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .flag-item {
-      padding: 6px 12px;
-      margin-bottom: 4px;
-      border-radius: 6px;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .flag-item.risk { background: rgba(234, 179, 8, 0.1); color: var(--yellow); border-left: 3px solid var(--yellow); }
-    .flag-item.hard { background: rgba(239, 68, 68, 0.1); color: var(--red); border-left: 3px solid var(--red); }
-    .flag-item.hard-review { background: rgba(234, 179, 8, 0.1); color: var(--yellow); border-left: 3px solid var(--yellow); }
-
-    .clickable { cursor: pointer; }
-    .clickable:hover td { background: rgba(99, 102, 241, 0.08); }
-
-    th.sortable {
-      cursor: pointer;
-      user-select: none;
-      position: relative;
-      padding-right: 24px;
-    }
-
-    th.sortable:hover { color: var(--text); }
-
-    th.sortable::after {
-      content: '\2195';
-      position: absolute;
-      right: 8px;
-      opacity: 0.3;
-      font-size: 11px;
-    }
-
-    th.sortable.sort-asc::after {
-      content: '\2191';
-      opacity: 1;
-      color: var(--accent);
-    }
-
-    th.sortable.sort-desc::after {
-      content: '\2193';
-      opacity: 1;
-      color: var(--accent);
-    }
-
+    /* ── Folder Tabs ──────────────────────────────────────── */
     .folder-tabs {
       display: flex;
       gap: 8px;
@@ -277,14 +329,14 @@
     }
 
     .folder-tab {
-      padding: 6px 16px;
+      padding: 7px 18px;
       border-radius: 20px;
       border: 1px solid var(--border);
       background: var(--surface);
       color: var(--text-dim);
       cursor: pointer;
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       transition: all 0.15s;
       display: flex;
       align-items: center;
@@ -295,63 +347,166 @@
     .folder-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
 
     .folder-tab .count {
-      background: rgba(255,255,255,0.15);
-      padding: 1px 7px;
+      background: rgba(255,255,255,0.12);
+      padding: 1px 8px;
       border-radius: 10px;
       font-size: 12px;
-      min-width: 20px;
+      min-width: 22px;
       text-align: center;
     }
 
-    .folder-tab.active .count { background: rgba(255,255,255,0.25); }
+    .folder-tab.active .count { background: rgba(255,255,255,0.22); }
 
-    .action-btns {
-      display: flex;
-      gap: 4px;
+    /* ── Table ────────────────────────────────────────────── */
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
     }
 
+    table { width: 100%; border-collapse: collapse; }
+
+    th {
+      text-align: left;
+      padding: 14px 16px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+      font-weight: 700;
+    }
+
+    td {
+      padding: 13px 16px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(232, 93, 74, 0.03); }
+
+    /* ── Badges ───────────────────────────────────────────── */
+    .score-badge {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .score-high { background: var(--green-soft); color: var(--green); }
+    .score-mid { background: var(--yellow-soft); color: var(--yellow); }
+    .score-low { background: var(--red-soft); color: var(--red); }
+
+    .status-badge {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-new { background: var(--blue-soft); color: var(--blue); }
+    .status-scored { background: var(--yellow-soft); color: var(--yellow); }
+    .status-generated { background: var(--green-soft); color: var(--green); }
+    .status-running { background: var(--yellow-soft); color: var(--yellow); }
+    .status-completed { background: var(--green-soft); color: var(--green); }
+    .status-failed { background: var(--red-soft); color: var(--red); }
+
+    .shape-badge {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .shape-A { background: var(--green-soft); color: var(--green); }
+    .shape-B { background: var(--yellow-soft); color: var(--yellow); }
+    .shape-C { background: var(--blue-soft); color: var(--blue); }
+    .shape-D { background: var(--red-soft); color: var(--red); }
+
+    .gate-badge {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .gate-PASS { background: var(--green-soft); color: var(--green); }
+    .gate-REVIEW { background: var(--yellow-soft); color: var(--yellow); }
+    .gate-NO { background: var(--red-soft); color: var(--red); }
+
+    .flag-list { margin: 8px 0 16px 0; padding: 0; list-style: none; }
+
+    .flag-item {
+      padding: 8px 14px;
+      margin-bottom: 4px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .flag-item.risk { background: var(--yellow-soft); color: var(--yellow); border-left: 3px solid var(--yellow); }
+    .flag-item.hard { background: var(--red-soft); color: var(--red); border-left: 3px solid var(--red); }
+    .flag-item.hard-review { background: var(--yellow-soft); color: var(--yellow); border-left: 3px solid var(--yellow); }
+
+    /* ── Sortable headers ─────────────────────────────────── */
+    .clickable { cursor: pointer; }
+    .clickable:hover td { background: rgba(232, 93, 74, 0.05); }
+
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      padding-right: 24px;
+    }
+
+    th.sortable:hover { color: var(--text-dim); }
+    th.sortable::after { content: '\2195'; position: absolute; right: 8px; opacity: 0.3; font-size: 11px; }
+    th.sortable.sort-asc::after { content: '\2191'; opacity: 1; color: var(--accent); }
+    th.sortable.sort-desc::after { content: '\2193'; opacity: 1; color: var(--accent); }
+
+    /* ── Action buttons ───────────────────────────────────── */
+    .action-btns { display: flex; gap: 4px; }
+
     .action-btn {
-      padding: 3px 10px;
-      border-radius: 6px;
+      padding: 4px 12px;
+      border-radius: 8px;
       border: 1px solid var(--border);
       background: var(--surface2);
       color: var(--text-dim);
       cursor: pointer;
       font-size: 12px;
+      font-weight: 600;
       transition: all 0.15s;
       white-space: nowrap;
     }
 
     .action-btn:hover { border-color: var(--accent); color: var(--text); }
+    .action-btn.applied { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+    .action-btn.deleted { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+    .action-btn.undo { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
-    .action-btn.applied {
-      background: rgba(34, 197, 94, 0.15);
-      border-color: var(--green);
-      color: var(--green);
-    }
-
-    .action-btn.deleted {
-      background: rgba(239, 68, 68, 0.15);
-      border-color: var(--red);
-      color: var(--red);
-    }
-
-    .action-btn.undo {
-      background: rgba(99, 102, 241, 0.15);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
+    /* ── Modal ────────────────────────────────────────────── */
     .modal-overlay {
       display: none;
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.65);
       z-index: 100;
       justify-content: center;
       align-items: flex-start;
-      padding-top: 60px;
+      padding-top: 50px;
       overflow-y: auto;
+      backdrop-filter: blur(4px);
     }
 
     .modal-overlay.active { display: flex; }
@@ -359,11 +514,12 @@
     .modal {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: 18px;
       width: 90%;
       max-width: 900px;
       margin-bottom: 60px;
       overflow: hidden;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
     }
 
     .modal-header {
@@ -372,21 +528,24 @@
       align-items: flex-start;
       padding: 24px;
       border-bottom: 1px solid var(--border);
+      background: var(--surface2);
     }
 
-    .modal-header h2 { font-size: 20px; font-weight: 600; }
+    .modal-header h2 { font-size: 20px; font-weight: 700; }
     .modal-header .sub { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
 
     .close-btn {
-      background: none;
-      border: none;
+      background: var(--surface3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
       color: var(--text-dim);
-      font-size: 24px;
+      font-size: 18px;
       cursor: pointer;
-      padding: 4px;
+      padding: 4px 10px;
+      transition: all 0.15s;
     }
 
-    .close-btn:hover { color: var(--text); }
+    .close-btn:hover { color: var(--text); border-color: var(--accent); }
 
     .modal-body { padding: 24px; }
 
@@ -398,18 +557,19 @@
     }
 
     .detail-item .label {
-      font-size: 12px;
-      color: var(--text-dim);
+      font-size: 11px;
+      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 4px;
+      font-weight: 600;
     }
 
     .detail-item .value { font-size: 14px; }
 
     .section-title {
       font-size: 16px;
-      font-weight: 600;
+      font-weight: 700;
       margin: 24px 0 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
@@ -422,33 +582,10 @@
       padding: 8px 0;
     }
 
-    .breakdown-bar .name {
-      width: 200px;
-      font-size: 13px;
-      color: var(--text-dim);
-    }
-
-    .breakdown-bar .bar-bg {
-      flex: 1;
-      height: 8px;
-      background: var(--surface2);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .breakdown-bar .bar-fill {
-      height: 100%;
-      border-radius: 4px;
-      background: var(--accent);
-      transition: width 0.3s;
-    }
-
-    .breakdown-bar .score-val {
-      width: 40px;
-      text-align: right;
-      font-size: 13px;
-      font-weight: 600;
-    }
+    .breakdown-bar .name { width: 200px; font-size: 13px; color: var(--text-dim); }
+    .breakdown-bar .bar-bg { flex: 1; height: 8px; background: var(--surface3); border-radius: 4px; overflow: hidden; }
+    .breakdown-bar .bar-fill { height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.3s; }
+    .breakdown-bar .score-val { width: 40px; text-align: right; font-size: 13px; font-weight: 700; }
 
     .download-grid {
       display: grid;
@@ -459,8 +596,8 @@
     .download-card {
       background: var(--surface2);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px;
+      border-radius: 12px;
+      padding: 18px;
       text-align: center;
       cursor: pointer;
       transition: all 0.15s;
@@ -468,63 +605,36 @@
       color: var(--text);
     }
 
-    .download-card:hover { border-color: var(--accent); }
+    .download-card:hover { border-color: var(--accent); transform: translateY(-1px); }
     .download-card .icon { font-size: 28px; margin-bottom: 8px; }
-    .download-card .name { font-size: 13px; font-weight: 500; }
-
-    .download-card.disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-      pointer-events: none;
-    }
+    .download-card .name { font-size: 13px; font-weight: 600; }
+    .download-card.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
     .contact-card {
       background: var(--surface2);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px;
+      border-radius: 12px;
+      padding: 18px;
       margin-bottom: 8px;
     }
 
-    .contact-card .name { font-weight: 600; font-size: 14px; }
+    .contact-card .name { font-weight: 700; font-size: 14px; }
     .contact-card .title { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
     .contact-card .links { margin-top: 8px; display: flex; gap: 12px; }
-    .contact-card .links a {
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 13px;
-    }
+    .contact-card .links a { color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 600; }
     .contact-card .links a:hover { text-decoration: underline; }
 
-    .evidence-row {
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border);
-    }
-
+    .evidence-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
     .evidence-row:last-child { border-bottom: none; }
     .evidence-row .claim { font-size: 14px; margin-bottom: 4px; }
-    .evidence-row .quote {
-      font-size: 13px;
-      color: var(--text-dim);
-      font-style: italic;
-      margin-top: 4px;
-    }
-
-    .evidence-row .conf {
-      display: inline-block;
-      margin-top: 4px;
-      font-size: 12px;
-      padding: 2px 8px;
-      border-radius: 8px;
-      background: rgba(99, 102, 241, 0.15);
-      color: var(--accent);
-    }
+    .evidence-row .quote { font-size: 13px; color: var(--text-dim); font-style: italic; margin-top: 4px; }
+    .evidence-row .conf { display: inline-block; margin-top: 4px; font-size: 12px; padding: 2px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
     .jd-text {
       background: var(--surface2);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px;
+      border-radius: 10px;
+      padding: 18px;
       font-size: 13px;
       line-height: 1.6;
       max-height: 300px;
@@ -534,25 +644,27 @@
 
     .empty-state {
       text-align: center;
-      padding: 48px;
+      padding: 56px;
       color: var(--text-dim);
     }
 
-    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; opacity: 0.6; }
 
     .toast {
       position: fixed;
       bottom: 24px;
       right: 24px;
-      padding: 12px 20px;
-      border-radius: 10px;
+      padding: 14px 22px;
+      border-radius: 12px;
       background: var(--surface);
       border: 1px solid var(--border);
       font-size: 14px;
+      font-weight: 500;
       z-index: 200;
       opacity: 0;
       transform: translateY(10px);
       transition: all 0.3s;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
     }
 
     .toast.visible { opacity: 1; transform: translateY(0); }
@@ -571,79 +683,156 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Responsive ───────────────────────────────────────── */
+    @media (max-width: 1024px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; }
+    }
+
     @media (max-width: 768px) {
       .container { padding: 16px; }
-      header { padding: 12px 16px; }
+      .topbar { padding: 16px; }
       .detail-grid { grid-template-columns: 1fr; }
       .modal { width: 95%; }
+      .quick-launch { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1><span>&#x1F3AF;</span> Job Match Dashboard</h1>
-    <div class="header-actions">
-      <a class="btn" href="/profile" style="text-decoration:none">Build Profile</a>
-      <a class="btn" href="/api/settings" style="text-decoration:none">Settings</a>
-      <button class="btn" onclick="refreshData()">Refresh</button>
-      <button class="btn btn-primary" id="triggerBtn" onclick="triggerWorkflow()">Run Workflow</button>
-    </div>
-  </header>
-
-  <div class="container">
-    <div class="stats-grid" id="statsGrid"></div>
-
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('jobs')">Jobs</button>
-      <button class="tab" onclick="switchTab('runs')">Run History</button>
-    </div>
-
-    <div class="panel active" id="panel-jobs">
-      <div class="folder-tabs" id="folderTabs">
-        <button class="folder-tab active" onclick="setFolder('new')">New <span class="count" id="count-new">0</span></button>
-        <button class="folder-tab" onclick="setFolder('applied')">Applied <span class="count" id="count-applied">0</span></button>
-        <button class="folder-tab" onclick="setFolder('deleted')">Dismissed <span class="count" id="count-deleted">0</span></button>
-        <button class="folder-tab" onclick="setFolder('all')">All <span class="count" id="count-all">0</span></button>
+  <div class="layout">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <div class="sidebar-brand">
+        <h1>Job Hunt</h1>
+        <div class="tagline">AI-Powered Job Search</div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="company" onclick="sortJobs('company')">Company</th>
-              <th class="sortable" data-sort="title" onclick="sortJobs('title')">Title</th>
-              <th class="sortable" data-sort="location" onclick="sortJobs('location')">Location</th>
-              <th class="sortable sort-desc" data-sort="score" onclick="sortJobs('score')">Score</th>
-              <th class="sortable" data-sort="shape" onclick="sortJobs('shape')">Shape</th>
-              <th class="sortable" data-sort="gate" onclick="sortJobs('gate')">Gate</th>
-              <th class="sortable" data-sort="status" onclick="sortJobs('status')">Status</th>
-              <th class="sortable" data-sort="artifacts" onclick="sortJobs('artifacts')">Artifacts</th>
-              <th class="sortable" data-sort="date" onclick="sortJobs('date')">Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="jobsBody"></tbody>
-        </table>
-      </div>
-    </div>
 
-    <div class="panel" id="panel-runs">
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Run ID</th>
-              <th>Started</th>
-              <th>Ended</th>
-              <th>Status</th>
-              <th>Duration</th>
-            </tr>
-          </thead>
-          <tbody id="runsBody"></tbody>
-        </table>
+      <div class="nav-section">
+        <div class="nav-section-label">Main</div>
+        <a class="nav-item active" href="/dashboard">
+          <span class="nav-icon">&#x1F3E0;</span> Dashboard
+        </a>
+        <a class="nav-item" href="/profile">
+          <span class="nav-icon">&#x1F464;</span> Profile Builder
+        </a>
+        <a class="nav-item" href="/api/settings">
+          <span class="nav-icon">&#x2699;&#xFE0F;</span> Settings
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Actions</div>
+        <button class="nav-item" onclick="triggerWorkflow()">
+          <span class="nav-icon">&#x26A1;</span> Run Workflow
+        </button>
+        <button class="nav-item" onclick="refreshData()">
+          <span class="nav-icon">&#x1F504;</span> Refresh Data
+        </button>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="version">Job Hunt v1.0</div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main">
+      <div class="topbar">
+        <div class="greeting">
+          <h2 id="greetingText">Good Morning</h2>
+          <div class="date" id="dateText"></div>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn" onclick="refreshData()">&#x1F504; Refresh</button>
+          <button class="btn btn-primary" id="triggerBtn" onclick="triggerWorkflow()">&#x26A1; Run Workflow</button>
+        </div>
+      </div>
+
+      <div class="container">
+        <!-- Quick Launch Tiles -->
+        <div class="quick-launch">
+          <a class="launch-tile" href="/profile">
+            <div class="tile-icon coral">&#x1F464;</div>
+            <div class="tile-label">Build Profile</div>
+            <div class="tile-desc">Upload resume & create your experience inventory</div>
+          </a>
+          <div class="launch-tile" onclick="triggerWorkflow()">
+            <div class="tile-icon navy">&#x26A1;</div>
+            <div class="tile-label">Run Workflow</div>
+            <div class="tile-desc">Fetch, score, and generate application packets</div>
+          </div>
+          <a class="launch-tile" href="/api/settings">
+            <div class="tile-icon green">&#x2699;&#xFE0F;</div>
+            <div class="tile-label">Settings</div>
+            <div class="tile-desc">Configure API keys, sources & preferences</div>
+          </a>
+          <div class="launch-tile" onclick="switchTab('runs')">
+            <div class="tile-icon blue">&#x1F4CA;</div>
+            <div class="tile-label">Run History</div>
+            <div class="tile-desc">View past workflow runs & results</div>
+          </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid" id="statsGrid"></div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('jobs')">Jobs</button>
+          <button class="tab" onclick="switchTab('runs')">Run History</button>
+        </div>
+
+        <!-- Jobs Panel -->
+        <div class="panel active" id="panel-jobs">
+          <div class="folder-tabs" id="folderTabs">
+            <button class="folder-tab active" onclick="setFolder('new')">New <span class="count" id="count-new">0</span></button>
+            <button class="folder-tab" onclick="setFolder('applied')">Applied <span class="count" id="count-applied">0</span></button>
+            <button class="folder-tab" onclick="setFolder('deleted')">Dismissed <span class="count" id="count-deleted">0</span></button>
+            <button class="folder-tab" onclick="setFolder('all')">All <span class="count" id="count-all">0</span></button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th class="sortable" data-sort="company" onclick="sortJobs('company')">Company</th>
+                  <th class="sortable" data-sort="title" onclick="sortJobs('title')">Title</th>
+                  <th class="sortable" data-sort="location" onclick="sortJobs('location')">Location</th>
+                  <th class="sortable sort-desc" data-sort="score" onclick="sortJobs('score')">Score</th>
+                  <th class="sortable" data-sort="shape" onclick="sortJobs('shape')">Shape</th>
+                  <th class="sortable" data-sort="gate" onclick="sortJobs('gate')">Gate</th>
+                  <th class="sortable" data-sort="status" onclick="sortJobs('status')">Status</th>
+                  <th class="sortable" data-sort="artifacts" onclick="sortJobs('artifacts')">Artifacts</th>
+                  <th class="sortable" data-sort="date" onclick="sortJobs('date')">Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="jobsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Runs Panel -->
+        <div class="panel" id="panel-runs">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Run ID</th>
+                  <th>Started</th>
+                  <th>Ended</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                </tr>
+              </thead>
+              <tbody id="runsBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- Modal -->
   <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
     <div class="modal" onclick="event.stopPropagation()">
       <div class="modal-header">
@@ -664,6 +853,19 @@
     let allJobs = [];
     let currentSort = { field: 'score', dir: 'desc' };
     let currentFolder = 'new';
+
+    // Greeting based on time of day
+    function updateGreeting() {
+      const hour = new Date().getHours();
+      let greeting = 'Good Evening';
+      if (hour < 12) greeting = 'Good Morning';
+      else if (hour < 18) greeting = 'Good Afternoon';
+      document.getElementById('greetingText').textContent = greeting;
+
+      const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      document.getElementById('dateText').textContent = new Date().toLocaleDateString('en-US', opts);
+    }
+    updateGreeting();
 
     async function api(path, opts) {
       const res = await fetch(API + path, opts);
@@ -695,7 +897,7 @@
 
     function shapeBadge(j) {
       const bd = getBreakdown(j);
-      if (!bd || !bd._role_shape) return '<span style="color:var(--text-dim)">-</span>';
+      if (!bd || !bd._role_shape) return '<span style="color:var(--text-muted)">-</span>';
       const shape = bd._role_shape;
       const conf = bd._role_shape_confidence != null ? Math.round(bd._role_shape_confidence * 100) : '';
       const labels = { A: 'Strategy', B: 'Hybrid', C: 'Analytics', D: 'Eng/IC' };
@@ -704,7 +906,7 @@
 
     function gateBadge(j) {
       const bd = getBreakdown(j);
-      if (!bd || !bd._gate_status) return '<span style="color:var(--text-dim)">-</span>';
+      if (!bd || !bd._gate_status) return '<span style="color:var(--text-muted)">-</span>';
       const gate = bd._gate_status;
       return `<span class="gate-badge gate-${gate}">${gate}</span>`;
     }
@@ -722,16 +924,25 @@
         const grid = document.getElementById('statsGrid');
         grid.innerHTML = `
           <div class="stat-card">
-            <div class="label">Total Jobs</div>
-            <div class="value">${data.stats.totalJobs}</div>
+            <div class="stat-icon" style="background:var(--blue-soft)">&#x1F4BC;</div>
+            <div>
+              <div class="label">Total Jobs</div>
+              <div class="value">${data.stats.totalJobs}</div>
+            </div>
           </div>
           <div class="stat-card">
-            <div class="label">Scored</div>
-            <div class="value">${data.stats.scoredJobs}</div>
+            <div class="stat-icon" style="background:var(--yellow-soft)">&#x1F3AF;</div>
+            <div>
+              <div class="label">Scored</div>
+              <div class="value">${data.stats.scoredJobs}</div>
+            </div>
           </div>
           <div class="stat-card">
-            <div class="label">Packets Generated</div>
-            <div class="value">${data.stats.packetsGenerated}</div>
+            <div class="stat-icon" style="background:var(--green-soft)">&#x1F4E6;</div>
+            <div>
+              <div class="label">Packets Ready</div>
+              <div class="value">${data.stats.packetsGenerated}</div>
+            </div>
           </div>
         `;
       } catch (e) {
@@ -901,7 +1112,7 @@
           }
           return `
             <tr>
-              <td><code>${esc(r.run_id?.substring(0, 12) || '-')}...</code></td>
+              <td><code style="background:var(--surface2);padding:3px 8px;border-radius:6px;font-size:12px">${esc(r.run_id?.substring(0, 12) || '-')}...</code></td>
               <td>${formatDate(r.start_ts)}</td>
               <td>${formatDate(r.end_ts)}</td>
               <td>${statusBadge(r.status)}</td>
@@ -960,19 +1171,19 @@
         if (j.posting_url) {
           const searchUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((j.title || '') + ' ' + (j.company || ''))}`;
           html += `<div style="margin-bottom:20px;display:flex;gap:8px;flex-wrap:wrap">
-            <a href="${esc(j.posting_url)}" target="_blank" class="btn" style="text-decoration:none;display:inline-block">View Original Posting &#x2197;</a>
-            <a href="${searchUrl}" target="_blank" class="btn" style="text-decoration:none;display:inline-block">Search on LinkedIn &#x1F50D;</a>
+            <a href="${esc(j.posting_url)}" target="_blank" class="btn" style="text-decoration:none;display:inline-flex">View Original Posting &#x2197;</a>
+            <a href="${searchUrl}" target="_blank" class="btn" style="text-decoration:none;display:inline-flex">Search on LinkedIn &#x1F50D;</a>
           </div>`;
         } else if (j.company || j.title) {
           const searchUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent((j.title || '') + ' ' + (j.company || ''))}`;
-          html += `<div style="margin-bottom:20px"><a href="${searchUrl}" target="_blank" class="btn" style="text-decoration:none;display:inline-block">Search on LinkedIn &#x1F50D;</a></div>`;
+          html += `<div style="margin-bottom:20px"><a href="${searchUrl}" target="_blank" class="btn" style="text-decoration:none;display:inline-flex">Search on LinkedIn &#x1F50D;</a></div>`;
         }
 
         if (s && s.breakdown_json) {
           const breakdown = typeof s.breakdown_json === 'string' ? JSON.parse(s.breakdown_json) : s.breakdown_json;
           const modeLabel = breakdown._scoring_mode === 'recall' ? 'Recall (wider net)' : 'Precision (strict fit)';
-          const modeColor = breakdown._scoring_mode === 'recall' ? '#f59e0b' : '#6366f1';
-          html += `<div class="section-title">Score Breakdown <span style="font-size:12px;font-weight:normal;color:${modeColor};margin-left:8px;padding:2px 8px;border:1px solid ${modeColor};border-radius:4px">${esc(modeLabel)}</span></div>`;
+          const modeColor = breakdown._scoring_mode === 'recall' ? 'var(--yellow)' : 'var(--accent)';
+          html += `<div class="section-title">Score Breakdown <span style="font-size:12px;font-weight:normal;color:${modeColor};margin-left:8px;padding:2px 8px;border:1px solid ${modeColor};border-radius:6px">${esc(modeLabel)}</span></div>`;
           if (breakdown._raw_total !== undefined) {
             html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Raw: ${breakdown._raw_total} / ${breakdown._max_possible} &rarr; Normalized: ${s.total_score}/100</div>`;
           }
@@ -1123,16 +1334,13 @@
 
       try {
         const data = await api('/trigger', { method: 'POST' });
-        showToast('Workflow triggered successfully! Switching to Run History...', 'success');
-        // Switch to Run History tab so user can see progress
+        showToast('Workflow triggered! Switching to Run History...', 'success');
         switchTab('runs');
-        // Poll for updates every 10 seconds while workflow is running
         let pollCount = 0;
         const pollInterval = setInterval(async () => {
           pollCount++;
           await loadRuns();
           await loadDashboard();
-          // Stop polling after 5 minutes or when no "running" status
           if (pollCount > 30) clearInterval(pollInterval);
           try {
             const runData = await api('/runs');
@@ -1142,14 +1350,14 @@
               showToast('Workflow completed! Refreshing jobs...', 'success');
               loadJobs();
               btn.disabled = false;
-              btn.textContent = 'Run Workflow';
+              btn.innerHTML = '&#x26A1; Run Workflow';
             }
           } catch(e) { /* ignore poll errors */ }
         }, 10000);
       } catch (e) {
         showToast('Failed to trigger workflow', 'error');
         btn.disabled = false;
-        btn.textContent = 'Run Workflow';
+        btn.innerHTML = '&#x26A1; Run Workflow';
       }
     }
 

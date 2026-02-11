@@ -17,7 +17,7 @@ export async function initDatabase(): Promise<void> {
       );
 
       CREATE TABLE IF NOT EXISTS jobs (
-        job_id SERIAL PRIMARY KEY,
+        job_id BIGSERIAL PRIMARY KEY,
         source TEXT,
         source_message_id TEXT,
         company TEXT,
@@ -44,7 +44,7 @@ export async function initDatabase(): Promise<void> {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS jd_requirements JSONB;
 
       CREATE TABLE IF NOT EXISTS scores (
-        job_id INTEGER PRIMARY KEY REFERENCES jobs(job_id),
+        job_id BIGINT PRIMARY KEY REFERENCES jobs(job_id),
         total_score REAL,
         breakdown_json JSONB,
         match_report JSONB
@@ -54,7 +54,7 @@ export async function initDatabase(): Promise<void> {
 
       CREATE TABLE IF NOT EXISTS artifacts (
         id SERIAL PRIMARY KEY,
-        job_id INTEGER REFERENCES jobs(job_id),
+        job_id BIGINT REFERENCES jobs(job_id),
         resume_docx_path TEXT,
         cover_docx_path TEXT,
         evidence_map_path TEXT,
@@ -67,7 +67,7 @@ export async function initDatabase(): Promise<void> {
 
       CREATE TABLE IF NOT EXISTS evidence_map (
         id SERIAL PRIMARY KEY,
-        job_id INTEGER REFERENCES jobs(job_id),
+        job_id BIGINT REFERENCES jobs(job_id),
         claim_id TEXT,
         claim_text TEXT,
         evidence_quote TEXT,
@@ -77,7 +77,7 @@ export async function initDatabase(): Promise<void> {
 
       CREATE TABLE IF NOT EXISTS contacts (
         id SERIAL PRIMARY KEY,
-        job_id INTEGER REFERENCES jobs(job_id),
+        job_id BIGINT REFERENCES jobs(job_id),
         person_name TEXT,
         title TEXT,
         linkedin_url TEXT,
@@ -86,6 +86,13 @@ export async function initDatabase(): Promise<void> {
         rationale TEXT,
         message_draft TEXT
       );
+
+      -- Migrate existing tables from INTEGER to BIGINT for job_id
+      ALTER TABLE jobs ALTER COLUMN job_id SET DATA TYPE BIGINT;
+      ALTER TABLE scores ALTER COLUMN job_id SET DATA TYPE BIGINT;
+      ALTER TABLE artifacts ALTER COLUMN job_id SET DATA TYPE BIGINT;
+      ALTER TABLE evidence_map ALTER COLUMN job_id SET DATA TYPE BIGINT;
+      ALTER TABLE contacts ALTER COLUMN job_id SET DATA TYPE BIGINT;
 
       CREATE TABLE IF NOT EXISTS profile_sessions (
         session_id TEXT PRIMARY KEY,
