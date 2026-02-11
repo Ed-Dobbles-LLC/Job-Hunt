@@ -88,7 +88,9 @@ export const buildOutputTool = createTool({
     const truthPass = Boolean(vr?.pass ?? vr?.overallPass ?? false);
 
     logger?.info(`📄 [buildOutput] Rendering resume DOCX from TailoredResume JSON...`);
-    logger?.info(`📄 [buildOutput] Resume has ${context.resume.experience.length} experience entries, ${context.resume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0)} bullets`);
+    const expEntries = context.resume?.experience || [];
+    const totalBullets = expEntries.reduce((s: number, e: any) => s + (e?.bullets?.length || 0), 0);
+    logger?.info(`📄 [buildOutput] Resume has ${expEntries.length} experience entries, ${totalBullets} bullets`);
     const resumeBuffer = await renderResumeDocx(context.resume, profile);
     const resumeDocxPath = path.join(outputDir, `Resume_${companySafe}_${titleSafe}.docx`);
     fs.writeFileSync(resumeDocxPath, resumeBuffer);
@@ -96,7 +98,7 @@ export const buildOutputTool = createTool({
     logger?.info(`✅ [buildOutput] Resume DOCX written: ${resumeDocxPath}`);
 
     logger?.info(`📝 [buildOutput] Rendering cover letter DOCX from TailoredCoverLetter JSON...`);
-    logger?.info(`📝 [buildOutput] Cover letter: ${context.cover_letter.word_count} words, ${context.cover_letter.value_claims.length} value claims`);
+    logger?.info(`📝 [buildOutput] Cover letter: ${context.cover_letter?.word_count || 0} words, ${context.cover_letter?.value_claims?.length || 0} value claims`);
     const coverBuffer = await renderCoverLetterDocx(context.cover_letter, profile);
     const coverDocxPath = path.join(outputDir, `CoverLetter_${companySafe}_${titleSafe}.docx`);
     fs.writeFileSync(coverDocxPath, coverBuffer);

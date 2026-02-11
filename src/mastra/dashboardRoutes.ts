@@ -560,7 +560,7 @@ export function getDashboardRoutes() {
               },
               mastra,
             } as any);
-            logger?.info(`✅ [generate-packet] Phase 4 complete: ${buildResult.files.length} files`);
+            logger?.info(`✅ [generate-packet] Phase 4 complete: ${buildResult?.files?.length || 0} files`);
           } catch (phase4Err: any) {
             logger?.error(`❌ [generate-packet] Phase 4 failed: ${phase4Err.message}`);
             return c.json({
@@ -576,7 +576,8 @@ export function getDashboardRoutes() {
             [packetResult.pass ? "generated" : "generated-unverified", jobId],
           );
 
-          logger?.info(`✅ [generate-packet] Done! pass=${packetResult.pass}, files=${buildResult.files.length}`);
+          const resumeExp = packetResult.resume?.experience || [];
+          logger?.info(`✅ [generate-packet] Done! pass=${packetResult.pass}, files=${buildResult?.files?.length || 0}`);
 
           return c.json({
             success: true,
@@ -586,14 +587,14 @@ export function getDashboardRoutes() {
             truth_pass: packetResult.pass,
             attempts_used: packetResult.attempts_used,
             evidence_count: combinedEvidence.length,
-            files: buildResult.files.length,
-            output_dir: buildResult.outputDir,
-            resume_summary: packetResult.resume.professional_summary,
-            resume_roles: packetResult.resume.experience.length,
-            resume_bullets: packetResult.resume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0),
-            ats_keywords: packetResult.resume.ats_keywords_used,
-            gap_notes: packetResult.resume.gap_notes,
-            cover_letter_words: packetResult.cover_letter.word_count,
+            files: buildResult?.files?.length || 0,
+            output_dir: buildResult?.outputDir || "",
+            resume_summary: packetResult.resume?.professional_summary || "",
+            resume_roles: resumeExp.length,
+            resume_bullets: resumeExp.reduce((s: number, e: any) => s + (e?.bullets?.length || 0), 0),
+            ats_keywords: packetResult.resume?.ats_keywords_used || [],
+            gap_notes: packetResult.resume?.gap_notes || [],
+            cover_letter_words: packetResult.cover_letter?.word_count || 0,
           });
         } catch (err: any) {
           logger?.error(`❌ [generate-packet] Unhandled error: ${err.message}`);
