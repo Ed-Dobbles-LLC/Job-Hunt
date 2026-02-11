@@ -683,6 +683,62 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Job Cards ────────────────────────────────────────── */
+    .job-cards { display: flex; flex-direction: column; gap: 12px; }
+
+    .job-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+    }
+
+    .job-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+
+    .job-card .jc-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+    .job-card .jc-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .job-card .jc-company { font-weight: 700; font-size: 16px; }
+    .job-card .jc-title { font-size: 14px; color: var(--text-dim); }
+    .job-card .jc-location { font-size: 12px; color: var(--text-muted); }
+
+    .job-card .jc-badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+    .job-card .jc-reasons {
+      display: flex; flex-direction: column; gap: 4px; margin-top: 4px;
+    }
+
+    .jc-reason {
+      display: flex; align-items: flex-start; gap: 6px; font-size: 13px; line-height: 1.4;
+    }
+
+    .jc-reason .icon { flex-shrink: 0; margin-top: 1px; }
+    .jc-reason.pro .icon { color: var(--green); }
+    .jc-reason.con .icon { color: var(--red); }
+    .jc-reason.neutral .icon { color: var(--yellow); }
+
+    .job-card .jc-actions {
+      display: flex; flex-direction: column; gap: 8px; align-items: flex-end; justify-content: center;
+    }
+
+    .job-card .jc-score-big {
+      width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 800; border: 3px solid;
+    }
+
+    .jc-score-high { border-color: var(--green); color: var(--green); background: var(--green-soft); }
+    .jc-score-mid { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-soft); }
+    .jc-score-low { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+
+    .job-cards.compact .job-card { padding: 14px 20px; }
+    .job-cards.compact .jc-reasons { display: none; }
+    .job-cards.compact .jc-score-big { width: 42px; height: 42px; font-size: 15px; border-width: 2px; }
+
     /* ── Responsive ───────────────────────────────────────── */
     @media (max-width: 1024px) {
       .sidebar { display: none; }
@@ -790,24 +846,28 @@
             <button class="folder-tab" onclick="setFolder('deleted')">Dismissed <span class="count" id="count-deleted">0</span></button>
             <button class="folder-tab" onclick="setFolder('all')">All <span class="count" id="count-all">0</span></button>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th class="sortable" data-sort="company" onclick="sortJobs('company')">Company</th>
-                  <th class="sortable" data-sort="title" onclick="sortJobs('title')">Title</th>
-                  <th class="sortable" data-sort="location" onclick="sortJobs('location')">Location</th>
-                  <th class="sortable sort-desc" data-sort="score" onclick="sortJobs('score')">Score</th>
-                  <th class="sortable" data-sort="shape" onclick="sortJobs('shape')">Shape</th>
-                  <th class="sortable" data-sort="gate" onclick="sortJobs('gate')">Gate</th>
-                  <th class="sortable" data-sort="status" onclick="sortJobs('status')">Status</th>
-                  <th class="sortable" data-sort="artifacts" onclick="sortJobs('artifacts')">Artifacts</th>
-                  <th class="sortable" data-sort="date" onclick="sortJobs('date')">Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="jobsBody"></tbody>
-            </table>
+
+          <!-- Recommended Matches -->
+          <div id="recommendedSection" style="display:none">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <h3 style="font-size:16px;font-weight:700">Recommended for You</h3>
+              <span class="count" id="count-recommended" style="background:var(--green-soft);color:var(--green);padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700">0</span>
+            </div>
+            <div class="job-cards" id="recommendedCards"></div>
+          </div>
+
+          <!-- Other Jobs -->
+          <div id="otherSection" style="display:none">
+            <div style="display:flex;align-items:center;gap:10px;margin:24px 0 14px">
+              <h3 style="font-size:16px;font-weight:700;color:var(--text-dim)">Other Jobs</h3>
+              <span class="count" id="count-other" style="background:var(--surface2);color:var(--text-dim);padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700">0</span>
+            </div>
+            <div class="job-cards compact" id="otherCards"></div>
+          </div>
+
+          <div class="empty-state" id="emptyJobs" style="display:none">
+            <div class="icon">&#x1F4ED;</div>
+            <div id="emptyJobsMsg">No jobs found. Run the workflow to fetch and process job alerts.</div>
           </div>
         </div>
 
@@ -1002,31 +1062,110 @@
       }
     }
 
-    function actionButtons(j) {
+    function getMatchReasons(j) {
+      const reasons = [];
+      const bd = getBreakdown(j);
+      if (!bd) return [{ type: 'neutral', text: 'Not yet scored' }];
+
+      // Pros
+      if (bd.role_level_match >= 14) reasons.push({ type: 'pro', text: 'Strong role/level fit' });
+      else if (bd.role_level_match >= 10) reasons.push({ type: 'pro', text: 'Good role/level alignment' });
+      else if (bd.role_level_match !== undefined && bd.role_level_match < 6) reasons.push({ type: 'con', text: 'Role level mismatch' });
+
+      if (bd.leadership_scope >= 10) reasons.push({ type: 'pro', text: 'Leadership scope matches your experience' });
+      if (bd.domain_relevance >= 5) reasons.push({ type: 'pro', text: 'Relevant industry/domain' });
+      else if (bd.domain_relevance !== undefined && bd.domain_relevance <= 2) reasons.push({ type: 'con', text: 'Unfamiliar domain' });
+
+      if (bd.ai_strategy_stack >= 5) reasons.push({ type: 'pro', text: 'AI/data strategy alignment' });
+      if (bd.transformation_mandate >= 8) reasons.push({ type: 'pro', text: 'Strong transformation mandate' });
+      if (bd.location_fit >= 6) reasons.push({ type: 'pro', text: 'Good location/remote fit' });
+      else if (bd.location_fit !== undefined && bd.location_fit <= 2) reasons.push({ type: 'con', text: 'Location may not work' });
+
+      if (bd.compensation >= 6) reasons.push({ type: 'pro', text: 'Compensation aligns' });
+      if (bd.execution_mode_match !== undefined && bd.execution_mode_match <= 2) reasons.push({ type: 'con', text: bd.execution_mode_reason || 'Heavy engineering/IC focus' });
+
+      if (bd.spec_inflation_penalty !== undefined && bd.spec_inflation_penalty < -3) reasons.push({ type: 'con', text: bd.spec_inflation_reason || 'Inflated spec requirements' });
+
+      // Hard flags
+      if (bd._hard_flags && bd._hard_flags.length > 0) {
+        bd._hard_flags.forEach(f => {
+          reasons.push({ type: f.gate === 'NO' ? 'con' : 'neutral', text: f.rule });
+        });
+      }
+
+      // Risk flags
+      if (bd._risk_flags && bd._risk_flags.length > 0) {
+        bd._risk_flags.slice(0, 2).forEach(f => {
+          reasons.push({ type: 'neutral', text: f });
+        });
+      }
+
+      return reasons.slice(0, 4); // max 4 reasons
+    }
+
+    function isRecommended(j) {
+      const bd = getBreakdown(j);
+      const gate = bd && bd._gate_status;
+      const score = j.total_score ?? 0;
+      // Recommended if gate is PASS and score >= 40
+      return gate === 'PASS' && score >= 40;
+    }
+
+    function buildJobCard(j, showReasons) {
+      const score = j.total_score ?? 0;
+      const scoreCls = score >= 60 ? 'jc-score-high' : score >= 40 ? 'jc-score-mid' : 'jc-score-low';
+      const bd = getBreakdown(j);
+      const reasons = showReasons ? getMatchReasons(j) : [];
+      const shapeLabels = { A: 'Strategy', B: 'Hybrid', C: 'Analytics', D: 'Eng/IC' };
+      const shape = bd && bd._role_shape ? bd._role_shape : null;
+
+      let actionsHtml = '';
       if (j.user_action === 'applied') {
-        return `<div class="action-btns">
-          <span class="action-btn applied">Applied</span>
-          <button class="action-btn undo" onclick="event.stopPropagation(); setJobAction(${j.job_id}, null)">Undo</button>
+        actionsHtml = `<span class="action-btn applied" style="font-size:13px">Applied</span>
+          <button class="action-btn undo" onclick="event.stopPropagation(); setJobAction(${j.job_id}, null)">Undo</button>`;
+      } else if (j.user_action === 'deleted') {
+        actionsHtml = `<span class="action-btn deleted" style="font-size:13px">Dismissed</span>
+          <button class="action-btn undo" onclick="event.stopPropagation(); setJobAction(${j.job_id}, null)">Undo</button>`;
+      } else {
+        if (j.has_artifacts) {
+          actionsHtml = `<a class="btn" href="/api/dashboard/preview/${j.job_id}/resume" target="_blank" onclick="event.stopPropagation()" style="font-size:12px;padding:6px 14px">View Resume</a>`;
+        } else {
+          actionsHtml = `<button class="btn btn-primary" onclick="event.stopPropagation(); generatePacket(${j.job_id})" id="gen-${j.job_id}" style="font-size:13px;padding:8px 18px">&#x26A1; Generate Packet</button>`;
+        }
+        actionsHtml += `<div class="action-btns" style="margin-top:4px">
+          <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'applied')">Applied</button>
+          <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'deleted')">Dismiss</button>
         </div>`;
       }
-      if (j.user_action === 'deleted') {
-        return `<div class="action-btns">
-          <span class="action-btn deleted">Dismissed</span>
-          <button class="action-btn undo" onclick="event.stopPropagation(); setJobAction(${j.job_id}, null)">Undo</button>
-        </div>`;
-      }
-      const genBtn = j.has_artifacts ? '' :
-        `<button class="action-btn" style="background:var(--accent-soft);border-color:var(--accent);color:var(--accent)" onclick="event.stopPropagation(); generatePacket(${j.job_id})" id="gen-${j.job_id}">Generate</button>`;
-      return `<div class="action-btns">
-        ${genBtn}
-        <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'applied')">Applied</button>
-        <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'deleted')">Dismiss</button>
+
+      return `<div class="job-card" onclick="openJobDetail(${j.job_id})">
+        <div class="jc-main">
+          <div class="jc-header">
+            <span class="jc-company">${esc(j.company || '-')}</span>
+            <span class="jc-title">${esc(j.title || '-')}</span>
+          </div>
+          <div class="jc-badges">
+            <span class="jc-location">&#x1F4CD; ${esc(j.location || '-')}</span>
+            ${shape ? `<span class="shape-badge shape-${shape}" style="font-size:11px">${shape} &middot; ${shapeLabels[shape] || ''}</span>` : ''}
+            ${j.has_artifacts ? (j.truth_pass ? '<span style="font-size:12px;color:var(--green)">&#x2705; Packet Ready</span>' : '<span style="font-size:12px;color:var(--yellow)">&#x26A0;&#xFE0F; Needs Review</span>') : ''}
+          </div>
+          ${showReasons && reasons.length > 0 ? `<div class="jc-reasons">
+            ${reasons.map(r => `<div class="jc-reason ${r.type}">
+              <span class="icon">${r.type === 'pro' ? '&#x2705;' : r.type === 'con' ? '&#x274C;' : '&#x26A0;&#xFE0F;'}</span>
+              <span>${esc(r.text)}</span>
+            </div>`).join('')}
+          </div>` : ''}
+        </div>
+        <div class="jc-actions">
+          <div class="jc-score-big ${scoreCls}">${score > 0 ? Math.round(score) : '?'}</div>
+          ${actionsHtml}
+        </div>
       </div>`;
     }
 
     async function generatePacket(jobId) {
       const btn = document.getElementById('gen-' + jobId);
-      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating...'; }
       showToast('Generating application packet... This may take 1-2 minutes.', 'success');
       try {
         const data = await api('/generate-packet/' + jobId, { method: 'POST' });
@@ -1036,11 +1175,11 @@
           loadDashboard();
         } else {
           showToast('Generation failed: ' + (data.error || 'Unknown'), 'error');
-          if (btn) { btn.disabled = false; btn.textContent = 'Generate'; }
+          if (btn) { btn.disabled = false; btn.innerHTML = '&#x26A1; Generate Packet'; }
         }
       } catch (e) {
         showToast('Generation failed: ' + e.message, 'error');
-        if (btn) { btn.disabled = false; btn.textContent = 'Generate'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '&#x26A1; Generate Packet'; }
       }
     }
 
@@ -1065,56 +1204,44 @@
     function applySortAndRender() {
       updateFolderCounts();
       const filtered = getFilteredJobs();
-      const sorted = [...filtered].sort((a, b) => {
-        let va, vb;
-        const bdA = getBreakdown(a);
-        const bdB = getBreakdown(b);
-        switch (currentSort.field) {
-          case 'company': va = (a.company || '').toLowerCase(); vb = (b.company || '').toLowerCase(); break;
-          case 'title': va = (a.title || '').toLowerCase(); vb = (b.title || '').toLowerCase(); break;
-          case 'location': va = (a.location || '').toLowerCase(); vb = (b.location || '').toLowerCase(); break;
-          case 'score': va = a.total_score ?? -1; vb = b.total_score ?? -1; break;
-          case 'shape': va = (bdA && bdA._role_shape) || 'Z'; vb = (bdB && bdB._role_shape) || 'Z'; break;
-          case 'gate': {
-            const gateOrder = { NO: 0, REVIEW: 1, PASS: 2 };
-            va = bdA && bdA._gate_status ? (gateOrder[bdA._gate_status] ?? 1) : 3;
-            vb = bdB && bdB._gate_status ? (gateOrder[bdB._gate_status] ?? 1) : 3;
-            break;
-          }
-          case 'status': va = (a.status || '').toLowerCase(); vb = (b.status || '').toLowerCase(); break;
-          case 'artifacts': va = a.has_artifacts ? 1 : 0; vb = b.has_artifacts ? 1 : 0; break;
-          case 'date': va = a.date_ingested ? new Date(a.date_ingested).getTime() : 0; vb = b.date_ingested ? new Date(b.date_ingested).getTime() : 0; break;
-          default: va = 0; vb = 0;
-        }
-        let cmp = 0;
-        if (typeof va === 'string') cmp = va.localeCompare(vb);
-        else cmp = va < vb ? -1 : va > vb ? 1 : 0;
-        return currentSort.dir === 'asc' ? cmp : -cmp;
-      });
+      const sorted = [...filtered].sort((a, b) => (b.total_score ?? -1) - (a.total_score ?? -1));
 
-      const tbody = document.getElementById('jobsBody');
+      const recommended = sorted.filter(j => isRecommended(j));
+      const other = sorted.filter(j => !isRecommended(j));
+
+      const recSection = document.getElementById('recommendedSection');
+      const otherSection = document.getElementById('otherSection');
+      const emptyEl = document.getElementById('emptyJobs');
+
       if (sorted.length === 0) {
+        recSection.style.display = 'none';
+        otherSection.style.display = 'none';
+        emptyEl.style.display = 'block';
         const emptyMsg = currentFolder === 'new' ? 'No new jobs to review.' :
                          currentFolder === 'applied' ? 'No jobs marked as applied yet.' :
                          currentFolder === 'deleted' ? 'No dismissed jobs.' :
                          'No jobs found. Run the workflow to fetch and process job alerts.';
-        tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="icon">&#x1F4ED;</div><div>${emptyMsg}</div></div></td></tr>`;
+        document.getElementById('emptyJobsMsg').textContent = emptyMsg;
         return;
       }
-      tbody.innerHTML = sorted.map(j => `
-        <tr class="clickable" onclick="openJobDetail(${j.job_id})">
-          <td><strong>${esc(j.company || '-')}</strong></td>
-          <td>${esc(j.title || '-')}</td>
-          <td>${esc(j.location || '-')}</td>
-          <td>${scoreBadge(j.total_score)}</td>
-          <td>${shapeBadge(j)}</td>
-          <td>${gateBadge(j)}</td>
-          <td>${statusBadge(j.status)}</td>
-          <td>${j.has_artifacts ? (j.truth_pass ? '&#x2705;' : '&#x26A0;&#xFE0F;') : '-'}</td>
-          <td>${formatDate(j.date_ingested)}</td>
-          <td>${actionButtons(j)}</td>
-        </tr>
-      `).join('');
+
+      emptyEl.style.display = 'none';
+
+      if (recommended.length > 0) {
+        recSection.style.display = 'block';
+        document.getElementById('count-recommended').textContent = recommended.length;
+        document.getElementById('recommendedCards').innerHTML = recommended.map(j => buildJobCard(j, true)).join('');
+      } else {
+        recSection.style.display = 'none';
+      }
+
+      if (other.length > 0) {
+        otherSection.style.display = 'block';
+        document.getElementById('count-other').textContent = other.length;
+        document.getElementById('otherCards').innerHTML = other.map(j => buildJobCard(j, false)).join('');
+      } else {
+        otherSection.style.display = 'none';
+      }
     }
 
     async function loadRuns() {
