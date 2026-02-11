@@ -6,6 +6,10 @@ import { sendEmail } from "../tools/gmailClient";
 import * as fs from "fs";
 import * as path from "path";
 import { workspacePath } from "../tools/paths";
+import { extractJDRequirementsTool } from "../tools/extractJDRequirementsTool";
+import { generateVerifiedPacketTool } from "../tools/generateVerifiedPacketTool";
+import { buildOutputTool } from "../tools/buildOutputTool";
+import { contactDiscoveryTool } from "../tools/contactDiscoveryTool";
 
 async function executeFetchAndParse({ mastra }: { mastra?: any; inputData?: any }) {
   const logger = mastra?.getLogger();
@@ -362,7 +366,7 @@ const scoreAndShortlistStep = createStep({
 async function executeGeneratePackets({ inputData, mastra }: { inputData: any; mastra?: any }) {
   const logger = mastra?.getLogger();
   logger?.info(
-    `🏗️ [Step 3] Generating packets for ${inputData.shortlistedJobs.length} jobs`,
+    `🏗️ [Step 3] Generating packets for ${inputData.shortlistedJobs.length} jobs (deterministic pipeline)`,
   );
 
   const results: any[] = [];
@@ -373,66 +377,101 @@ async function executeGeneratePackets({ inputData, mastra }: { inputData: any; m
         `📦 [Step 3] Processing: ${job.company} - ${job.title} (Score: ${job.total_score})`,
       );
 
-      const inventoryPath = workspacePath("experience_inventory.json");
-      const inventoryText = fs.readFileSync(inventoryPath, "utf-8");
-
-      const generateResponse = await jobMatchAgent.generateLegacy(
-        [
-          {
-            role: "user",
-            content: `Generate a complete application packet for this job. You MUST follow the Extract → Tailor → Verify → Render pipeline:
-
-1. **EXTRACT**: Call the extract-inventory tool to build the FactRegistry
-2. **TAILOR**: Call generate-resume with tailored resume content + evidence pointers (each with evidence_id = inventory bullet ID like exp-001-b2)
-3. **TAILOR**: Call generate-cover-letter with cover letter text + evidence pointers (each with evidence_id)
-4. **VERIFY**: Call verify-truth to run 5-layer deterministic verification
-5. **RENDER**: Call build-output to create the output folder with all files
-
-IMPORTANT: Include contact discovery targets (3-10 recommended titles to search for at this company, since we cannot scrape LinkedIn).
-
-## EVIDENCE POINTER REQUIREMENTS
-Every resume bullet and cover letter factual claim MUST have an evidence pointer with:
-- evidence_id: The inventory bullet ID (e.g., "exp-001-b2", "edu-001", "cert-001")
-- evidence_quote: Exact or near-exact text from the inventory
-- evidence_source_key: Path in inventory JSON (e.g., "experience[0].bullets[1]")
-- confidence: 0.7-1.0
-
-## JOB DETAILS
-Company: ${job.company}
-Title: ${job.title}
-Location: ${job.location} (${job.remote_hybrid})
-Score: ${job.total_score}/100
-Score Breakdown: ${JSON.stringify(job.breakdown)}
-Posting URL: ${job.posting_url}
-
-## JOB DESCRIPTION
-${job.jd_raw_text}
-
-## EXPERIENCE INVENTORY (SOURCE OF TRUTH)
-${inventoryText}
-
-## STRICT TRUTHFULNESS RULES
-- ONLY use facts from the inventory — NEVER invent employers, titles, dates, tools, degrees, certs, or metrics
-- Every resume bullet needs an evidence_id pointing to inventory
-- Every cover letter claim with metrics/tools/achievements needs an evidence_id
-- If something is unknown, state it as unknown — never fabricate
-- Numbers and metrics must be EXACT copies from inventory
-- After generating, verify truth with 5-layer check, then build output`,
+      // Phase 1: Extract JD requirements if not already done
+      const reqCheck = await query(
+        "SELECT jd_requirements FROM jobs WHERE job_id = $1",
+        [job.job_id],
+      );
+      if (!reqCheck.rows[0]?.jd_requirements) {
+        logger?.info(`📋 [Step 3] Extracting JD requirements for job_id=${job.job_id}`);
+        await extractJDRequirementsTool.execute({
+          context: {
+            job_id: job.job_id,
+            jd_text: job.jd_raw_text,
+            company: job.company,
+            title: job.title,
           },
-        ],
-        { maxSteps: 10 },
-      );
+          mastra,
+        } as any);
+        logger?.info(`✅ [Step 3] JD requirements extracted for ${job.company}`);
+      }
 
-      const allToolResults = generateResponse.steps?.flatMap(
-        (s: any) => s.toolResults || [],
-      ) || [];
-      const allResults = allToolResults.map((r: any) => r.result || r);
+      // Phase 2: Generate verified resume + cover letter (with internal verify-correct loop)
+      logger?.info(`📄 [Step 3] Generating verified packet for ${job.company} - ${job.title}`);
+      const packetResult = await generateVerifiedPacketTool.execute({
+        context: {
+          job_id: job.job_id,
+          company: job.company,
+          title: job.title,
+          max_attempts: 3,
+        },
+        mastra,
+      } as any);
 
-      const buildResult = allResults.find(
-        (r: any) => r.outputDir,
-      );
-      const verifyResult = allResults.find(
-        (r: any) => r.overallPass !== undefined,
+      if (!packetResult.success) {
+        throw new Error(`Packet generation failed for job_id=${job.job_id}`);
+      }
+
+      logger?.info(`📄 [Step 3] Packet generated: pass=${packetResult.pass}, attempts=${packetResult.attempts_used}`);
+
+      // Phase 3: Combine evidence pointers from resume + cover letter
+      const resumePointers = (packetResult.resume.evidence_pointers || []).map((p: any) => ({
+        claim_text: p.claim_text,
+        evidence_id: p.source_hash,
+        evidence_quote: p.evidence_quote,
+        evidence_source_key: p.source_hash,
+        confidence: p.confidence,
+      }));
+      const clPointers = (packetResult.cover_letter.evidence_pointers || []).map((p: any) => ({
+        claim_text: p.claim_text,
+        evidence_id: p.source_hash,
+        evidence_quote: p.evidence_quote,
+        evidence_source_key: p.source_hash,
+        confidence: p.confidence,
+      }));
+      const combinedEvidence = [...resumePointers, ...clPointers];
+
+      logger?.info(`🔗 [Step 3] Combined evidence: ${resumePointers.length} resume + ${clPointers.length} cover letter = ${combinedEvidence.length} total`);
+
+      // Phase 4: Build output files (DOCX, PDF, evidence JSON, verifier JSON)
+      logger?.info(`📁 [Step 3] Building output files for ${job.company} - ${job.title}`);
+      const buildResult = await buildOutputTool.execute({
+        context: {
+          job_id: job.job_id,
+          company: job.company,
+          title: job.title,
+          resume: packetResult.resume,
+          cover_letter: packetResult.cover_letter,
+          evidenceMap: combinedEvidence,
+          verifierResult: packetResult.final_report,
+          scoringBreakdown: job.breakdown,
+          totalScore: job.total_score,
+          skip_pdf: false,
+        },
+        mastra,
+      } as any);
+
+      // Phase 5: Contact discovery (optional, non-blocking)
+      try {
+        logger?.info(`👥 [Step 3] Running contact discovery for ${job.company}`);
+        await contactDiscoveryTool.execute({
+          context: {
+            job_id: job.job_id,
+            company_name: job.company,
+            job_title: job.title,
+            location: job.location,
+            target_function: "",
+          },
+          mastra,
+        } as any);
+      } catch (contactErr: any) {
+        logger?.warn(`⚠️ [Step 3] Contact discovery failed (non-blocking): ${contactErr.message}`);
+      }
+
+      // Update job status
+      await query(
+        "UPDATE jobs SET status = $1 WHERE job_id = $2",
+        [packetResult.pass ? "generated" : "generated-unverified", job.job_id],
       );
 
       results.push({
@@ -440,12 +479,12 @@ ${inventoryText}
         company: job.company,
         title: job.title,
         total_score: job.total_score,
-        truthPass: verifyResult?.overallPass ?? buildResult?.truthPass ?? false,
-        outputDir: buildResult?.outputDir || "",
+        truthPass: packetResult.pass,
+        outputDir: buildResult.outputDir || "",
       });
 
       logger?.info(
-        `✅ [Step 3] Packet complete for ${job.company} - ${job.title}`,
+        `✅ [Step 3] Packet complete for ${job.company} - ${job.title} (truth_pass=${packetResult.pass})`,
       );
     } catch (err) {
       logger?.error(
