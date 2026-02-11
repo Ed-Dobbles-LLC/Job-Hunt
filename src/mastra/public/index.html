@@ -1122,10 +1122,10 @@
               <div class="value">${data.stats.totalJobs}</div>
             </div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" style="cursor:pointer" onclick="rescoreJobs()" title="Click to score unscored jobs">
             <div class="stat-icon" style="background:var(--yellow-soft)">&#x1F3AF;</div>
             <div>
-              <div class="label">Scored</div>
+              <div class="label">Scored${data.stats.scoredJobs < data.stats.totalJobs ? ' <span style=&quot;font-size:0.7em;color:var(--coral)&quot;>(click to score all)</span>' : ''}</div>
               <div class="value">${data.stats.scoredJobs}</div>
             </div>
           </div>
@@ -1658,6 +1658,28 @@
     function refreshData() {
       loadDashboard();
       loadJobs();
+    }
+
+    async function rescoreJobs() {
+      showToast('Scoring unscored jobs...', 'info');
+      try {
+        const res = await fetch('/api/dashboard/rescore', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          // Poll for completion
+          let polls = 0;
+          const pollInterval = setInterval(() => {
+            polls++;
+            refreshData();
+            if (polls >= 12) clearInterval(pollInterval); // stop after ~60s
+          }, 5000);
+        } else {
+          showToast('Scoring failed: ' + (data.error || 'Unknown'), 'error');
+        }
+      } catch (err) {
+        showToast('Scoring failed: ' + err.message, 'error');
+      }
     }
 
     function esc(str) {

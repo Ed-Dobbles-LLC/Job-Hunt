@@ -602,6 +602,41 @@ export function getDashboardRoutes() {
         }
       },
     },
+    /* ── Re-score unscored jobs ─────────────────────────────── */
+    {
+      path: "/api/dashboard/rescore",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          const unscoredResult = await query(
+            `SELECT j.job_id FROM jobs j LEFT JOIN scores s ON j.job_id = s.job_id WHERE s.job_id IS NULL`
+          );
+          const unscoredIds = unscoredResult.rows.map((r: any) => Number(r.job_id));
+
+          if (unscoredIds.length === 0) {
+            return c.json({ success: true, message: "All jobs already scored", unscored: 0 });
+          }
+
+          logger?.info(`📊 [rescore] Scoring ${unscoredIds.length} unscored jobs in background...`);
+
+          // Fire-and-forget
+          scoreJobsTool.execute!({
+            context: { jobIds: unscoredIds, topN: unscoredIds.length },
+            mastra,
+          } as any)
+            .then((result: any) => logger?.info(`✅ [rescore] Done: ${result.totalScored} scored`))
+            .catch((err: any) => logger?.error(`⚠️ [rescore] Failed: ${err.message}`));
+
+          return c.json({ success: true, message: `Scoring ${unscoredIds.length} unscored jobs in background`, unscored: unscoredIds.length });
+        } catch (err: any) {
+          logger?.error(`❌ [rescore] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
     /* ── Excel/CSV import ───────────────────────────────────── */
     {
       path: "/api/dashboard/import-excel",

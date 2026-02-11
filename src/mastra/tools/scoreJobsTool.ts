@@ -21,7 +21,12 @@ import { classifyRoleShape, type RoleShapeResult } from "./roleShapeClassifier";
 
 function loadInventory(): any {
   const inventoryPath = workspacePath("experience_inventory.json");
-  return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+  try {
+    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+  } catch {
+    // Return minimal inventory so scoring can still run with keyword matching
+    return { profile: {}, domains: [], skills: [], experience: [] };
+  }
 }
 
 const EXECUTION_MODE_NEGATIVE_SIGNALS = [
@@ -620,39 +625,45 @@ export const scoreJobsTool = createTool({
     const scoredJobs: any[] = [];
 
     for (const jobId of context.jobIds) {
-      const result = await query("SELECT * FROM jobs WHERE job_id = $1", [
-        jobId,
-      ]);
-      if (result.rows.length === 0) {
-        logger?.warn(`⚠️ [scoreJobs] Job ID ${jobId} not found`);
+      try {
+        const result = await query("SELECT * FROM jobs WHERE job_id = $1", [
+          jobId,
+        ]);
+        if (result.rows.length === 0) {
+          logger?.warn(`⚠️ [scoreJobs] Job ID ${jobId} not found`);
+          continue;
+        }
+        const job = result.rows[0];
+        const { total, breakdown } = scoreSingleJob(job, inventory, profile);
+
+        await query(
+          `INSERT INTO scores (job_id, total_score, breakdown_json)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (job_id) DO UPDATE SET total_score = $2, breakdown_json = $3`,
+          [jobId, total, JSON.stringify(breakdown)],
+        );
+
+        scoredJobs.push({
+          job_id: jobId,
+          company: job.company || "",
+          title: job.title || "",
+          location: job.location || "",
+          remote_hybrid: job.remote_hybrid || "",
+          posting_url: job.posting_url || "",
+          total_score: total,
+          breakdown,
+          jd_raw_text: job.jd_raw_text || "",
+        });
+
+        if (scoredJobs.length % 25 === 0) {
+          logger?.info(`📊 [scoreJobs] Progress: ${scoredJobs.length}/${context.jobIds.length} scored`);
+        }
+      } catch (err: any) {
+        logger?.error(`⚠️ [scoreJobs] Failed to score job ${jobId}: ${err.message}`);
         continue;
       }
-      const job = result.rows[0];
-      const { total, breakdown } = scoreSingleJob(job, inventory, profile);
-
-      await query(
-        `INSERT INTO scores (job_id, total_score, breakdown_json)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (job_id) DO UPDATE SET total_score = $2, breakdown_json = $3`,
-        [jobId, total, JSON.stringify(breakdown)],
-      );
-
-      scoredJobs.push({
-        job_id: jobId,
-        company: job.company || "",
-        title: job.title || "",
-        location: job.location || "",
-        remote_hybrid: job.remote_hybrid || "",
-        posting_url: job.posting_url || "",
-        total_score: total,
-        breakdown,
-        jd_raw_text: job.jd_raw_text || "",
-      });
-
-      logger?.info(
-        `📊 [scoreJobs] ${job.company} - ${job.title}: ${total}/100 (${mode})`,
-      );
     }
+    logger?.info(`📊 [scoreJobs] Finished: ${scoredJobs.length}/${context.jobIds.length} scored successfully`);
 
     scoredJobs.sort((a, b) => b.total_score - a.total_score);
     const topJobs = scoredJobs.slice(0, topN);
