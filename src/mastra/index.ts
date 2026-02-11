@@ -9,18 +9,12 @@ import { z } from "zod";
 import { sharedPostgresStorage } from "./storage";
 import { inngest, inngestServe } from "./inngest";
 
-import { registerCronTrigger } from "../triggers/cronTriggers";
-import { jobMatchWorkflow } from "./workflows/jobMatchWorkflow";
+import { jobMatchWorkflow, runWorkflowDirectly } from "./workflows/jobMatchWorkflow";
 import { jobMatchAgent } from "./agents/jobMatchAgent";
 import { getDashboardRoutes } from "./dashboardRoutes";
 import { getProfileBuilderRoutes } from "./profileBuilderRoutes";
 import { getJobSourceRoutes } from "./jobSourceRoutes";
 import { getSettingsRoutes } from "./settingsRoutes";
-
-registerCronTrigger({
-  cronExpression: process.env.SCHEDULE_CRON_EXPRESSION || "30 12 * * *",
-  workflow: jobMatchWorkflow,
-});
 
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
@@ -242,3 +236,28 @@ if (Object.keys(mastra.getAgents()).length > 1) {
     "More than 1 agents found. Currently, more than 1 agents are not supported in the UI, since doing so will cause app state to be inconsistent.",
   );
 }
+
+// Simple in-process daily scheduler (replaces Inngest cron trigger)
+const cronExpr = process.env.SCHEDULE_CRON_EXPRESSION || "30 12 * * *";
+const [cronMin, cronHour] = cronExpr.split(" ").map(Number);
+let lastScheduledRunDate = "";
+
+setInterval(() => {
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
+  if (
+    now.getUTCHours() === cronHour &&
+    now.getUTCMinutes() === cronMin &&
+    lastScheduledRunDate !== today
+  ) {
+    lastScheduledRunDate = today;
+    console.log(`🕐 [Scheduler] Starting daily workflow (${cronExpr})`);
+    runWorkflowDirectly(mastra)
+      .then((result) => {
+        console.log(`✅ [Scheduler] Workflow completed: ${result.summary}`);
+      })
+      .catch((err) => {
+        console.error(`❌ [Scheduler] Workflow failed: ${err.message}`);
+      });
+  }
+}, 60_000);
