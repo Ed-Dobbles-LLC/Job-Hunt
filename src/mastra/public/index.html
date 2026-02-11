@@ -1716,9 +1716,10 @@
         if (data.success) {
           resultEl.className = 'upload-result success';
           document.getElementById('importResultMsg').textContent = data.message;
+          const scoringLabel = data.scoring === 'in_progress' ? 'Scoring...' : (data.scored || 0);
           document.getElementById('importResultStats').innerHTML = `
             <div class="ur-stat"><div class="num">${data.imported}</div><div class="lbl">Imported</div></div>
-            <div class="ur-stat"><div class="num">${data.scored}</div><div class="lbl">Scored</div></div>
+            <div class="ur-stat"><div class="num">${scoringLabel}</div><div class="lbl">Scored</div></div>
             <div class="ur-stat"><div class="num">${data.duplicates}</div><div class="lbl">Duplicates</div></div>
             <div class="ur-stat"><div class="num">${data.skipped}</div><div class="lbl">Skipped</div></div>
           `;

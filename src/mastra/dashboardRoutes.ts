@@ -617,13 +617,11 @@ export function getDashboardRoutes() {
           let rows: Record<string, any>[] = [];
 
           if (contentType.includes("multipart/form-data")) {
-            // File upload via form
             const formData = await c.req.formData();
             const file = formData.get("file") as File | null;
             if (!file) {
               return c.json({ error: "No file uploaded. Include a 'file' field." }, 400);
             }
-
             const buffer = Buffer.from(await file.arrayBuffer());
             const XLSX = await import("xlsx");
             const workbook = XLSX.read(buffer, { type: "buffer" });
@@ -634,7 +632,6 @@ export function getDashboardRoutes() {
             rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
             logger?.info(`📥 [import-excel] Parsed ${rows.length} rows from sheet "${sheetName}"`);
           } else if (contentType.includes("application/json")) {
-            // JSON array of job objects
             const body = await c.req.json();
             rows = Array.isArray(body) ? body : body.jobs || [body];
             logger?.info(`📥 [import-excel] Received ${rows.length} jobs via JSON`);
@@ -646,9 +643,12 @@ export function getDashboardRoutes() {
             return c.json({ error: "No data rows found in file" }, 400);
           }
 
-          // Map columns flexibly (handle various header names)
-          const newJobIds: number[] = [];
-          let duplicateCount = 0;
+          // Parse all rows into structured objects first (fast, no DB)
+          const parsed: Array<{
+            company: string; title: string; location: string; postingUrl: string;
+            jdText: string; compensation: string; remoteHybrid: string; source: string;
+            jdHash: string; simhash: number; level: string; keywords: string[];
+          }> = [];
           let skippedCount = 0;
 
           for (const row of rows) {
@@ -663,87 +663,123 @@ export function getDashboardRoutes() {
 
             if (!company && !title) {
               skippedCount++;
-              logger?.warn(`📥 [import-excel] Skipping row with no company or title`);
               continue;
             }
 
-            // Dedup check
             const hashInput = jdText || `${company}|${title}|${location}|${postingUrl}`;
-            const jdHash = computeHash(hashInput);
+            parsed.push({
+              company, title, location, postingUrl, jdText, compensation, remoteHybrid, source,
+              jdHash: computeHash(hashInput),
+              simhash: computeSimhash(jdText),
+              level: classifyLevel(title),
+              keywords: extractKeywords(jdText),
+            });
+          }
 
-            const existingByHash = await query(
-              "SELECT job_id FROM jobs WHERE jd_hash = $1",
-              [jdHash],
+          // Batch dedup: fetch all existing hashes in one query
+          const allHashes = parsed.map(p => p.jdHash);
+          const existingHashResult = await query(
+            `SELECT jd_hash FROM jobs WHERE jd_hash = ANY($1)`,
+            [allHashes],
+          );
+          const existingHashes = new Set(existingHashResult.rows.map((r: any) => r.jd_hash));
+
+          // Batch dedup by company+title (recent 14 days)
+          const companyTitlePairs = parsed
+            .filter(p => p.company && p.title && !existingHashes.has(p.jdHash))
+            .map(p => ({
+              normCompany: normalizeText(p.company).replace(/\s/g, ""),
+              normTitle: normalizeText(p.title).replace(/\s/g, ""),
+              jdHash: p.jdHash,
+            }));
+
+          const existingByNameSet = new Set<string>();
+          if (companyTitlePairs.length > 0) {
+            // Build a batch lookup: unnest arrays for efficient matching
+            const companies = companyTitlePairs.map(p => p.normCompany);
+            const titles = companyTitlePairs.map(p => p.normTitle);
+            const nameMatches = await query(
+              `SELECT LOWER(REPLACE(company, ' ', '')) AS nc, LOWER(REPLACE(title, ' ', '')) AS nt
+               FROM jobs
+               WHERE LOWER(REPLACE(company, ' ', '')) = ANY($1)
+               AND LOWER(REPLACE(title, ' ', '')) = ANY($2)
+               AND date_ingested > NOW() - INTERVAL '14 days'`,
+              [companies, titles],
             );
-            if (existingByHash.rows.length > 0) {
-              duplicateCount++;
-              continue;
+            for (const r of nameMatches.rows) {
+              existingByNameSet.add(`${r.nc}||${r.nt}`);
             }
+          }
 
-            // Also check by company+title for recent dupes
-            if (company && title) {
-              const normalizedCompany = normalizeText(company).replace(/\s/g, "");
-              const normalizedTitle = normalizeText(title).replace(/\s/g, "");
-              const existingBySimilar = await query(
-                `SELECT job_id FROM jobs
-                 WHERE LOWER(REPLACE(company, ' ', '')) = $1
-                 AND LOWER(REPLACE(title, ' ', '')) = $2
-                 AND date_ingested > NOW() - INTERVAL '14 days'`,
-                [normalizedCompany, normalizedTitle],
+          // Filter to non-duplicate rows
+          let duplicateCount = 0;
+          const toInsert = parsed.filter(p => {
+            if (existingHashes.has(p.jdHash)) { duplicateCount++; return false; }
+            if (p.company && p.title) {
+              const key = `${normalizeText(p.company).replace(/\s/g, "")}||${normalizeText(p.title).replace(/\s/g, "")}`;
+              if (existingByNameSet.has(key)) { duplicateCount++; return false; }
+            }
+            return true;
+          });
+
+          // Batch insert using multi-row VALUES (chunks of 50 to stay under param limits)
+          const newJobIds: number[] = [];
+          const CHUNK_SIZE = 50;
+          const today = new Date().toISOString().split("T")[0];
+
+          for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
+            const chunk = toInsert.slice(i, i + CHUNK_SIZE);
+            const values: any[] = [];
+            const placeholders: string[] = [];
+
+            for (let j = 0; j < chunk.length; j++) {
+              const p = chunk[j];
+              const offset = j * 16;
+              placeholders.push(
+                `($${offset+1}, $${offset+2}, $${offset+3}, $${offset+4}, $${offset+5}, $${offset+6}, $${offset+7}, $${offset+8}, $${offset+9}, $${offset+10}, $${offset+11}, $${offset+12}, $${offset+13}, $${offset+14}, $${offset+15}, $${offset+16})`
               );
-              if (existingBySimilar.rows.length > 0) {
-                duplicateCount++;
-                continue;
-              }
+              values.push(
+                p.source,
+                `excel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                p.company,
+                p.title,
+                p.location,
+                p.remoteHybrid || "Unknown",
+                p.level,
+                p.postingUrl,
+                today,
+                p.jdText,
+                p.jdHash,
+                p.simhash,
+                JSON.stringify(p.keywords),
+                p.postingUrl || null,
+                "new",
+                p.compensation,
+              );
             }
-
-            const simhash = computeSimhash(jdText);
-            const level = classifyLevel(title);
-            const jobKeywords = extractKeywords(jdText);
 
             const insertResult = await query(
               `INSERT INTO jobs (source, source_message_id, company, title, location, remote_hybrid, level, posting_url, date_posted, jd_raw_text, jd_hash, simhash, keywords, url_canonical, status, compensation)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+               VALUES ${placeholders.join(", ")}
                RETURNING job_id`,
-              [
-                source,
-                `excel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                company,
-                title,
-                location,
-                remoteHybrid || "Unknown",
-                level,
-                postingUrl,
-                new Date().toISOString().split("T")[0],
-                jdText,
-                jdHash,
-                simhash,
-                JSON.stringify(jobKeywords),
-                postingUrl || null,
-                jdText.length > 100 ? "new" : "new",
-                compensation,
-              ],
+              values,
             );
-
-            newJobIds.push(insertResult.rows[0].job_id);
-            logger?.info(`📥 [import-excel] Imported: ${company} — ${title} (ID: ${insertResult.rows[0].job_id})`);
+            for (const r of insertResult.rows) {
+              newJobIds.push(r.job_id);
+            }
+            logger?.info(`📥 [import-excel] Inserted chunk ${Math.floor(i/CHUNK_SIZE)+1}: ${chunk.length} jobs`);
           }
 
           logger?.info(`📥 [import-excel] Done: ${newJobIds.length} new, ${duplicateCount} dupes, ${skippedCount} skipped`);
 
-          // Auto-score the newly imported jobs
-          let scoringResult: any = null;
+          // Fire-and-forget: score in background so response returns immediately
           if (newJobIds.length > 0) {
-            try {
-              logger?.info(`📊 [import-excel] Auto-scoring ${newJobIds.length} imported jobs...`);
-              scoringResult = await scoreJobsTool.execute!({
-                context: { jobIds: newJobIds, topN: newJobIds.length },
-                mastra,
-              } as any);
-              logger?.info(`✅ [import-excel] Scoring complete: ${scoringResult.totalScored} jobs scored`);
-            } catch (scoreErr: any) {
-              logger?.error(`⚠️ [import-excel] Scoring failed: ${scoreErr.message}`);
-            }
+            scoreJobsTool.execute!({
+              context: { jobIds: newJobIds, topN: newJobIds.length },
+              mastra,
+            } as any)
+              .then((result: any) => logger?.info(`✅ [import-excel] Background scoring complete: ${result.totalScored} scored`))
+              .catch((err: any) => logger?.error(`⚠️ [import-excel] Background scoring failed: ${err.message}`));
           }
 
           return c.json({
@@ -753,8 +789,8 @@ export function getDashboardRoutes() {
             skipped: skippedCount,
             totalRows: rows.length,
             jobIds: newJobIds,
-            scored: scoringResult ? scoringResult.totalScored : 0,
-            message: `Imported ${newJobIds.length} jobs (${duplicateCount} duplicates, ${skippedCount} skipped). ${scoringResult ? scoringResult.totalScored + ' scored.' : ''}`,
+            scoring: "in_progress",
+            message: `Imported ${newJobIds.length} jobs (${duplicateCount} duplicates, ${skippedCount} skipped). Scoring in background.`,
           });
         } catch (err: any) {
           logger?.error(`❌ [import-excel] Error: ${err.message}`);
