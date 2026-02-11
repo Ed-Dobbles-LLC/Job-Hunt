@@ -268,10 +268,21 @@ export function getDashboardRoutes() {
             return c.json({ error: `No ${type} file available` }, 404);
           }
 
-          const resolvedPath = filePath.startsWith("/") ? filePath : workspacePath(filePath);
+          // Resolve path: try relative first (new format), then absolute (old format)
+          let resolvedPath = filePath.startsWith("/") ? filePath : workspacePath(filePath);
+          if (!fs.existsSync(resolvedPath) && !filePath.startsWith("/")) {
+            // Already tried relative → workspacePath, no other fallback
+          } else if (!fs.existsSync(resolvedPath) && filePath.startsWith("/")) {
+            // Old absolute path doesn't exist, try as relative from workspace root
+            const asRelative = workspacePath(filePath.replace(/^\/app\//, "").replace(/^\/home\/user\/Job-Hunt\//, ""));
+            if (fs.existsSync(asRelative)) {
+              resolvedPath = asRelative;
+            }
+          }
 
           if (!fs.existsSync(resolvedPath)) {
-            return c.json({ error: "File not found on disk" }, 404);
+            logger?.warn(`👁️ [dashboard] File not found at: ${resolvedPath} (original: ${filePath})`);
+            return c.json({ error: `File not found on disk. The file may have been generated on a previous deployment. Try regenerating the packet.`, original_path: filePath }, 404);
           }
 
           let contentHtml = "";
@@ -388,11 +399,18 @@ export function getDashboardRoutes() {
             return c.json({ error: `No ${type} file available` }, 404);
           }
 
-          const resolvedPath = filePath.startsWith("/") ? filePath : workspacePath(filePath);
+          // Resolve path: try relative first (new format), then absolute (old format)
+          let resolvedPath = filePath.startsWith("/") ? filePath : workspacePath(filePath);
+          if (!fs.existsSync(resolvedPath) && filePath.startsWith("/")) {
+            const asRelative = workspacePath(filePath.replace(/^\/app\//, "").replace(/^\/home\/user\/Job-Hunt\//, ""));
+            if (fs.existsSync(asRelative)) {
+              resolvedPath = asRelative;
+            }
+          }
 
           if (!fs.existsSync(resolvedPath)) {
-            logger?.warn(`📥 [dashboard] File not found: ${resolvedPath}`);
-            return c.json({ error: "File not found on disk" }, 404);
+            logger?.warn(`📥 [dashboard] File not found: ${resolvedPath} (original: ${filePath})`);
+            return c.json({ error: "File not found on disk. Try regenerating the packet." }, 404);
           }
 
           const fileBuffer = fs.readFileSync(resolvedPath);
@@ -414,10 +432,18 @@ export function getDashboardRoutes() {
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         const jobId = parseInt(c.req.param("jobId"));
-        logger?.info(`🔄 [dashboard] Generate packet for job_id=${jobId}`);
+        logger?.info(`🔄 [generate-packet] Starting for job_id=${jobId}`);
 
         try {
           if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          // Preflight: check OpenAI API key
+          if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
+            return c.json({
+              error: "OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY in Railway environment variables (Settings > Variables).",
+              phase: "preflight",
+            }, 400);
+          }
 
           // Load job
           const jobResult = await query(
@@ -430,50 +456,83 @@ export function getDashboardRoutes() {
             [jobId],
           );
           if (jobResult.rows.length === 0) {
-            return c.json({ error: "Job not found" }, 404);
+            return c.json({ error: "Job not found", phase: "load" }, 404);
           }
           const job = jobResult.rows[0];
 
           if (!job.jd_raw_text || job.jd_raw_text.length < 100) {
-            return c.json({ error: "Job has no/short JD text. Enrich first." }, 400);
+            return c.json({
+              error: `Job has insufficient JD text (${(job.jd_raw_text || '').length} chars, need 100+). The JD may not have been fully extracted from the email. Try re-running the workflow or manually adding job description text.`,
+              phase: "validation",
+            }, 400);
           }
 
           // Phase 1: Extract JD requirements if missing
           if (!job.jd_requirements) {
-            logger?.info(`📋 [generate-packet] Extracting JD requirements for job_id=${jobId}`);
-            await extractJDRequirementsTool.execute!({
+            logger?.info(`📋 [generate-packet] Phase 1: Extracting JD requirements for job_id=${jobId}`);
+            try {
+              await extractJDRequirementsTool.execute!({
+                context: {
+                  job_id: jobId,
+                  jd_text: job.jd_raw_text,
+                  company: job.company,
+                  title: job.title,
+                },
+                mastra,
+              } as any);
+              logger?.info(`✅ [generate-packet] Phase 1 complete: JD requirements extracted`);
+            } catch (phase1Err: any) {
+              logger?.error(`❌ [generate-packet] Phase 1 failed: ${phase1Err.message}`);
+              return c.json({
+                error: `Failed to extract JD requirements: ${phase1Err.message}`,
+                phase: "extract-requirements",
+                hint: phase1Err.message.includes("API key") || phase1Err.message.includes("401")
+                  ? "Check your OpenAI API key in Railway environment variables."
+                  : phase1Err.message.includes("rate") || phase1Err.message.includes("429")
+                  ? "OpenAI rate limit hit. Wait a moment and try again."
+                  : undefined,
+              }, 500);
+            }
+          }
+
+          // Phase 2: Generate verified packet (resume + cover letter + truth verification)
+          logger?.info(`📄 [generate-packet] Phase 2: Generating verified packet...`);
+          let packetResult: any;
+          try {
+            packetResult = await generateVerifiedPacketTool.execute!({
               context: {
                 job_id: jobId,
-                jd_text: job.jd_raw_text,
                 company: job.company,
                 title: job.title,
+                max_attempts: 2,
               },
               mastra,
             } as any);
-            logger?.info(`✅ [generate-packet] JD requirements extracted`);
+            logger?.info(`✅ [generate-packet] Phase 2 complete: pass=${packetResult.pass}, attempts=${packetResult.attempts_used}`);
+          } catch (phase2Err: any) {
+            logger?.error(`❌ [generate-packet] Phase 2 failed: ${phase2Err.message}`);
+            return c.json({
+              error: `Failed to generate resume/cover letter: ${phase2Err.message}`,
+              phase: "generate-packet",
+              hint: phase2Err.message.includes("API key") || phase2Err.message.includes("401")
+                ? "Check your OpenAI API key in Railway environment variables."
+                : phase2Err.message.includes("rate") || phase2Err.message.includes("429")
+                ? "OpenAI rate limit hit. Wait a moment and try again."
+                : phase2Err.message.includes("All") && phase2Err.message.includes("attempts failed")
+                ? "The AI couldn't generate a verified resume after multiple attempts. Try again — results vary between runs."
+                : undefined,
+            }, 500);
           }
 
-          // Phase 2: Generate verified packet
-          logger?.info(`📄 [generate-packet] Generating verified packet...`);
-          const packetResult = await generateVerifiedPacketTool.execute!({
-            context: {
-              job_id: jobId,
-              company: job.company,
-              title: job.title,
-              max_attempts: 2,
-            },
-            mastra,
-          } as any);
-
-          // Phase 3: Combine evidence
-          const resumePointers = (packetResult.resume.evidence_pointers || []).map((p: any) => ({
+          // Phase 3: Combine evidence pointers
+          const resumePointers = (packetResult.resume?.evidence_pointers || []).map((p: any) => ({
             claim_text: p.claim_text,
             evidence_id: p.source_hash,
             evidence_quote: p.evidence_quote,
             evidence_source_key: p.source_hash,
             confidence: p.confidence,
           }));
-          const clPointers = (packetResult.cover_letter.evidence_pointers || []).map((p: any) => ({
+          const clPointers = (packetResult.cover_letter?.evidence_pointers || []).map((p: any) => ({
             claim_text: p.claim_text,
             evidence_id: p.source_hash,
             evidence_quote: p.evidence_quote,
@@ -482,23 +541,34 @@ export function getDashboardRoutes() {
           }));
           const combinedEvidence = [...resumePointers, ...clPointers];
 
-          // Phase 4: Build output
-          logger?.info(`📁 [generate-packet] Building output files...`);
-          const buildResult = await buildOutputTool.execute!({
-            context: {
-              job_id: jobId,
-              company: job.company,
-              title: job.title,
-              resume: packetResult.resume,
-              cover_letter: packetResult.cover_letter,
-              evidenceMap: combinedEvidence,
-              verifierResult: packetResult.final_report,
-              scoringBreakdown: job.breakdown_json || {},
-              totalScore: job.total_score || 0,
-              skip_pdf: false,
-            },
-            mastra,
-          } as any);
+          // Phase 4: Build output files (DOCX, evidence JSON, verifier JSON)
+          logger?.info(`📁 [generate-packet] Phase 4: Building output files...`);
+          let buildResult: any;
+          try {
+            buildResult = await buildOutputTool.execute!({
+              context: {
+                job_id: jobId,
+                company: job.company,
+                title: job.title,
+                resume: packetResult.resume,
+                cover_letter: packetResult.cover_letter,
+                evidenceMap: combinedEvidence,
+                verifierResult: packetResult.final_report,
+                scoringBreakdown: job.breakdown_json || {},
+                totalScore: job.total_score || 0,
+                skip_pdf: false,
+              },
+              mastra,
+            } as any);
+            logger?.info(`✅ [generate-packet] Phase 4 complete: ${buildResult.files.length} files`);
+          } catch (phase4Err: any) {
+            logger?.error(`❌ [generate-packet] Phase 4 failed: ${phase4Err.message}`);
+            return c.json({
+              error: `Resume generated but failed to save files: ${phase4Err.message}`,
+              phase: "build-output",
+              hint: "The resume and cover letter were generated successfully by AI, but saving the DOCX files failed. This may be a server disk or LibreOffice issue.",
+            }, 500);
+          }
 
           // Update job status
           await query(
@@ -526,8 +596,8 @@ export function getDashboardRoutes() {
             cover_letter_words: packetResult.cover_letter.word_count,
           });
         } catch (err: any) {
-          logger?.error(`❌ [generate-packet] Error: ${err.message}`);
-          return c.json({ error: err.message, stack: err.stack?.split('\n').slice(0, 5) }, 500);
+          logger?.error(`❌ [generate-packet] Unhandled error: ${err.message}`);
+          return c.json({ error: err.message, phase: "unknown", stack: err.stack?.split('\n').slice(0, 5) }, 500);
         }
       },
     },

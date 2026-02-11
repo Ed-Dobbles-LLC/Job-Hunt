@@ -2,7 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
-import { workspacePath } from "./paths";
+import { workspacePath, WORKSPACE_ROOT } from "./paths";
 import { query } from "./db";
 import { TailoredResumeSchema } from "./tailoredResumePrompt";
 import { TailoredCoverLetterSchema } from "./tailoredCoverLetterPrompt";
@@ -172,22 +172,25 @@ export const buildOutputTool = createTool({
     const actualJobId = jobLookup.rows?.[0]?.job_id || context.job_id;
     logger?.info(`🔍 [buildOutput] Resolved job_id: ${actualJobId} (input was ${context.job_id})`);
 
+    // Store relative paths in DB so they work across environments (dev vs Railway)
+    const toRelative = (p: string) => path.relative(WORKSPACE_ROOT, p);
+
     try {
       await query(
         `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           actualJobId,
-          resumeDocxPath,
-          coverDocxPath,
-          evidenceMapPath,
-          verifierPath,
+          toRelative(resumeDocxPath),
+          toRelative(coverDocxPath),
+          toRelative(evidenceMapPath),
+          toRelative(verifierPath),
           "v2",
           "gpt-4o",
           truthPass,
         ],
       );
-      logger?.info(`💾 [buildOutput] Artifact record saved to DB`);
+      logger?.info(`💾 [buildOutput] Artifact record saved to DB (relative paths)`);
     } catch (err: any) {
       logger?.error(`⚠️ [buildOutput] Failed to save artifact record: ${err.message}`);
     }

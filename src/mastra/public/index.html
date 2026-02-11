@@ -1306,7 +1306,9 @@
           loadJobs();
           loadDashboard();
         } else {
-          showToast('Generation failed: ' + (data.error || 'Unknown'), 'error');
+          const hint = data.hint ? '\n' + data.hint : '';
+          const phase = data.phase ? ` [${data.phase}]` : '';
+          showToast(`Generation failed${phase}: ${data.error || 'Unknown'}${hint}`, 'error');
           if (btn) { btn.disabled = false; btn.innerHTML = '&#x26A1; Generate Packet'; }
         }
       } catch (e) {
