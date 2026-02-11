@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:legacy": "tsx tests/hardFlagEngine.test.ts && tsx tests/executionModeMatch.test.ts && tsx tests/roleShapeClassifier.test.ts && tsx tests/scoreReport.test.ts && tsx tests/scoringWeights.test.ts && tsx tests/specInflationPenalty.test.ts && tsx tests/verifyTruth5Layer.test.ts",
     "dev": "mastra dev",
     "build": "mastra build",
     "check": "tsc",
@@ -53,6 +55,7 @@
     "mastra": "^0.14.0",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }

@@ -183,12 +183,17 @@ describe("profileSchemas", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects Skills with missing category", () => {
+  it("fills missing categories with defaults", () => {
     const result = SkillsSchema.safeParse({
       leadership: ["Team building"],
-      // missing technical, data_science, domains
+      // missing technical, data_science, domains — filled by .default([])
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.technical).toEqual([]);
+      expect(result.data.data_science).toEqual([]);
+      expect(result.data.domains).toEqual([]);
+    }
   });
 });
 
