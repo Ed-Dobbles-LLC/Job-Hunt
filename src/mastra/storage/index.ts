@@ -7,8 +7,8 @@ const connString =
 // Railway containers may start before the Postgres service is fully reachable
 class ResilientPostgresStore extends PostgresStore {
   private initAttempts = 0;
-  private readonly maxRetries = 5;
-  private readonly retryDelayMs = 3000;
+  private readonly maxRetries = 8;
+  private readonly retryDelayMs = 5000;
 
   async init(): Promise<void> {
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
@@ -20,10 +20,13 @@ class ResilientPostgresStore extends PostgresStore {
         }
         return;
       } catch (err: any) {
+        const errCode = err?.cause?.cause?.code || err?.cause?.code || "";
+        const errMsg = err?.message || "";
         const isConnectionError =
-          err?.cause?.cause?.code === "ECONNREFUSED" ||
-          err?.cause?.code === "ECONNREFUSED" ||
-          err?.message?.includes("ECONNREFUSED");
+          errCode === "ECONNREFUSED" ||
+          errCode === "ETIMEDOUT" ||
+          errMsg.includes("ECONNREFUSED") ||
+          errMsg.includes("ETIMEDOUT");
 
         if (isConnectionError && attempt < this.maxRetries) {
           console.warn(
