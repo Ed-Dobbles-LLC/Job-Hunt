@@ -4,6 +4,9 @@ import * as path from "path";
 import { workspacePath, findPublicFile } from "./tools/paths";
 import mammoth from "mammoth";
 import { runWorkflowDirectly } from "./workflows/jobMatchWorkflow";
+import { extractJDRequirementsTool } from "./tools/extractJDRequirementsTool";
+import { generateVerifiedPacketTool } from "./tools/generateVerifiedPacketTool";
+import { buildOutputTool } from "./tools/buildOutputTool";
 
 let dbReady = false;
 
@@ -394,6 +397,129 @@ export function getDashboardRoutes() {
         } catch (err: any) {
           logger?.error(`❌ [dashboard] Download error: ${err.message}`);
           return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/dashboard/generate-packet/:jobId",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        const jobId = parseInt(c.req.param("jobId"));
+        logger?.info(`🔄 [dashboard] Generate packet for job_id=${jobId}`);
+
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          // Load job
+          const jobResult = await query(
+            `SELECT j.job_id, j.company, j.title, j.location, j.remote_hybrid,
+                    j.jd_raw_text, j.jd_requirements, j.posting_url,
+                    s.total_score, s.breakdown_json
+             FROM jobs j
+             LEFT JOIN scores s ON j.job_id = s.job_id
+             WHERE j.job_id = $1`,
+            [jobId],
+          );
+          if (jobResult.rows.length === 0) {
+            return c.json({ error: "Job not found" }, 404);
+          }
+          const job = jobResult.rows[0];
+
+          if (!job.jd_raw_text || job.jd_raw_text.length < 100) {
+            return c.json({ error: "Job has no/short JD text. Enrich first." }, 400);
+          }
+
+          // Phase 1: Extract JD requirements if missing
+          if (!job.jd_requirements) {
+            logger?.info(`📋 [generate-packet] Extracting JD requirements for job_id=${jobId}`);
+            await extractJDRequirementsTool.execute!({
+              context: {
+                job_id: jobId,
+                jd_text: job.jd_raw_text,
+                company: job.company,
+                title: job.title,
+              },
+              mastra,
+            } as any);
+            logger?.info(`✅ [generate-packet] JD requirements extracted`);
+          }
+
+          // Phase 2: Generate verified packet
+          logger?.info(`📄 [generate-packet] Generating verified packet...`);
+          const packetResult = await generateVerifiedPacketTool.execute!({
+            context: {
+              job_id: jobId,
+              company: job.company,
+              title: job.title,
+              max_attempts: 2,
+            },
+            mastra,
+          } as any);
+
+          // Phase 3: Combine evidence
+          const resumePointers = (packetResult.resume.evidence_pointers || []).map((p: any) => ({
+            claim_text: p.claim_text,
+            evidence_id: p.source_hash,
+            evidence_quote: p.evidence_quote,
+            evidence_source_key: p.source_hash,
+            confidence: p.confidence,
+          }));
+          const clPointers = (packetResult.cover_letter.evidence_pointers || []).map((p: any) => ({
+            claim_text: p.claim_text,
+            evidence_id: p.source_hash,
+            evidence_quote: p.evidence_quote,
+            evidence_source_key: p.source_hash,
+            confidence: p.confidence,
+          }));
+          const combinedEvidence = [...resumePointers, ...clPointers];
+
+          // Phase 4: Build output
+          logger?.info(`📁 [generate-packet] Building output files...`);
+          const buildResult = await buildOutputTool.execute!({
+            context: {
+              job_id: jobId,
+              company: job.company,
+              title: job.title,
+              resume: packetResult.resume,
+              cover_letter: packetResult.cover_letter,
+              evidenceMap: combinedEvidence,
+              verifierResult: packetResult.final_report,
+              scoringBreakdown: job.breakdown_json || {},
+              totalScore: job.total_score || 0,
+              skip_pdf: false,
+            },
+            mastra,
+          } as any);
+
+          // Update job status
+          await query(
+            "UPDATE jobs SET status = $1 WHERE job_id = $2",
+            [packetResult.pass ? "generated" : "generated-unverified", jobId],
+          );
+
+          logger?.info(`✅ [generate-packet] Done! pass=${packetResult.pass}, files=${buildResult.files.length}`);
+
+          return c.json({
+            success: true,
+            job_id: jobId,
+            company: job.company,
+            title: job.title,
+            truth_pass: packetResult.pass,
+            attempts_used: packetResult.attempts_used,
+            evidence_count: combinedEvidence.length,
+            files: buildResult.files.length,
+            output_dir: buildResult.outputDir,
+            resume_summary: packetResult.resume.professional_summary,
+            resume_roles: packetResult.resume.experience.length,
+            resume_bullets: packetResult.resume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0),
+            ats_keywords: packetResult.resume.ats_keywords_used,
+            gap_notes: packetResult.resume.gap_notes,
+            cover_letter_words: packetResult.cover_letter.word_count,
+          });
+        } catch (err: any) {
+          logger?.error(`❌ [generate-packet] Error: ${err.message}`);
+          return c.json({ error: err.message, stack: err.stack?.split('\n').slice(0, 5) }, 500);
         }
       },
     },
