@@ -269,12 +269,24 @@ const enrichJobsStep = createStep({
 
 async function executeScoreAndShortlist({ inputData, mastra }: { inputData: any; mastra?: any }) {
   const logger = mastra?.getLogger();
+
+  // Also pick up unscored jobs from other sources (Clay, Apollo, import)
+  const unscoredResult = await query(
+    `SELECT j.job_id FROM jobs j
+     LEFT JOIN scores s ON j.job_id = s.job_id
+     WHERE s.job_id IS NULL AND j.jd_raw_text IS NOT NULL AND LENGTH(j.jd_raw_text) > 100
+     AND j.job_id != ALL($1)`,
+    [inputData.enrichedJobIds || []],
+  );
+  const unscoredIds = unscoredResult.rows.map((r: any) => r.job_id);
+  const allJobIds = [...(inputData.enrichedJobIds || []), ...unscoredIds];
+
   logger?.info(
-    `📊 [Step 2] Scoring ${inputData.enrichedJobIds.length} enriched jobs`,
+    `📊 [Step 2] Scoring ${allJobIds.length} jobs (${inputData.enrichedJobIds.length} from email + ${unscoredIds.length} from other sources)`,
   );
 
-  if (inputData.enrichedJobIds.length === 0) {
-    logger?.info("📊 [Step 2] No new jobs to score");
+  if (allJobIds.length === 0) {
+    logger?.info("📊 [Step 2] No jobs to score");
     return {
       shortlistedJobs: [] as any[],
       runId: inputData.runId,
@@ -288,7 +300,7 @@ async function executeScoreAndShortlist({ inputData, mastra }: { inputData: any;
     [
       {
         role: "user",
-        content: `Score the following job IDs against my experience inventory and return the top 10: [${inputData.enrichedJobIds.join(", ")}]. Call the score-jobs tool with these job IDs.`,
+        content: `Score the following job IDs against my experience inventory and return the top 10: [${allJobIds.join(", ")}]. Call the score-jobs tool with these job IDs.`,
       },
     ],
     { maxSteps: 3 },
