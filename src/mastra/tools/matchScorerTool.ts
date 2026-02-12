@@ -6,9 +6,12 @@ import { workspacePath } from "./paths";
 import { computeMatchReport, prettyPrintMatchReport, type ExperienceInventory, type MatchReport } from "./matchScorer";
 import { JDRequirementsSchema, type JDRequirements } from "./extractJDRequirementsTool";
 
-function loadInventory(): ExperienceInventory {
-  const inventoryPath = workspacePath("experience_inventory.json");
-  return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+async function loadInventory(): Promise<ExperienceInventory> {
+  try {
+    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
+    if (dbResult.rows.length > 0 && dbResult.rows[0].value) return JSON.parse(dbResult.rows[0].value);
+  } catch { /* fall through */ }
+  return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8"));
 }
 
 const MatchedReqSchema = z.object({
@@ -124,7 +127,7 @@ export const matchScorerTool = createTool({
     }
 
     logger?.info(`📊 [matchScorer] Loading experience inventory`);
-    const inventory = loadInventory();
+    const inventory = await loadInventory();
 
     logger?.info(`📊 [matchScorer] Computing match report`);
     const report: MatchReport = computeMatchReport(requirements, inventory);

@@ -450,5 +450,39 @@ export function getProfileBuilderRoutes() {
         }
       },
     },
+
+    /* ── Find most recent unfinalized session ──────────────────── */
+    {
+      path: "/api/profile/recent",
+      method: "GET" as const,
+      createHandler: async () => async (c: any) => {
+        try {
+          await ensureProfileTable();
+          const result = await query(
+            `SELECT session_id, status, current_draft, gaps, questions, interview_round, resume_filename, error_message, created_at
+             FROM profile_sessions
+             WHERE status NOT IN ('finalized')
+             ORDER BY created_at DESC LIMIT 1`,
+          );
+          if (result.rows.length === 0) {
+            return c.json({ found: false });
+          }
+          const row = result.rows[0];
+          return c.json({
+            found: true,
+            sessionId: row.session_id,
+            status: row.status,
+            draft: row.current_draft,
+            gaps: row.gaps || [],
+            questions: row.questions || [],
+            interviewRound: row.interview_round,
+            resumeFilename: row.resume_filename,
+            errorMessage: row.error_message,
+          });
+        } catch {
+          return c.json({ found: false });
+        }
+      },
+    },
   ];
 }

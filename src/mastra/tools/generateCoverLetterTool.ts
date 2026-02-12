@@ -14,10 +14,13 @@ import {
 } from "./tailoredCoverLetterPrompt";
 import type { JDRequirements } from "./extractJDRequirementsTool";
 
-function loadInventory(): Record<string, any> {
+async function loadInventory(): Promise<Record<string, any>> {
   try {
-    const inventoryPath = workspacePath("experience_inventory.json");
-    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
+    if (dbResult.rows.length > 0 && dbResult.rows[0].value) return JSON.parse(dbResult.rows[0].value);
+  } catch { /* fall through */ }
+  try {
+    return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8"));
   } catch (err: any) {
     throw new Error(`Cannot load experience_inventory.json: ${err.message}. Run the Profile Builder first.`);
   }
@@ -99,7 +102,7 @@ export const generateCoverLetterTool = createTool({
     logger?.info(`📝 [generateCoverLetter] Target: ${company} — ${title}`);
     logger?.info(`📝 [generateCoverLetter] Loading experience inventory and allowlist`);
 
-    const inventory = loadInventory();
+    const inventory = await loadInventory();
     const allowlist = buildEntityAllowlist(inventory);
 
     const systemPrompt = buildCoverLetterSystemPrompt();

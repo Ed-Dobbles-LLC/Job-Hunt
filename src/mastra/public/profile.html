@@ -391,21 +391,38 @@
       }
     });
 
-    // Recover in-progress session on page load
+    // Recover in-progress session on page load (checks DB, not just localStorage)
     (async () => {
-      const saved = localStorage.getItem('profileSessionId');
-      if (!saved) return;
       try {
-        const res = await fetch('/api/profile/session/' + saved);
-        if (!res.ok) { localStorage.removeItem('profileSessionId'); return; }
+        // Ask server for most recent unfinalized session
+        const res = await fetch('/api/profile/recent');
+        if (!res.ok) return;
         const data = await res.json();
+        if (!data.found) return;
+
+        const sid = data.sessionId;
+        const hasDraft = data.draft && data.draft.profile && data.draft.profile.name;
 
         if (['processing', 'structuring', 'generating_questions'].includes(data.status)) {
-          sessionId = saved;
-          showLoading('Resuming... ' + (data.status === 'structuring' ? 'Building your experience profile with AI...' : 'Processing your resume...'));
-          await pollForReady(saved);
+          if (hasDraft) {
+            // Draft exists — let user review/finalize immediately instead of waiting
+            sessionId = sid;
+            localStorage.setItem('profileSessionId', sid);
+            currentDraft = data.draft;
+            currentGaps = data.gaps || [];
+            currentQuestions = data.questions || [];
+            goToPanel('review');
+            showToast('Found your profile from a previous upload. Review and save below.', 'success');
+          } else {
+            // Still processing, no draft yet — resume polling
+            sessionId = sid;
+            localStorage.setItem('profileSessionId', sid);
+            showLoading(data.status === 'structuring' ? 'Building your experience profile with AI...' : 'Processing your resume...');
+            await pollForReady(sid);
+          }
         } else if (data.status === 'interviewing') {
-          sessionId = saved;
+          sessionId = sid;
+          localStorage.setItem('profileSessionId', sid);
           currentDraft = data.draft;
           currentGaps = data.gaps || [];
           currentQuestions = data.questions || [];
@@ -414,17 +431,16 @@
           renderQuestions();
           showToast('Resumed your session.', 'success');
         } else if (data.status === 'review') {
-          sessionId = saved;
+          sessionId = sid;
+          localStorage.setItem('profileSessionId', sid);
           currentDraft = data.draft;
           currentGaps = data.gaps || [];
           goToPanel('review');
+          showToast('Your profile is ready for review.', 'success');
         } else if (data.status === 'error') {
-          showToast('Previous session failed: ' + (data.errorMessage || 'Unknown error'), 'error');
-          localStorage.removeItem('profileSessionId');
-        } else {
-          localStorage.removeItem('profileSessionId');
+          showToast('Previous upload failed: ' + (data.errorMessage || 'Unknown error') + '. Upload again to retry.', 'error');
         }
-      } catch { localStorage.removeItem('profileSessionId'); }
+      } catch (e) { console.warn('Session recovery error:', e); }
     })();
 
     async function uploadResume() {

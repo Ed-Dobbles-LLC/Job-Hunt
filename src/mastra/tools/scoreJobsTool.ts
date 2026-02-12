@@ -19,12 +19,14 @@ import { evaluateRules } from "./hardFlagEngine";
 import type { GateStatus } from "./hardFlagRules";
 import { classifyRoleShape, type RoleShapeResult } from "./roleShapeClassifier";
 
-function loadInventory(): any {
-  const inventoryPath = workspacePath("experience_inventory.json");
+async function loadInventory(): Promise<any> {
   try {
-    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
+    if (dbResult.rows.length > 0 && dbResult.rows[0].value) return JSON.parse(dbResult.rows[0].value);
+  } catch { /* fall through */ }
+  try {
+    return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8"));
   } catch {
-    // Return minimal inventory so scoring can still run with keyword matching
     return { profile: {}, domains: [], skills: [], experience: [] };
   }
 }
@@ -754,7 +756,7 @@ export const scoreJobsTool = createTool({
       `📊 [scoreJobs] Scoring ${context.jobIds.length} jobs in ${mode} mode (${profile.label})`,
     );
 
-    const inventory = loadInventory();
+    const inventory = await loadInventory();
     const topN = context.topN || 10;
 
     // Load location preferences from DB

@@ -11,9 +11,12 @@ import {
   runTruthfulnessVerification,
 } from "./truthfulnessVerifier";
 
-function loadInventory(): Record<string, any> {
-  const inventoryPath = workspacePath("experience_inventory.json");
-  return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+async function loadInventory(): Promise<Record<string, any>> {
+  try {
+    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
+    if (dbResult.rows.length > 0 && dbResult.rows[0].value) return JSON.parse(dbResult.rows[0].value);
+  } catch { /* fall through */ }
+  return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8"));
 }
 
 export const verifyTruthfulnessTool = createTool({
@@ -34,7 +37,7 @@ export const verifyTruthfulnessTool = createTool({
     logger?.info(`🔍 [verifyTruthfulness] Starting adversarial verification for job_id=${context.job_id}`);
 
     logger?.info(`🔍 [verifyTruthfulness] Loading experience inventory and building allowlist`);
-    const inventory = loadInventory();
+    const inventory = await loadInventory();
     const allowlist = buildEntityAllowlist(inventory);
 
     logger?.info(`🔍 [verifyTruthfulness] Allowlist loaded — ${allowlist.companies.length} companies, ${allowlist.metrics.length} metrics, ${allowlist.dates.length} dates, ${allowlist.tools.length} tools`);
