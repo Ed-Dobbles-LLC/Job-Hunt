@@ -1129,10 +1129,10 @@
               <div class="value">${data.stats.scoredJobs}</div>
             </div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" style="cursor:pointer" onclick="autoGeneratePackets()" title="Click to generate packets for top matches">
             <div class="stat-icon" style="background:var(--green-soft)">&#x1F4E6;</div>
             <div>
-              <div class="label">Packets Ready</div>
+              <div class="label">Packets Ready${data.stats.packetsGenerated < data.stats.scoredJobs ? ' <span style=&quot;font-size:0.7em;color:var(--coral)&quot;>(click to auto-generate)</span>' : ''}</div>
               <div class="value">${data.stats.packetsGenerated}</div>
             </div>
           </div>
@@ -1679,6 +1679,33 @@
         }
       } catch (err) {
         showToast('Scoring failed: ' + err.message, 'error');
+      }
+    }
+
+    async function autoGeneratePackets() {
+      showToast('Generating packets for top matches...', 'info');
+      try {
+        const res = await fetch('/api/dashboard/auto-generate-packets?topN=10&minScore=30', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          if (data.queued === 0) {
+            showToast(data.message, 'info');
+          } else {
+            const names = data.jobs.map(j => `${j.company} (${j.score})`).join(', ');
+            showToast(`Generating ${data.queued} packets: ${names}`, 'success');
+            // Poll for completion — packets take ~30-60s each
+            let polls = 0;
+            const pollInterval = setInterval(() => {
+              polls++;
+              refreshData();
+              if (polls >= 60) clearInterval(pollInterval); // stop after ~10min
+            }, 10000);
+          }
+        } else {
+          showToast('Auto-generate failed: ' + (data.error || 'Unknown'), 'error');
+        }
+      } catch (err) {
+        showToast('Auto-generate failed: ' + err.message, 'error');
       }
     }
 

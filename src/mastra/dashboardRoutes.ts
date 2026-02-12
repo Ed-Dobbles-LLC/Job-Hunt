@@ -637,6 +637,126 @@ export function getDashboardRoutes() {
         }
       },
     },
+    /* ── Auto-generate packets for top matches ──────────────── */
+    {
+      path: "/api/dashboard/auto-generate-packets",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
+            return c.json({ error: "OpenAI API key not configured.", phase: "preflight" }, 400);
+          }
+
+          const url = new URL(c.req.url);
+          const topN = parseInt(url.searchParams.get("topN") || "10");
+          const minScore = parseInt(url.searchParams.get("minScore") || "0");
+
+          // Find top scored jobs that don't already have packets
+          const candidates = await query(
+            `SELECT j.job_id, j.company, j.title, s.total_score
+             FROM jobs j
+             INNER JOIN scores s ON j.job_id = s.job_id
+             LEFT JOIN artifacts a ON j.job_id = a.job_id
+             WHERE a.job_id IS NULL
+               AND LENGTH(COALESCE(j.jd_raw_text, '')) >= 100
+               AND s.total_score >= $1
+             ORDER BY s.total_score DESC
+             LIMIT $2`,
+            [minScore, topN],
+          );
+
+          const jobs = candidates.rows;
+          if (jobs.length === 0) {
+            return c.json({ success: true, message: "No eligible jobs found (all top matches already have packets, or no scored jobs with sufficient JD text)", queued: 0 });
+          }
+
+          logger?.info(`🚀 [auto-generate] Queuing packet generation for ${jobs.length} top jobs`);
+
+          // Return immediately, process in background
+          const jobList = jobs.map((j: any) => ({ job_id: j.job_id, company: j.company, title: j.title, score: j.total_score }));
+
+          // Background: generate packets sequentially (each takes ~30-60s of LLM calls)
+          (async () => {
+            let success = 0;
+            let failed = 0;
+            for (const job of jobs) {
+              try {
+                logger?.info(`📦 [auto-generate] ${success + failed + 1}/${jobs.length}: ${job.company} — ${job.title} (score: ${job.total_score})`);
+
+                // Load full job
+                const jobResult = await query(
+                  `SELECT j.*, s.total_score, s.breakdown_json FROM jobs j LEFT JOIN scores s ON j.job_id = s.job_id WHERE j.job_id = $1`,
+                  [job.job_id],
+                );
+                const fullJob = jobResult.rows[0];
+                if (!fullJob) { failed++; continue; }
+
+                // Phase 1: Extract JD requirements if missing
+                if (!fullJob.jd_requirements) {
+                  await extractJDRequirementsTool.execute!({
+                    context: { job_id: job.job_id, jd_text: fullJob.jd_raw_text, company: fullJob.company, title: fullJob.title },
+                    mastra,
+                  } as any);
+                }
+
+                // Phase 2: Generate verified packet
+                const packetResult = await generateVerifiedPacketTool.execute!({
+                  context: { job_id: job.job_id, company: fullJob.company, title: fullJob.title, max_attempts: 2 },
+                  mastra,
+                } as any);
+
+                // Phase 3: Combine evidence
+                const resumePointers = (packetResult.resume?.evidence_pointers || []).map((p: any) => ({
+                  claim_text: p.claim_text, evidence_id: p.source_hash, evidence_quote: p.evidence_quote,
+                  evidence_source_key: p.source_hash, confidence: p.confidence,
+                }));
+                const clPointers = (packetResult.cover_letter?.evidence_pointers || []).map((p: any) => ({
+                  claim_text: p.claim_text, evidence_id: p.source_hash, evidence_quote: p.evidence_quote,
+                  evidence_source_key: p.source_hash, confidence: p.confidence,
+                }));
+
+                // Phase 4: Build output files
+                await buildOutputTool.execute!({
+                  context: {
+                    job_id: job.job_id, company: fullJob.company, title: fullJob.title,
+                    resume: packetResult.resume, cover_letter: packetResult.cover_letter,
+                    evidenceMap: [...resumePointers, ...clPointers],
+                    verifierResult: packetResult.final_report,
+                    scoringBreakdown: fullJob.breakdown_json || {}, totalScore: fullJob.total_score || 0,
+                    skip_pdf: false,
+                  },
+                  mastra,
+                } as any);
+
+                // Update status
+                await query("UPDATE jobs SET status = $1 WHERE job_id = $2",
+                  [packetResult.pass ? "generated" : "generated-unverified", job.job_id]);
+
+                success++;
+                logger?.info(`✅ [auto-generate] ${job.company} — ${job.title}: done (pass=${packetResult.pass})`);
+              } catch (err: any) {
+                failed++;
+                logger?.error(`❌ [auto-generate] ${job.company} — ${job.title}: ${err.message}`);
+              }
+            }
+            logger?.info(`🏁 [auto-generate] Complete: ${success} succeeded, ${failed} failed out of ${jobs.length}`);
+          })();
+
+          return c.json({
+            success: true,
+            queued: jobs.length,
+            jobs: jobList,
+            message: `Generating packets for ${jobs.length} top matches in background. This will take a few minutes.`,
+          });
+        } catch (err: any) {
+          logger?.error(`❌ [auto-generate] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
     /* ── Excel/CSV import ───────────────────────────────────── */
     {
       path: "/api/dashboard/import-excel",
