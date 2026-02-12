@@ -280,19 +280,33 @@ export function getDashboardRoutes() {
             }
           }
 
-          if (!fs.existsSync(resolvedPath)) {
-            logger?.warn(`👁️ [dashboard] File not found at: ${resolvedPath} (original: ${filePath})`);
-            return c.json({ error: `File not found on disk. The file may have been generated on a previous deployment. Try regenerating the packet.`, original_path: filePath }, 404);
-          }
-
           let contentHtml = "";
 
-          if (type === "evidence" || type === "verifier") {
-            const jsonContent = JSON.parse(fs.readFileSync(resolvedPath, "utf-8"));
-            contentHtml = `<pre style="white-space:pre-wrap;word-wrap:break-word;font-family:monospace;font-size:13px;line-height:1.6;">${escapeHtml(JSON.stringify(jsonContent, null, 2))}</pre>`;
+          if (fs.existsSync(resolvedPath)) {
+            // Serve from disk (fast path)
+            if (type === "evidence" || type === "verifier") {
+              const jsonContent = JSON.parse(fs.readFileSync(resolvedPath, "utf-8"));
+              contentHtml = `<pre style="white-space:pre-wrap;word-wrap:break-word;font-family:monospace;font-size:13px;line-height:1.6;">${escapeHtml(JSON.stringify(jsonContent, null, 2))}</pre>`;
+            } else {
+              const result = await mammoth.convertToHtml({ path: resolvedPath });
+              contentHtml = result.value;
+            }
           } else {
-            const result = await mammoth.convertToHtml({ path: resolvedPath });
-            contentHtml = result.value;
+            // Serve from DB blob (survives Railway redeploys)
+            const blobCol = type === "resume" ? "resume_docx" : type === "cover" ? "cover_docx" : type === "evidence" ? "evidence_map_json" : "verifier_json";
+            const blobRow = await query(`SELECT ${blobCol} FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1`, [jobId]);
+            const blob = blobRow.rows[0]?.[blobCol];
+            if (!blob) {
+              return c.json({ error: `File not found. Try regenerating the packet.` }, 404);
+            }
+            if (type === "evidence" || type === "verifier") {
+              const jsonContent = typeof blob === "string" ? JSON.parse(blob) : blob;
+              contentHtml = `<pre style="white-space:pre-wrap;word-wrap:break-word;font-family:monospace;font-size:13px;line-height:1.6;">${escapeHtml(JSON.stringify(jsonContent, null, 2))}</pre>`;
+            } else {
+              const buf = Buffer.isBuffer(blob) ? blob : Buffer.from(blob);
+              const result = await mammoth.convertToHtml({ buffer: buf });
+              contentHtml = result.value;
+            }
           }
 
           const html = `<!DOCTYPE html>
@@ -408,13 +422,21 @@ export function getDashboardRoutes() {
             }
           }
 
-          if (!fs.existsSync(resolvedPath)) {
-            logger?.warn(`📥 [dashboard] File not found: ${resolvedPath} (original: ${filePath})`);
-            return c.json({ error: "File not found on disk. Try regenerating the packet." }, 404);
+          let fileBuffer: Buffer;
+          if (fs.existsSync(resolvedPath)) {
+            fileBuffer = fs.readFileSync(resolvedPath);
+          } else {
+            // Serve from DB blob (survives Railway redeploys)
+            const blobCol = type === "resume" ? "resume_docx" : type === "cover" ? "cover_docx" : type === "evidence" ? "evidence_map_json" : "verifier_json";
+            const blobRow = await query(`SELECT ${blobCol} FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1`, [jobId]);
+            const blob = blobRow.rows[0]?.[blobCol];
+            if (!blob) {
+              return c.json({ error: "File not found. Try regenerating the packet." }, 404);
+            }
+            fileBuffer = Buffer.isBuffer(blob) ? blob : Buffer.from(typeof blob === "string" ? blob : JSON.stringify(blob));
           }
 
-          const fileBuffer = fs.readFileSync(resolvedPath);
-          return new Response(fileBuffer, {
+          return new Response(new Uint8Array(fileBuffer), {
             headers: {
               "Content-Type": contentType,
               "Content-Disposition": `attachment; filename="${filename}"`,
@@ -623,10 +645,12 @@ export function getDashboardRoutes() {
         try {
           if (!dbReady) { await initDatabase(); dbReady = true; }
 
-          // Find artifacts where the resume file doesn't exist on disk
-          const allArtifacts = await query(`SELECT id, job_id, resume_docx_path FROM artifacts`);
+          // Find artifacts where the resume file doesn't exist on disk AND has no DB blob
+          const allArtifacts = await query(`SELECT id, job_id, resume_docx_path, resume_docx IS NOT NULL as has_blob FROM artifacts`);
           const staleIds: number[] = [];
           for (const row of allArtifacts.rows) {
+            // If we have a DB blob, the artifact is NOT stale (survives deploys)
+            if (row.has_blob) continue;
             const filePath = row.resume_docx_path;
             if (!filePath) { staleIds.push(row.id); continue; }
             const resolved = filePath.startsWith("/") ? filePath : workspacePath(filePath);

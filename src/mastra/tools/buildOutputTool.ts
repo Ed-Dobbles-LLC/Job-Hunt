@@ -181,9 +181,12 @@ export const buildOutputTool = createTool({
     // Delete any existing artifact for this job before inserting (avoid duplicates)
     await query(`DELETE FROM artifacts WHERE job_id = $1`, [actualJobId]);
 
+    const evidenceJson = JSON.stringify(context.evidenceMap, null, 2);
+    const verifierJson = JSON.stringify(context.verifierResult, null, 2);
+
     await query(
-      `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass, resume_docx, cover_docx, evidence_map_json, verifier_json)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         actualJobId,
         toRelative(resumeDocxPath),
@@ -193,9 +196,13 @@ export const buildOutputTool = createTool({
         "v2",
         "gpt-4o",
         truthPass,
+        resumeBuffer,
+        coverBuffer,
+        evidenceJson,
+        verifierJson,
       ],
     );
-    logger?.info(`💾 [buildOutput] Artifact record saved to DB for job_id=${actualJobId}`);
+    logger?.info(`💾 [buildOutput] Artifact record + blobs saved to DB for job_id=${actualJobId}`);
 
     for (const evidence of context.evidenceMap) {
       try {
