@@ -90,7 +90,7 @@ export function getDashboardRoutes() {
         try {
           const url = new URL(c.req.url);
           const page = parseInt(url.searchParams.get("page") || "1");
-          const limit = parseInt(url.searchParams.get("limit") || "50");
+          const limit = parseInt(url.searchParams.get("limit") || "500");
           const offset = (page - 1) * limit;
 
           const result = await query(`
