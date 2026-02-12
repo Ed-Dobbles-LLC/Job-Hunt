@@ -4,10 +4,16 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { query } from "./db";
 
-const openai = createOpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+/** Lazy OpenAI client — reads API key at call time, not import time */
+let _openai: ReturnType<typeof createOpenAI> | null = null;
+function getOpenAI() {
+  if (!_openai) {
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error("OpenAI API key not configured. Set OPENAI_API_KEY env var.");
+    _openai = createOpenAI({ apiKey });
+  }
+  return _openai;
+}
 
 const RequirementItemSchema = z.object({
   text: z.string().describe("The requirement or keyword text"),
@@ -234,7 +240,7 @@ export const extractJDRequirementsTool = createTool({
     const modelId = "gpt-4o";
 
     const { object: requirements } = await generateObject({
-      model: openai(modelId),
+      model: getOpenAI()(modelId),
       schema: JDRequirementsSchema,
       prompt: `${JD_EXTRACTION_PROMPT}\n\n## JOB DESCRIPTION TO ANALYZE\nCompany: ${company}\nTitle: ${title}\n\n${jdText}`,
       temperature: 0.1,

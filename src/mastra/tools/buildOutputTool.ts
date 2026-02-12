@@ -18,8 +18,13 @@ function sanitizeName(name: string): string {
 }
 
 function loadInventory(): Record<string, any> {
-  const inventoryPath = workspacePath("experience_inventory.json");
-  return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+  try {
+    const inventoryPath = workspacePath("experience_inventory.json");
+    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+  } catch (err: any) {
+    console.error(`[buildOutput] Failed to load inventory: ${err.message}`);
+    return { profile: { name: "Candidate" }, experience: [], education: [], skills: {}, certifications: [] };
+  }
 }
 
 export const buildOutputTool = createTool({

@@ -29,14 +29,81 @@ import type { JDRequirements } from "./extractJDRequirementsTool";
 const DEFAULT_MAX_ATTEMPTS = 3;
 
 function loadInventory(): Record<string, any> {
-  const inventoryPath = workspacePath("experience_inventory.json");
-  return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+  try {
+    const inventoryPath = workspacePath("experience_inventory.json");
+    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+  } catch (err: any) {
+    throw new Error(`Cannot load experience_inventory.json: ${err.message}. Run the Profile Builder first.`);
+  }
 }
 
-const openai = createOpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+/** Lazy OpenAI client — reads API key at call time, not import time */
+let _openai: ReturnType<typeof createOpenAI> | null = null;
+function getOpenAI() {
+  if (!_openai) {
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OpenAI API key not configured. Set OPENAI_API_KEY or AI_INTEGRATIONS_OPENAI_API_KEY.");
+    }
+    _openai = createOpenAI({ apiKey });
+  }
+  return _openai;
+}
+
+/** Wrap generateObject with timeout and actionable error messages */
+async function safeGenerateObject<T extends z.ZodTypeAny>(opts: {
+  schema: T;
+  system: string;
+  prompt: string;
+  temperature: number;
+  label: string;
+  logger?: any;
+  timeoutMs?: number;
+}): Promise<z.infer<T>> {
+  const { schema, system, prompt, temperature, label, logger, timeoutMs = 120_000 } = opts;
+  const startMs = Date.now();
+  logger?.info(`🤖 [${label}] Calling gpt-4o (timeout=${timeoutMs}ms, prompt=${prompt.length} chars)`);
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    const { object } = await generateObject({
+      model: getOpenAI()("gpt-4o"),
+      schema,
+      system,
+      prompt,
+      temperature,
+      abortSignal: controller.signal,
+    });
+
+    clearTimeout(timer);
+    logger?.info(`✅ [${label}] LLM responded in ${Date.now() - startMs}ms`);
+    return object;
+  } catch (err: any) {
+    const elapsedMs = Date.now() - startMs;
+    const msg = err.message || String(err);
+    if (err.name === "AbortError" || msg.includes("abort")) {
+      throw new Error(`[${label}] LLM timed out after ${elapsedMs}ms. Prompt may be too large (${prompt.length} chars).`);
+    }
+    if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("API key")) {
+      throw new Error(`[${label}] OpenAI API key is invalid. Check OPENAI_API_KEY env var.`);
+    }
+    throw new Error(`[${label}] LLM call failed after ${elapsedMs}ms: ${msg.substring(0, 500)}`);
+  }
+}
+
+/** Write debug artifacts when DEBUG_GENERATION env var is set */
+function writeDebugArtifact(label: string, data: any, jobId: number) {
+  if (!process.env.DEBUG_GENERATION) return;
+  try {
+    const debugDir = workspacePath(`output/debug/${jobId}`);
+    fs.mkdirSync(debugDir, { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const filePath = `${debugDir}/${ts}_${label}.json`;
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch { /* debug logging should never break the pipeline */ }
+}
 
 export function buildCorrectionPrompt(
   docType: "resume" | "cover_letter",
@@ -227,26 +294,32 @@ export const generateVerifiedPacketTool = createTool({
       try {
         if (attempt === 1) {
           logger?.info(`📄 [generateVerifiedPacket] Attempt ${attempt}: Generating initial resume...`);
-          const { object: resume } = await generateObject({
-            model: openai("gpt-4o"),
+          writeDebugArtifact(`attempt${attempt}_resume_prompt`, { system: resumeSystemPrompt, user: resumeUserPrompt }, context.job_id);
+
+          currentResume = await safeGenerateObject({
             schema: TailoredResumeSchema,
             system: resumeSystemPrompt,
             prompt: resumeUserPrompt,
             temperature: 0.3,
+            label: `resume-attempt${attempt}`,
+            logger,
           });
-          currentResume = resume;
-          logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Resume generated (${resume.experience.length} roles, ${resume.experience.reduce((s, e) => s + e.bullets.length, 0)} bullets)`);
+          logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Resume generated (${currentResume.experience.length} roles, ${currentResume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0)} bullets)`);
+          writeDebugArtifact(`attempt${attempt}_resume_output`, currentResume, context.job_id);
 
           logger?.info(`📝 [generateVerifiedPacket] Attempt ${attempt}: Generating initial cover letter...`);
-          const { object: coverLetter } = await generateObject({
-            model: openai("gpt-4o"),
+          writeDebugArtifact(`attempt${attempt}_coverLetter_prompt`, { system: clSystemPrompt, user: clUserPrompt }, context.job_id);
+
+          currentCoverLetter = await safeGenerateObject({
             schema: TailoredCoverLetterSchema,
             system: clSystemPrompt,
             prompt: clUserPrompt,
             temperature: 0.4,
+            label: `coverLetter-attempt${attempt}`,
+            logger,
           });
-          currentCoverLetter = coverLetter;
-          logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Cover letter generated (${coverLetter.word_count} words, ${coverLetter.value_claims.length} claims)`);
+          logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Cover letter generated (${currentCoverLetter.word_count} words, ${currentCoverLetter.value_claims.length} claims)`);
+          writeDebugArtifact(`attempt${attempt}_coverLetter_output`, currentCoverLetter, context.job_id);
         } else {
           const previousViolations = currentReport!.violations;
           const previousFixes = currentReport!.line_item_fixes;
@@ -265,17 +338,18 @@ export const generateVerifiedPacketTool = createTool({
               attempt,
             );
             logger?.info(`📄 [generateVerifiedPacket] Attempt ${attempt}: Re-generating resume with ${resumeViolations.filter((v) => v.severity === "critical").length} critical violations to fix`);
-            logger?.info(`📄 [generateVerifiedPacket] Correction prompt length: ${correctionPrompt.length} chars`);
+            writeDebugArtifact(`attempt${attempt}_resume_correction`, { violations: resumeViolations, fixes: resumeFixes }, context.job_id);
 
-            const { object: correctedResume } = await generateObject({
-              model: openai("gpt-4o"),
+            currentResume = await safeGenerateObject({
               schema: TailoredResumeSchema,
               system: resumeSystemPrompt,
               prompt: `${resumeUserPrompt}\n\n${correctionPrompt}`,
               temperature: 0.2,
+              label: `resume-correction-attempt${attempt}`,
+              logger,
             });
-            currentResume = correctedResume;
             logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Corrected resume generated`);
+            writeDebugArtifact(`attempt${attempt}_resume_corrected`, currentResume, context.job_id);
           } else {
             logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Resume had no violations, keeping previous version`);
           }
@@ -289,17 +363,18 @@ export const generateVerifiedPacketTool = createTool({
               attempt,
             );
             logger?.info(`📝 [generateVerifiedPacket] Attempt ${attempt}: Re-generating cover letter with ${clViolations.filter((v) => v.severity === "critical").length} critical violations to fix`);
-            logger?.info(`📝 [generateVerifiedPacket] Correction prompt length: ${correctionPrompt.length} chars`);
+            writeDebugArtifact(`attempt${attempt}_coverLetter_correction`, { violations: clViolations, fixes: clFixes }, context.job_id);
 
-            const { object: correctedCL } = await generateObject({
-              model: openai("gpt-4o"),
+            currentCoverLetter = await safeGenerateObject({
               schema: TailoredCoverLetterSchema,
               system: clSystemPrompt,
               prompt: `${clUserPrompt}\n\n${correctionPrompt}`,
               temperature: 0.2,
+              label: `coverLetter-correction-attempt${attempt}`,
+              logger,
             });
-            currentCoverLetter = correctedCL;
             logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Corrected cover letter generated`);
+            writeDebugArtifact(`attempt${attempt}_coverLetter_corrected`, currentCoverLetter, context.job_id);
           } else {
             logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Cover letter had no violations, keeping previous version`);
           }
@@ -312,6 +387,7 @@ export const generateVerifiedPacketTool = createTool({
           allowlist,
           inventory,
         );
+        writeDebugArtifact(`attempt${attempt}_verifier_report`, currentReport, context.job_id);
 
         const criticalCount = currentReport.stats.critical_violations;
         const warningCount = currentReport.stats.warnings;
@@ -369,7 +445,7 @@ export const generateVerifiedPacketTool = createTool({
           timestamp: new Date().toISOString(),
         });
 
-        if (attempt >= maxAttempts) {
+        if (attempt >= maxAttempts && !bestResume) {
           throw new Error(
             `All ${maxAttempts} attempts failed. Last error: ${err.message}`,
           );

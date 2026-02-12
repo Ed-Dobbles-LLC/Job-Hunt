@@ -438,12 +438,24 @@ export function getDashboardRoutes() {
           if (!dbReady) { await initDatabase(); dbReady = true; }
 
           // Preflight: check OpenAI API key
-          if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
+          const hasApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+          if (!hasApiKey) {
             return c.json({
-              error: "OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY in Railway environment variables (Settings > Variables).",
+              error: "OpenAI API key not configured. Set OPENAI_API_KEY in Railway environment variables (Settings > Variables).",
               phase: "preflight",
             }, 400);
           }
+
+          // Preflight: check inventory file exists
+          try {
+            const invPath = require("./tools/paths").workspacePath("experience_inventory.json");
+            if (!require("fs").existsSync(invPath)) {
+              return c.json({
+                error: "Experience inventory not found. Go to Profile Builder to upload and finalize your resume first.",
+                phase: "preflight",
+              }, 400);
+            }
+          } catch { /* path check is best-effort */ }
 
           // Load job
           const jobResult = await query(
@@ -693,8 +705,8 @@ export function getDashboardRoutes() {
         try {
           if (!dbReady) { await initDatabase(); dbReady = true; }
 
-          if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
-            return c.json({ error: "OpenAI API key not configured.", phase: "preflight" }, 400);
+          if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && !process.env.OPENAI_API_KEY) {
+            return c.json({ error: "OpenAI API key not configured. Set OPENAI_API_KEY in Railway variables.", phase: "preflight" }, 400);
           }
 
           const url = new URL(c.req.url);

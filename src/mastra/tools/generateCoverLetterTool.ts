@@ -15,14 +15,24 @@ import {
 import type { JDRequirements } from "./extractJDRequirementsTool";
 
 function loadInventory(): Record<string, any> {
-  const inventoryPath = workspacePath("experience_inventory.json");
-  return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+  try {
+    const inventoryPath = workspacePath("experience_inventory.json");
+    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
+  } catch (err: any) {
+    throw new Error(`Cannot load experience_inventory.json: ${err.message}. Run the Profile Builder first.`);
+  }
 }
 
-const openai = createOpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+/** Lazy OpenAI client — reads API key at call time, not import time */
+let _openai: ReturnType<typeof createOpenAI> | null = null;
+function getOpenAI() {
+  if (!_openai) {
+    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error("OpenAI API key not configured. Set OPENAI_API_KEY env var.");
+    _openai = createOpenAI({ apiKey });
+  }
+  return _openai;
+}
 
 export const generateCoverLetterTool = createTool({
   id: "generate-cover-letter",
@@ -107,7 +117,7 @@ export const generateCoverLetterTool = createTool({
     logger?.info(`📝 [generateCoverLetter] User prompt length: ${userPrompt.length} chars`);
 
     const { object: coverLetter } = await generateObject({
-      model: openai("gpt-4o"),
+      model: getOpenAI()("gpt-4o"),
       schema: TailoredCoverLetterSchema,
       system: systemPrompt,
       prompt: userPrompt,
