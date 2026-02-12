@@ -641,7 +641,7 @@ export function getDashboardRoutes() {
         }
       },
     },
-    /* ── Re-score unscored jobs ─────────────────────────────── */
+    /* ── Re-score jobs ────────────────────────────────────── */
     {
       path: "/api/dashboard/rescore",
       method: "POST" as const,
@@ -650,26 +650,34 @@ export function getDashboardRoutes() {
         try {
           if (!dbReady) { await initDatabase(); dbReady = true; }
 
-          const unscoredResult = await query(
-            `SELECT j.job_id FROM jobs j LEFT JOIN scores s ON j.job_id = s.job_id WHERE s.job_id IS NULL`
-          );
-          const unscoredIds = unscoredResult.rows.map((r: any) => Number(r.job_id));
+          const url = new URL(c.req.url);
+          const all = url.searchParams.get("all") === "true";
 
-          if (unscoredIds.length === 0) {
-            return c.json({ success: true, message: "All jobs already scored", unscored: 0 });
+          let jobIds: number[];
+          if (all) {
+            const allResult = await query(`SELECT job_id FROM jobs`);
+            jobIds = allResult.rows.map((r: any) => Number(r.job_id));
+          } else {
+            const unscoredResult = await query(
+              `SELECT j.job_id FROM jobs j LEFT JOIN scores s ON j.job_id = s.job_id WHERE s.job_id IS NULL`
+            );
+            jobIds = unscoredResult.rows.map((r: any) => Number(r.job_id));
           }
 
-          logger?.info(`📊 [rescore] Scoring ${unscoredIds.length} unscored jobs in background...`);
+          if (jobIds.length === 0) {
+            return c.json({ success: true, message: "No jobs to score", count: 0 });
+          }
 
-          // Fire-and-forget
+          logger?.info(`📊 [rescore] Scoring ${jobIds.length} jobs (all=${all}) in background...`);
+
           scoreJobsTool.execute!({
-            context: { jobIds: unscoredIds, topN: unscoredIds.length },
+            context: { jobIds, topN: jobIds.length },
             mastra,
           } as any)
             .then((result: any) => logger?.info(`✅ [rescore] Done: ${result.totalScored} scored`))
             .catch((err: any) => logger?.error(`⚠️ [rescore] Failed: ${err.message}`));
 
-          return c.json({ success: true, message: `Scoring ${unscoredIds.length} unscored jobs in background`, unscored: unscoredIds.length });
+          return c.json({ success: true, message: `Scoring ${jobIds.length} jobs in background`, count: jobIds.length });
         } catch (err: any) {
           logger?.error(`❌ [rescore] Error: ${err.message}`);
           return c.json({ error: err.message }, 500);

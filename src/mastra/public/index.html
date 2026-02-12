@@ -290,6 +290,77 @@
       letter-spacing: -0.5px;
     }
 
+    /* ── Preferences Panel ────────────────────────────────── */
+    .prefs-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 22px;
+      margin-bottom: 20px;
+    }
+    .prefs-panel .prefs-header {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+    }
+    .prefs-panel .prefs-header h3 { font-size: 14px; font-weight: 700; color: var(--text-dim); }
+    .prefs-panel .prefs-header .toggle { font-size: 12px; color: var(--text-muted); }
+    .prefs-body { display: none; margin-top: 16px; }
+    .prefs-body.open { display: block; }
+    .prefs-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+    .pref-group { flex: 1; min-width: 140px; }
+    .pref-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .pref-group select {
+      width: 100%; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px; cursor: pointer;
+    }
+    .pref-group select:focus { outline: none; border-color: var(--accent); }
+    .pref-group select option { background: var(--surface2); }
+
+    /* Metro tags */
+    .metro-input-wrap {
+      position: relative; flex: 2; min-width: 280px;
+    }
+    .metro-input-wrap label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .metro-tags {
+      display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 10px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px; min-height: 38px; align-items: center;
+      cursor: text;
+    }
+    .metro-tags:focus-within { border-color: var(--accent); }
+    .metro-tag {
+      display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px;
+      background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 6px;
+      font-size: 12px; font-weight: 600; color: var(--accent);
+    }
+    .metro-tag .remove { cursor: pointer; font-size: 14px; line-height: 1; opacity: 0.7; }
+    .metro-tag .remove:hover { opacity: 1; }
+    .metro-input {
+      border: none; background: transparent; color: var(--text); font-size: 13px;
+      outline: none; flex: 1; min-width: 120px; padding: 2px 0;
+    }
+    .metro-input::placeholder { color: var(--text-muted); }
+    .metro-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      max-height: 200px; overflow-y: auto; display: none; margin-top: 4px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .metro-dropdown.open { display: block; }
+    .metro-option {
+      padding: 8px 14px; font-size: 13px; cursor: pointer; color: var(--text);
+    }
+    .metro-option:hover, .metro-option.highlighted { background: var(--surface2); }
+    .metro-option .state { color: var(--text-muted); font-size: 11px; margin-left: 6px; }
+
+    .prefs-actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+    .prefs-actions .btn-sm {
+      padding: 7px 16px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--border); transition: all 0.15s;
+    }
+    .prefs-actions .btn-save { background: var(--accent); border-color: var(--accent); color: white; }
+    .prefs-actions .btn-save:hover { background: var(--accent-hover); }
+    .prefs-actions .saved-msg { font-size: 12px; color: var(--green); display: none; }
+
     /* ── Tabs ─────────────────────────────────────────────── */
     .tabs {
       display: flex;
@@ -915,6 +986,56 @@
 
         <!-- Stats Cards -->
         <div class="stats-grid" id="statsGrid"></div>
+
+        <!-- Location & Work Preferences -->
+        <div class="prefs-panel">
+          <div class="prefs-header" onclick="togglePrefs()">
+            <h3>&#x1F4CD; Location & Work Style Preferences</h3>
+            <span class="toggle" id="prefsToggle">&#x25BC; Show</span>
+          </div>
+          <div class="prefs-body" id="prefsBody">
+            <div class="prefs-row">
+              <div class="metro-input-wrap">
+                <label>Preferred Metro Areas</label>
+                <div class="metro-tags" onclick="document.getElementById('metroInput').focus()">
+                  <span id="metroTagsContainer"></span>
+                  <input type="text" class="metro-input" id="metroInput" placeholder="Type a city..." autocomplete="off">
+                </div>
+                <div class="metro-dropdown" id="metroDropdown"></div>
+              </div>
+            </div>
+            <div class="prefs-row">
+              <div class="pref-group">
+                <label>Remote</label>
+                <select id="prefRemote">
+                  <option value="prefer">Yes, prefer</option>
+                  <option value="will-do" selected>Yes, will do</option>
+                  <option value="no">No, will not do</option>
+                </select>
+              </div>
+              <div class="pref-group">
+                <label>Hybrid</label>
+                <select id="prefHybrid">
+                  <option value="prefer">Yes, prefer</option>
+                  <option value="will-do" selected>Yes, will do</option>
+                  <option value="no">No, will not do</option>
+                </select>
+              </div>
+              <div class="pref-group">
+                <label>In-Office</label>
+                <select id="prefOnsite">
+                  <option value="prefer">Yes, prefer</option>
+                  <option value="will-do" selected>Yes, will do</option>
+                  <option value="no">No, will not do</option>
+                </select>
+              </div>
+            </div>
+            <div class="prefs-actions">
+              <button class="btn-sm btn-save" onclick="savePrefs()">Save & Re-Score</button>
+              <span class="saved-msg" id="prefsSaved">Saved! Re-scoring...</span>
+            </div>
+          </div>
+        </div>
 
         <!-- Tabs -->
         <div class="tabs">
@@ -1679,6 +1800,139 @@
         btn.innerHTML = '&#x26A1; Run Workflow';
       }
     }
+
+    // ── Metro Autocomplete & Preferences ──────────────────
+    const US_METROS = [
+      "Atlanta, GA","Austin, TX","Baltimore, MD","Birmingham, AL","Boise, ID","Boston, MA",
+      "Buffalo, NY","Charlotte, NC","Chicago, IL","Cincinnati, OH","Cleveland, OH",
+      "Columbus, OH","Dallas, TX","Denver, CO","Des Moines, IA","Detroit, MI",
+      "El Paso, TX","Fort Worth, TX","Fresno, CA","Grand Rapids, MI","Greensboro, NC",
+      "Hartford, CT","Honolulu, HI","Houston, TX","Indianapolis, IN","Jacksonville, FL",
+      "Kansas City, MO","Las Vegas, NV","Los Angeles, CA","Louisville, KY","Memphis, TN",
+      "Miami, FL","Milwaukee, WI","Minneapolis, MN","Nashville, TN","New Orleans, LA",
+      "New York, NY","Newark, NJ","Norfolk, VA","Oakland, CA","Oklahoma City, OK",
+      "Omaha, NE","Orlando, FL","Philadelphia, PA","Phoenix, AZ","Pittsburgh, PA",
+      "Portland, OR","Providence, RI","Raleigh, NC","Richmond, VA","Sacramento, CA",
+      "Salt Lake City, UT","San Antonio, TX","San Diego, CA","San Francisco, CA",
+      "San Jose, CA","Seattle, WA","St. Louis, MO","Tampa, FL","Tucson, AZ",
+      "Virginia Beach, VA","Washington, DC","Wilmington, DE",
+    ];
+
+    let selectedMetros = [];
+    let highlightIdx = -1;
+
+    function renderMetroTags() {
+      const container = document.getElementById('metroTagsContainer');
+      container.innerHTML = selectedMetros.map((m, i) =>
+        `<span class="metro-tag">${m} <span class="remove" onclick="event.stopPropagation(); removeMetro(${i})">&times;</span></span>`
+      ).join('');
+    }
+
+    function removeMetro(idx) {
+      selectedMetros.splice(idx, 1);
+      renderMetroTags();
+    }
+
+    function addMetro(name) {
+      const clean = name.trim();
+      if (clean && !selectedMetros.includes(clean)) {
+        selectedMetros.push(clean);
+        renderMetroTags();
+      }
+      document.getElementById('metroInput').value = '';
+      closeMetroDropdown();
+    }
+
+    function closeMetroDropdown() {
+      document.getElementById('metroDropdown').classList.remove('open');
+      highlightIdx = -1;
+    }
+
+    document.getElementById('metroInput').addEventListener('input', function() {
+      const q = this.value.toLowerCase().trim();
+      const dropdown = document.getElementById('metroDropdown');
+      if (q.length < 1) { closeMetroDropdown(); return; }
+      const matches = US_METROS.filter(m =>
+        m.toLowerCase().includes(q) && !selectedMetros.includes(m)
+      ).slice(0, 8);
+      if (matches.length === 0) { closeMetroDropdown(); return; }
+      highlightIdx = 0;
+      dropdown.innerHTML = matches.map((m, i) => {
+        const parts = m.split(', ');
+        return `<div class="metro-option ${i === 0 ? 'highlighted' : ''}" onmousedown="addMetro('${m}')">${parts[0]}${parts[1] ? `<span class="state">${parts[1]}</span>` : ''}</div>`;
+      }).join('');
+      dropdown.classList.add('open');
+    });
+
+    document.getElementById('metroInput').addEventListener('keydown', function(e) {
+      const dropdown = document.getElementById('metroDropdown');
+      const opts = dropdown.querySelectorAll('.metro-option');
+      if (e.key === 'ArrowDown') { e.preventDefault(); highlightIdx = Math.min(highlightIdx + 1, opts.length - 1); updateHighlight(opts); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); highlightIdx = Math.max(highlightIdx - 1, 0); updateHighlight(opts); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (opts[highlightIdx]) opts[highlightIdx].onmousedown(); else if (this.value.trim()) addMetro(this.value); }
+      else if (e.key === 'Backspace' && !this.value && selectedMetros.length > 0) { selectedMetros.pop(); renderMetroTags(); }
+      else if (e.key === 'Escape') { closeMetroDropdown(); }
+    });
+
+    document.getElementById('metroInput').addEventListener('blur', function() {
+      setTimeout(closeMetroDropdown, 150);
+    });
+
+    function updateHighlight(opts) {
+      opts.forEach((o, i) => o.classList.toggle('highlighted', i === highlightIdx));
+    }
+
+    function togglePrefs() {
+      const body = document.getElementById('prefsBody');
+      const toggle = document.getElementById('prefsToggle');
+      const isOpen = body.classList.toggle('open');
+      toggle.innerHTML = isOpen ? '&#x25B2; Hide' : '&#x25BC; Show';
+    }
+
+    async function loadPrefs() {
+      try {
+        const res = await fetch('/api/settings/list');
+        const data = await res.json();
+        const prefs = {};
+        for (const s of data.settings) prefs[s.key] = s.value || '';
+
+        // Load metros
+        selectedMetros = prefs.preferred_metros ? prefs.preferred_metros.split(',').map(s => s.trim()).filter(Boolean) : [];
+        renderMetroTags();
+
+        // Load work style dropdowns
+        if (prefs.pref_remote) document.getElementById('prefRemote').value = prefs.pref_remote;
+        if (prefs.pref_hybrid) document.getElementById('prefHybrid').value = prefs.pref_hybrid;
+        if (prefs.pref_onsite) document.getElementById('prefOnsite').value = prefs.pref_onsite;
+      } catch (e) { console.error('Failed to load prefs:', e); }
+    }
+
+    async function savePrefs() {
+      const settings = {
+        preferred_metros: selectedMetros.join(', '),
+        pref_remote: document.getElementById('prefRemote').value,
+        pref_hybrid: document.getElementById('prefHybrid').value,
+        pref_onsite: document.getElementById('prefOnsite').value,
+      };
+      try {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ settings }),
+        });
+        document.getElementById('prefsSaved').style.display = 'inline';
+        setTimeout(() => { document.getElementById('prefsSaved').style.display = 'none'; }, 4000);
+        // Trigger re-score
+        showToast('Preferences saved! Re-scoring all jobs...', 'success');
+        fetch('/api/dashboard/rescore?all=true', { method: 'POST' }).then(() => {
+          let polls = 0;
+          const interval = setInterval(() => { polls++; refreshData(); if (polls >= 12) clearInterval(interval); }, 5000);
+        });
+      } catch (e) { showToast('Failed to save preferences: ' + e.message, 'error'); }
+    }
+
+    // Load prefs on startup
+    loadPrefs();
 
     function refreshData() {
       // Purge stale artifacts from old deployments before refreshing
