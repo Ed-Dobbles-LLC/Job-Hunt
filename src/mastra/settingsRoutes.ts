@@ -19,6 +19,7 @@ async function ensureSettingsTable() {
 const SETTING_DEFS = [
   { key: "openai_api_key", label: "OpenAI API Key", env: "OPENAI_API_KEY", secret: true, group: "AI" },
   { key: "preferred_metros", label: "Preferred Metro Areas (comma-separated)", env: "", secret: false, group: "Job Preferences", placeholder: "Chicago, New York, Dallas, Austin" },
+  { key: "preferred_countries", label: "Accepted Countries (comma-separated)", env: "", secret: false, group: "Job Preferences", placeholder: "United States, Canada" },
   { key: "pref_remote", label: "Remote Work", env: "", secret: false, group: "Job Preferences", placeholder: "prefer, will-do, or no", options: ["prefer", "will-do", "no"] },
   { key: "pref_hybrid", label: "Hybrid Work", env: "", secret: false, group: "Job Preferences", placeholder: "prefer, will-do, or no", options: ["prefer", "will-do", "no"] },
   { key: "pref_onsite", label: "In-Office / On-Site", env: "", secret: false, group: "Job Preferences", placeholder: "prefer, will-do, or no", options: ["prefer", "will-do", "no"] },

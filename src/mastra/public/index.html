@@ -1005,6 +1005,16 @@
               </div>
             </div>
             <div class="prefs-row">
+              <div class="metro-input-wrap">
+                <label>Accepted Countries</label>
+                <div class="metro-tags" onclick="document.getElementById('countryInput').focus()">
+                  <span id="countryTagsContainer"></span>
+                  <input type="text" class="metro-input" id="countryInput" placeholder="Type a country..." autocomplete="off">
+                </div>
+                <div class="metro-dropdown" id="countryDropdown"></div>
+              </div>
+            </div>
+            <div class="prefs-row">
               <div class="pref-group">
                 <label>Remote</label>
                 <select id="prefRemote">
@@ -1336,6 +1346,12 @@
         else if (isOnsite) arrText = 'In-office / On-site';
         const type = acceptable === false ? 'con' : 'neutral';
         reasons.push({ type, text: arrText });
+      }
+
+      // Country mismatch callout (right after work arrangement)
+      if (bd._country_accepted === false && bd._detected_country) {
+        const country = bd._detected_country.charAt(0).toUpperCase() + bd._detected_country.slice(1);
+        reasons.push({ type: 'con', text: `Outside accepted countries (${country})` });
       }
 
       // Pros
@@ -1818,7 +1834,18 @@
       "Virginia Beach, VA","Washington, DC","Wilmington, DE",
     ];
 
+    const COUNTRIES = [
+      "United States","Canada","United Kingdom","Germany","France","Australia",
+      "Netherlands","Ireland","Singapore","India","Japan","Brazil","Mexico",
+      "Switzerland","Sweden","Denmark","Norway","Finland","Belgium","Austria",
+      "Spain","Italy","Portugal","Israel","South Korea","New Zealand",
+      "United Arab Emirates","Saudi Arabia","Poland","Czech Republic",
+      "Argentina","Chile","Colombia","South Africa","Philippines","Thailand",
+      "Malaysia","Indonesia","Vietnam","China","Hong Kong","Taiwan",
+    ];
+
     let selectedMetros = [];
+    let selectedCountries = [];
     let highlightIdx = -1;
 
     function renderMetroTags() {
@@ -1878,6 +1905,51 @@
       setTimeout(closeMetroDropdown, 150);
     });
 
+    // ── Country Autocomplete ──
+    let countryHighlightIdx = -1;
+
+    function renderCountryTags() {
+      const container = document.getElementById('countryTagsContainer');
+      container.innerHTML = selectedCountries.map((c, i) =>
+        `<span class="metro-tag">${c} <span class="remove" onclick="event.stopPropagation(); removeCountry(${i})">&times;</span></span>`
+      ).join('');
+    }
+    function removeCountry(idx) { selectedCountries.splice(idx, 1); renderCountryTags(); }
+    function addCountry(name) {
+      const clean = name.trim();
+      if (clean && !selectedCountries.includes(clean)) { selectedCountries.push(clean); renderCountryTags(); }
+      document.getElementById('countryInput').value = '';
+      document.getElementById('countryDropdown').classList.remove('open');
+      countryHighlightIdx = -1;
+    }
+
+    document.getElementById('countryInput').addEventListener('input', function() {
+      const q = this.value.toLowerCase().trim();
+      const dropdown = document.getElementById('countryDropdown');
+      if (q.length < 1) { dropdown.classList.remove('open'); return; }
+      const matches = COUNTRIES.filter(c => c.toLowerCase().includes(q) && !selectedCountries.includes(c)).slice(0, 8);
+      if (matches.length === 0) { dropdown.classList.remove('open'); return; }
+      countryHighlightIdx = 0;
+      dropdown.innerHTML = matches.map((c, i) =>
+        `<div class="metro-option ${i === 0 ? 'highlighted' : ''}" onmousedown="addCountry('${c}')">${c}</div>`
+      ).join('');
+      dropdown.classList.add('open');
+    });
+
+    document.getElementById('countryInput').addEventListener('keydown', function(e) {
+      const dropdown = document.getElementById('countryDropdown');
+      const opts = dropdown.querySelectorAll('.metro-option');
+      if (e.key === 'ArrowDown') { e.preventDefault(); countryHighlightIdx = Math.min(countryHighlightIdx + 1, opts.length - 1); opts.forEach((o, i) => o.classList.toggle('highlighted', i === countryHighlightIdx)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); countryHighlightIdx = Math.max(countryHighlightIdx - 1, 0); opts.forEach((o, i) => o.classList.toggle('highlighted', i === countryHighlightIdx)); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (opts[countryHighlightIdx]) opts[countryHighlightIdx].onmousedown(); else if (this.value.trim()) addCountry(this.value); }
+      else if (e.key === 'Backspace' && !this.value && selectedCountries.length > 0) { selectedCountries.pop(); renderCountryTags(); }
+      else if (e.key === 'Escape') { dropdown.classList.remove('open'); }
+    });
+
+    document.getElementById('countryInput').addEventListener('blur', function() {
+      setTimeout(() => document.getElementById('countryDropdown').classList.remove('open'), 150);
+    });
+
     function updateHighlight(opts) {
       opts.forEach((o, i) => o.classList.toggle('highlighted', i === highlightIdx));
     }
@@ -1900,6 +1972,10 @@
         selectedMetros = prefs.preferred_metros ? prefs.preferred_metros.split(',').map(s => s.trim()).filter(Boolean) : [];
         renderMetroTags();
 
+        // Load countries
+        selectedCountries = prefs.preferred_countries ? prefs.preferred_countries.split(',').map(s => s.trim()).filter(Boolean) : [];
+        renderCountryTags();
+
         // Load work style dropdowns
         if (prefs.pref_remote) document.getElementById('prefRemote').value = prefs.pref_remote;
         if (prefs.pref_hybrid) document.getElementById('prefHybrid').value = prefs.pref_hybrid;
@@ -1910,6 +1986,7 @@
     async function savePrefs() {
       const settings = {
         preferred_metros: selectedMetros.join(', '),
+        preferred_countries: selectedCountries.join(', '),
         pref_remote: document.getElementById('prefRemote').value,
         pref_hybrid: document.getElementById('prefHybrid').value,
         pref_onsite: document.getElementById('prefOnsite').value,

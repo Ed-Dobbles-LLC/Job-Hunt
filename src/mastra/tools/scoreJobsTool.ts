@@ -252,7 +252,7 @@ export function scoreSingleJob(
   job: any,
   inventory: any,
   profile?: ScoringProfile,
-  locationPrefs?: { metros: string[]; remote: string },
+  locationPrefs?: { metros: string[]; prefRemote: string; prefHybrid: string; prefOnsite: string; countries: string[] },
 ): { total: number; breakdown: Record<string, any>; mode: string; report: ScoreReport } {
   const p = profile || getActiveProfile();
   const w = p.weights;
@@ -417,6 +417,76 @@ export function scoreSingleJob(
   breakdown._location_metro_hits = metroHits;
   breakdown._arrangement_acceptable = arrangementAcceptable;
 
+  // Country filter
+  const acceptedCountries: string[] = (locationPrefs?.countries || []).map((c: string) => c.toLowerCase().trim());
+  let detectedCountry = "";
+
+  if (acceptedCountries.length > 0) {
+    // US state abbreviations for detection
+    const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"];
+    const COUNTRY_INDICATORS: Record<string, string[]> = {
+      "united states": [...US_STATES.map(s => `, ${s.toLowerCase()}`), "united states", ", usa", ", us"],
+      "united kingdom": [", uk", "united kingdom", "england", "scotland", "wales", "london", "manchester", "birmingham", "leeds", "glasgow", "edinburgh", "bristol", "liverpool", "nottingham", "sheffield", "cardiff"],
+      "canada": ["canada", ", ca", "toronto", "vancouver", "montreal", "ottawa", "calgary"],
+      "germany": ["germany", "deutschland", "berlin", "munich", "frankfurt", "hamburg"],
+      "france": ["france", "paris", "lyon", "marseille"],
+      "australia": ["australia", "sydney", "melbourne", "brisbane", "perth"],
+      "india": ["india", "bangalore", "bengaluru", "mumbai", "delhi", "hyderabad", "pune", "chennai"],
+      "singapore": ["singapore"],
+      "ireland": ["ireland", "dublin"],
+      "netherlands": ["netherlands", "amsterdam", "rotterdam"],
+      "uae": ["uae", "united arab emirates", "dubai", "abu dhabi"],
+      "israel": ["israel", "tel aviv"],
+      "japan": ["japan", "tokyo"],
+      "switzerland": ["switzerland", "zurich", "geneva"],
+      "spain": ["spain", "madrid", "barcelona"],
+      "italy": ["italy", "milan", "rome"],
+      "brazil": ["brazil", "são paulo", "sao paulo"],
+      "mexico": ["mexico", "mexico city"],
+      "south korea": ["south korea", "seoul"],
+      "china": ["china", "beijing", "shanghai", "shenzhen"],
+      "poland": ["poland", "warsaw", "krakow"],
+      "sweden": ["sweden", "stockholm"],
+      "denmark": ["denmark", "copenhagen"],
+      "norway": ["norway", "oslo"],
+      "finland": ["finland", "helsinki"],
+      "belgium": ["belgium", "brussels"],
+      "austria": ["austria", "vienna"],
+      "czech republic": ["czech", "prague"],
+      "portugal": ["portugal", "lisbon"],
+      "romania": ["romania", "bucharest"],
+      "new zealand": ["new zealand", "auckland", "wellington"],
+    };
+
+    const locLower = location.toLowerCase();
+    // Detect country from location field
+    for (const [country, indicators] of Object.entries(COUNTRY_INDICATORS)) {
+      if (indicators.some(ind => locLower.includes(ind))) {
+        detectedCountry = country;
+        break;
+      }
+    }
+
+    // Canada ambiguity: ", ca" also matches California — disambiguate
+    if (detectedCountry === "canada" && /,\s*ca\b/i.test(location) && !locLower.includes("canada")) {
+      // Likely California, not Canada
+      detectedCountry = "united states";
+    }
+
+    // Check if detected country is accepted
+    const countryAccepted = !detectedCountry || acceptedCountries.some(ac =>
+      ac === detectedCountry || detectedCountry.includes(ac) || ac.includes(detectedCountry)
+    );
+
+    if (!countryAccepted) {
+      // Zero out location score for non-accepted country
+      breakdown.location_fit = 0;
+    }
+
+    breakdown._detected_country = detectedCountry;
+    breakdown._country_accepted = countryAccepted;
+  }
+
   categories.location_fit = {
     score: breakdown.location_fit,
     maxPoints: w.location_fit,
@@ -522,10 +592,14 @@ export function scoreSingleJob(
     riskFlags.push(`Not in preferred metro (${prefList})`);
   }
 
-  const REASON_KEYS = ["execution_mode_reason", "spec_inflation_reason"];
+  if (breakdown._country_accepted === false && detectedCountry) {
+    riskFlags.push(`Outside accepted countries (detected: ${detectedCountry})`);
+  }
+
+  const SKIP_KEYS = new Set(["execution_mode_reason", "spec_inflation_reason"]);
   const rawTotal = Object.entries(breakdown).reduce((sum, [key, v]) => {
-    if (REASON_KEYS.includes(key)) return sum;
-    return sum + (v as number);
+    if (key.startsWith("_") || SKIP_KEYS.has(key) || typeof v !== "number") return sum;
+    return sum + v;
   }, 0);
 
   const maxPos = getMaxPositiveScore(w);
@@ -684,11 +758,11 @@ export const scoreJobsTool = createTool({
     const topN = context.topN || 10;
 
     // Load location preferences from DB
-    let locationPrefs: { metros: string[]; prefRemote: string; prefHybrid: string; prefOnsite: string } = {
-      metros: ["chicago"], prefRemote: "will-do", prefHybrid: "will-do", prefOnsite: "will-do",
+    let locationPrefs: { metros: string[]; prefRemote: string; prefHybrid: string; prefOnsite: string; countries: string[] } = {
+      metros: ["chicago"], prefRemote: "will-do", prefHybrid: "will-do", prefOnsite: "will-do", countries: [],
     };
     try {
-      const prefKeys = ["preferred_metros", "pref_remote", "pref_hybrid", "pref_onsite"];
+      const prefKeys = ["preferred_metros", "pref_remote", "pref_hybrid", "pref_onsite", "preferred_countries"];
       const prefResult = await query(
         `SELECT key, value FROM app_settings WHERE key = ANY($1)`,
         [prefKeys],
@@ -697,6 +771,9 @@ export const scoreJobsTool = createTool({
         if (row.key === "preferred_metros" && row.value) {
           locationPrefs.metros = row.value.split(",").map((m: string) => m.trim().toLowerCase()).filter(Boolean);
         }
+        if (row.key === "preferred_countries" && row.value) {
+          locationPrefs.countries = row.value.split(",").map((c: string) => c.trim().toLowerCase()).filter(Boolean);
+        }
         if (row.key === "pref_remote" && row.value) locationPrefs.prefRemote = row.value.trim().toLowerCase();
         if (row.key === "pref_hybrid" && row.value) locationPrefs.prefHybrid = row.value.trim().toLowerCase();
         if (row.key === "pref_onsite" && row.value) locationPrefs.prefOnsite = row.value.trim().toLowerCase();
@@ -704,7 +781,7 @@ export const scoreJobsTool = createTool({
     } catch (e: any) {
       logger?.warn(`⚠️ [scoreJobs] Could not load location prefs: ${e.message}`);
     }
-    logger?.info(`📊 [scoreJobs] Location prefs: metros=${locationPrefs.metros.join(",")}, remote=${locationPrefs.prefRemote}, hybrid=${locationPrefs.prefHybrid}, onsite=${locationPrefs.prefOnsite}`);
+    logger?.info(`📊 [scoreJobs] Location prefs: metros=${locationPrefs.metros.join(",")}, countries=${locationPrefs.countries.join(",")}, remote=${locationPrefs.prefRemote}, hybrid=${locationPrefs.prefHybrid}, onsite=${locationPrefs.prefOnsite}`);
 
     const scoredJobs: any[] = [];
 
