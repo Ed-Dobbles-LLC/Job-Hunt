@@ -167,35 +167,30 @@ export const buildOutputTool = createTool({
     );
     files.push(jobPath);
 
-    const jobLookup = await query(
-      `SELECT job_id FROM jobs WHERE company = $1 AND title = $2 ORDER BY job_id DESC LIMIT 1`,
-      [context.company, context.title],
-    );
-    const actualJobId = jobLookup.rows?.[0]?.job_id || context.job_id;
-    logger?.info(`🔍 [buildOutput] Resolved job_id: ${actualJobId} (input was ${context.job_id})`);
+    const actualJobId = Number(context.job_id);
+    logger?.info(`🔍 [buildOutput] Using job_id: ${actualJobId}`);
 
     // Store relative paths in DB so they work across environments (dev vs Railway)
     const toRelative = (p: string) => path.relative(WORKSPACE_ROOT, p);
 
-    try {
-      await query(
-        `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [
-          actualJobId,
-          toRelative(resumeDocxPath),
-          toRelative(coverDocxPath),
-          toRelative(evidenceMapPath),
-          toRelative(verifierPath),
-          "v2",
-          "gpt-4o",
-          truthPass,
-        ],
-      );
-      logger?.info(`💾 [buildOutput] Artifact record saved to DB (relative paths)`);
-    } catch (err: any) {
-      logger?.error(`⚠️ [buildOutput] Failed to save artifact record: ${err.message}`);
-    }
+    // Delete any existing artifact for this job before inserting (avoid duplicates)
+    await query(`DELETE FROM artifacts WHERE job_id = $1`, [actualJobId]);
+
+    await query(
+      `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        actualJobId,
+        toRelative(resumeDocxPath),
+        toRelative(coverDocxPath),
+        toRelative(evidenceMapPath),
+        toRelative(verifierPath),
+        "v2",
+        "gpt-4o",
+        truthPass,
+      ],
+    );
+    logger?.info(`💾 [buildOutput] Artifact record saved to DB for job_id=${actualJobId}`);
 
     for (const evidence of context.evidenceMap) {
       try {
