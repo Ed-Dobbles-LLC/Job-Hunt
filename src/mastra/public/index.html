@@ -1199,6 +1199,19 @@
       const bd = getBreakdown(j);
       if (!bd) return [{ type: 'neutral', text: 'Not yet scored' }];
 
+      // Work arrangement callout (always first)
+      const arrangement = bd._work_arrangement || j.remote_hybrid || 'Unknown';
+      if (arrangement && arrangement !== 'Unknown') {
+        const isRemote = bd._is_remote;
+        const isHybrid = bd._is_hybrid;
+        const days = bd._days_in_office;
+        let arrText = arrangement;
+        if (isRemote && !isHybrid) arrText = 'Remote position';
+        else if (isHybrid && days) arrText = `Hybrid — ${days} day${days > 1 ? 's' : ''} in office`;
+        else if (isHybrid) arrText = 'Hybrid (days in office not specified)';
+        reasons.push({ type: 'neutral', text: arrText });
+      }
+
       // Pros
       if (bd.role_level_match >= 14) reasons.push({ type: 'pro', text: 'Strong role/level fit' });
       else if (bd.role_level_match >= 10) reasons.push({ type: 'pro', text: 'Good role/level alignment' });
@@ -1210,8 +1223,14 @@
 
       if (bd.ai_strategy_stack >= 5) reasons.push({ type: 'pro', text: 'AI/data strategy alignment' });
       if (bd.transformation_mandate >= 8) reasons.push({ type: 'pro', text: 'Strong transformation mandate' });
-      if (bd.location_fit >= 6) reasons.push({ type: 'pro', text: 'Good location/remote fit' });
-      else if (bd.location_fit !== undefined && bd.location_fit <= 2) reasons.push({ type: 'con', text: 'Location may not work' });
+
+      // Location fit with metro detail
+      if (bd.location_fit >= 6) {
+        const metros = bd._location_metro_hits;
+        reasons.push({ type: 'pro', text: metros && metros.length > 0 ? `In preferred area (${metros.join(', ')})` : 'Good location/remote fit' });
+      } else if (bd.location_fit !== undefined && bd.location_fit <= 2) {
+        reasons.push({ type: 'con', text: 'Not in preferred metro area' });
+      }
 
       if (bd.compensation >= 6) reasons.push({ type: 'pro', text: 'Compensation aligns' });
       if (bd.execution_mode_match !== undefined && bd.execution_mode_match <= 2) reasons.push({ type: 'con', text: bd.execution_mode_reason || 'Heavy engineering/IC focus' });
@@ -1232,7 +1251,7 @@
         });
       }
 
-      return reasons.slice(0, 4); // max 4 reasons
+      return reasons.slice(0, 6); // max 6 reasons
     }
 
     function isRecommended(j) {
@@ -1247,7 +1266,7 @@
       const score = j.total_score ?? 0;
       const scoreCls = score >= 60 ? 'jc-score-high' : score >= 40 ? 'jc-score-mid' : 'jc-score-low';
       const bd = getBreakdown(j);
-      const reasons = showReasons ? getMatchReasons(j) : [];
+      const reasons = getMatchReasons(j);
       const shapeLabels = { A: 'Strategy', B: 'Hybrid', C: 'Analytics', D: 'Eng/IC' };
       const shape = bd && bd._role_shape ? bd._role_shape : null;
 
@@ -1282,7 +1301,7 @@
             ${shape ? `<span class="shape-badge shape-${shape}" style="font-size:11px">${shape} &middot; ${shapeLabels[shape] || ''}</span>` : ''}
             ${(j.has_artifacts === true || j.has_artifacts === 't') ? ((j.truth_pass === true || j.truth_pass === 't') ? '<span style="font-size:12px;color:var(--green)">&#x2705; Packet Ready</span>' : '<span style="font-size:12px;color:var(--yellow)">&#x26A0;&#xFE0F; Needs Review</span>') : ''}
           </div>
-          ${showReasons && reasons.length > 0 ? `<div class="jc-reasons">
+          ${reasons.length > 0 ? `<div class="jc-reasons">
             ${reasons.map(r => `<div class="jc-reason ${r.type}">
               <span class="icon">${r.type === 'pro' ? '&#x2705;' : r.type === 'con' ? '&#x274C;' : '&#x26A0;&#xFE0F;'}</span>
               <span>${esc(r.text)}</span>

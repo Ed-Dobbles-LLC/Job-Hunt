@@ -18,6 +18,8 @@ async function ensureSettingsTable() {
 // Setting definitions: key, label, env var fallback, whether to mask in UI
 const SETTING_DEFS = [
   { key: "openai_api_key", label: "OpenAI API Key", env: "OPENAI_API_KEY", secret: true, group: "AI" },
+  { key: "preferred_metros", label: "Preferred Metro Areas (comma-separated)", env: "", secret: false, group: "Job Preferences", placeholder: "Chicago, New York, Dallas, Austin" },
+  { key: "remote_preference", label: "Remote Work Preference", env: "", secret: false, group: "Job Preferences", placeholder: "yes, no, or hybrid-ok" },
   { key: "apollo_api_key", label: "Apollo API Key", env: "APOLLO_API_KEY", secret: true, group: "Job Sources" },
   { key: "clay_webhook_url", label: "Clay Outbound Webhook URL", env: "CLAY_WEBHOOK_URL", secret: false, group: "Job Sources" },
   { key: "clay_inbound_secret", label: "Clay Inbound Secret", env: "CLAY_INBOUND_SECRET", secret: true, group: "Job Sources" },

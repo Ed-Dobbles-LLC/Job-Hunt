@@ -252,6 +252,7 @@ export function scoreSingleJob(
   job: any,
   inventory: any,
   profile?: ScoringProfile,
+  locationPrefs?: { metros: string[]; remote: string },
 ): { total: number; breakdown: Record<string, any>; mode: string; report: ScoreReport } {
   const p = profile || getActiveProfile();
   const w = p.weights;
@@ -354,16 +355,48 @@ export function scoreSingleJob(
     reason: dominanceAdj !== 0 ? "eng_stack > strat_stack for VP+" : "n/a",
   };
 
-  const preferredLocations = ["chicago", "remote", "hybrid"];
-  const locationHits = preferredLocations.filter(
-    (loc) => location.includes(loc) || remoteHybrid.includes(loc),
+  // Location preferences from DB (passed via locationPrefs param) or fallback
+  const prefMetros: string[] = (locationPrefs?.metros || ["chicago"]).map((m: string) => m.toLowerCase().trim());
+  const remotePref: string = (locationPrefs?.remote || "yes").toLowerCase().trim(); // "yes", "no", "hybrid-ok"
+
+  // Detect work arrangement from JD text and remote_hybrid field
+  const allText = `${jd} ${remoteHybrid} ${location}`;
+  const isRemote = /\bremote\b/.test(allText) && !/\bnot?\s*remote\b/.test(allText) && !/\bno\s*remote\b/.test(allText);
+  const isHybrid = /\bhybrid\b/.test(allText);
+  const isOnsite = /\bon[\s-]?site\b/.test(allText) || /\bin[\s-]?office\b/.test(allText) || /\bin[\s-]?person\b/.test(allText);
+
+  // Detect days in office from JD
+  const daysMatch = jd.match(/(\d)\s*(?:days?)\s*(?:per\s*week|\/\s*week|a\s*week|in[\s-]?office|on[\s-]?site)/i)
+    || jd.match(/(?:in[\s-]?office|on[\s-]?site)\s*(\d)\s*(?:days?)/i);
+  const daysInOffice = daysMatch ? parseInt(daysMatch[1]) : null;
+
+  // Build work arrangement string
+  let workArrangement = "Unknown";
+  if (isRemote && !isHybrid) workArrangement = "Remote";
+  else if (isHybrid) workArrangement = daysInOffice ? `Hybrid (${daysInOffice} days in office)` : "Hybrid";
+  else if (isOnsite) workArrangement = daysInOffice ? `On-site (${daysInOffice} days/week)` : "On-site";
+  else if (remoteHybrid) workArrangement = remoteHybrid;
+
+  // Location matching
+  const metroHits = prefMetros.filter(
+    (metro) => location.includes(metro) || jd.includes(metro),
   );
-  const locationMatch = locationHits.length > 0;
+  const locationMatchesMetro = metroHits.length > 0;
+  const locationMatchesRemote = isRemote && (remotePref === "yes" || remotePref === "hybrid-ok");
+  const locationMatchesHybrid = isHybrid && (remotePref === "yes" || remotePref === "hybrid-ok");
+  const locationMatch = locationMatchesMetro || locationMatchesRemote || locationMatchesHybrid;
+
   breakdown.location_fit = locationMatch ? w.location_fit : Math.round(w.location_fit * 0.375);
+  breakdown._work_arrangement = workArrangement;
+  breakdown._days_in_office = daysInOffice;
+  breakdown._is_remote = isRemote;
+  breakdown._is_hybrid = isHybrid;
+  breakdown._location_metro_hits = metroHits;
+
   categories.location_fit = {
     score: breakdown.location_fit,
     maxPoints: w.location_fit,
-    matchedPhrases: cap(locationHits, 5),
+    matchedPhrases: cap([...metroHits, ...(isRemote ? ["remote"] : []), ...(isHybrid ? ["hybrid"] : [])], 5),
   };
 
   const compText = jd.match(
@@ -458,7 +491,11 @@ export function scoreSingleJob(
   }
 
   if (!locationMatch) {
-    riskFlags.push("No preferred location match (not Chicago/remote/hybrid)");
+    const prefList = prefMetros.join(", ");
+    riskFlags.push(`No preferred location match (not ${prefList}${remotePref === "yes" ? "/remote" : remotePref === "hybrid-ok" ? "/hybrid" : ""})`);
+  }
+  if (isRemote && remotePref === "no") {
+    riskFlags.push("Remote position — you prefer in-office/hybrid");
   }
 
   const REASON_KEYS = ["execution_mode_reason", "spec_inflation_reason"];
@@ -622,6 +659,22 @@ export const scoreJobsTool = createTool({
     const inventory = loadInventory();
     const topN = context.topN || 10;
 
+    // Load location preferences from DB
+    let locationPrefs = { metros: ["chicago"], remote: "yes" };
+    try {
+      const metrosResult = await query("SELECT value FROM app_settings WHERE key = 'preferred_metros'");
+      const remoteResult = await query("SELECT value FROM app_settings WHERE key = 'remote_preference'");
+      if (metrosResult.rows.length > 0 && metrosResult.rows[0].value) {
+        locationPrefs.metros = metrosResult.rows[0].value.split(",").map((m: string) => m.trim().toLowerCase()).filter(Boolean);
+      }
+      if (remoteResult.rows.length > 0 && remoteResult.rows[0].value) {
+        locationPrefs.remote = remoteResult.rows[0].value.trim().toLowerCase();
+      }
+    } catch (e: any) {
+      logger?.warn(`⚠️ [scoreJobs] Could not load location prefs: ${e.message}`);
+    }
+    logger?.info(`📊 [scoreJobs] Location prefs: metros=${locationPrefs.metros.join(",")}, remote=${locationPrefs.remote}`);
+
     const scoredJobs: any[] = [];
 
     for (const jobId of context.jobIds) {
@@ -634,7 +687,7 @@ export const scoreJobsTool = createTool({
           continue;
         }
         const job = result.rows[0];
-        const { total, breakdown } = scoreSingleJob(job, inventory, profile);
+        const { total, breakdown } = scoreSingleJob(job, inventory, profile, locationPrefs);
 
         await query(
           `INSERT INTO scores (job_id, total_score, breakdown_json)
