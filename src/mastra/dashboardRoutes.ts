@@ -465,7 +465,15 @@ export function getDashboardRoutes() {
         logger?.info(`🔄 [generate-packet] Starting for job_id=${jobId}`);
 
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          if (!dbReady) {
+            try {
+              await initDatabase();
+              dbReady = true;
+            } catch (dbErr: any) {
+              logGen({ jobId, company: "?", title: "?", status: "error", message: `Database init failed: ${dbErr.message}`, phase: "db-init" });
+              return c.json({ error: `Database initialization failed: ${dbErr.message}`, phase: "db-init" }, 500);
+            }
+          }
 
           // Preflight: check OpenAI API key
           const hasApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
@@ -645,9 +653,11 @@ export function getDashboardRoutes() {
             cover_letter_words: packetResult.cover_letter?.word_count || 0,
           });
         } catch (err: any) {
-          logger?.error(`❌ [generate-packet] Unhandled error: ${err.message}`);
-          logGen({ jobId, company: "?", title: "?", status: "error", message: err.message, phase: "unknown" });
-          return c.json({ error: err.message, phase: "unknown", stack: err.stack?.split('\n').slice(0, 5) }, 500);
+          const errMsg = err?.message || String(err);
+          const errStack = err?.stack?.split('\n').slice(0, 8) || [];
+          logger?.error(`❌ [generate-packet] Unhandled error: ${errMsg}\n${errStack.join('\n')}`);
+          logGen({ jobId, company: "?", title: "?", status: "error", message: errMsg, phase: "unknown" });
+          return c.json({ error: errMsg, phase: "unknown", stack: errStack }, 500);
         }
       },
     },
