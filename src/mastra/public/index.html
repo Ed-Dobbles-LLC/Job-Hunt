@@ -1764,22 +1764,22 @@
         if (a) {
           html += `<div class="section-title">Application Packet ${a.truth_pass ? '&#x2705; Verified' : '&#x26A0;&#xFE0F; Unverified'}</div>`;
           html += `<div class="download-grid">
-            <a class="download-card ${a.resume_docx_path ? '' : 'disabled'}" href="/api/dashboard/preview/${jobId}/resume" target="_blank">
+            <a class="download-card" href="/api/dashboard/preview/${jobId}/resume" target="_blank">
               <div class="icon">&#x1F4C4;</div>
               <div class="name">Resume</div>
               <div style="font-size:11px;color:var(--text-dim);margin-top:4px">View in browser</div>
             </a>
-            <a class="download-card ${a.cover_docx_path ? '' : 'disabled'}" href="/api/dashboard/preview/${jobId}/cover" target="_blank">
+            <a class="download-card" href="/api/dashboard/preview/${jobId}/cover" target="_blank">
               <div class="icon">&#x1F4DD;</div>
               <div class="name">Cover Letter</div>
               <div style="font-size:11px;color:var(--text-dim);margin-top:4px">View in browser</div>
             </a>
-            <a class="download-card ${a.evidence_map_path ? '' : 'disabled'}" href="/api/dashboard/preview/${jobId}/evidence" target="_blank">
+            <a class="download-card" href="/api/dashboard/preview/${jobId}/evidence" target="_blank">
               <div class="icon">&#x1F4CA;</div>
               <div class="name">Evidence Map</div>
               <div style="font-size:11px;color:var(--text-dim);margin-top:4px">View in browser</div>
             </a>
-            <a class="download-card ${a.verifier_json_path ? '' : 'disabled'}" href="/api/dashboard/preview/${jobId}/verifier" target="_blank">
+            <a class="download-card" href="/api/dashboard/preview/${jobId}/verifier" target="_blank">
               <div class="icon">&#x2705;</div>
               <div class="name">Verifier Report</div>
               <div style="font-size:11px;color:var(--text-dim);margin-top:4px">View in browser</div>

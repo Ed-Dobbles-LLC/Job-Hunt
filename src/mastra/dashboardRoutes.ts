@@ -8,6 +8,7 @@ import { extractJDRequirementsTool } from "./tools/extractJDRequirementsTool";
 import { generateVerifiedPacketTool } from "./tools/generateVerifiedPacketTool";
 import { buildOutputTool } from "./tools/buildOutputTool";
 import { scoreJobsTool } from "./tools/scoreJobsTool";
+import { renderResumeDocx, renderCoverLetterDocx } from "./tools/docxRenderer";
 import {
   normalizeText,
   computeHash,
@@ -144,7 +145,7 @@ export function getDashboardRoutes() {
 
           const score = await query("SELECT * FROM scores WHERE job_id = $1", [jobId]);
           const artifacts = await query(
-            "SELECT * FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1",
+            "SELECT *, resume_docx IS NOT NULL as has_resume_blob, cover_docx IS NOT NULL as has_cover_blob FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1",
             [jobId]
           );
           const contacts = await query(
@@ -272,25 +273,20 @@ export function getDashboardRoutes() {
               return c.json({ error: "Invalid type" }, 400);
           }
 
-          if (!filePath) {
-            return c.json({ error: `No ${type} file available` }, 404);
-          }
-
-          // Resolve path: try relative first (new format), then absolute (old format)
-          let resolvedPath = filePath.startsWith("/") ? filePath : workspacePath(filePath);
-          if (!fs.existsSync(resolvedPath) && !filePath.startsWith("/")) {
-            // Already tried relative → workspacePath, no other fallback
-          } else if (!fs.existsSync(resolvedPath) && filePath.startsWith("/")) {
-            // Old absolute path doesn't exist, try as relative from workspace root
-            const asRelative = workspacePath(filePath.replace(/^\/app\//, "").replace(/^\/home\/user\/Job-Hunt\//, ""));
-            if (fs.existsSync(asRelative)) {
-              resolvedPath = asRelative;
+          // Try disk first, then DB blob
+          let resolvedPath = "";
+          if (filePath) {
+            resolvedPath = filePath.startsWith("/") ? filePath : workspacePath(filePath);
+            if (!fs.existsSync(resolvedPath) && filePath.startsWith("/")) {
+              const asRelative = workspacePath(filePath.replace(/^\/app\//, "").replace(/^\/home\/user\/Job-Hunt\//, ""));
+              if (fs.existsSync(asRelative)) resolvedPath = asRelative;
             }
           }
 
           let contentHtml = "";
+          const diskExists = resolvedPath && fs.existsSync(resolvedPath);
 
-          if (fs.existsSync(resolvedPath)) {
+          if (diskExists) {
             // Serve from disk (fast path)
             if (type === "evidence" || type === "verifier") {
               const jsonContent = JSON.parse(fs.readFileSync(resolvedPath, "utf-8"));
@@ -300,12 +296,12 @@ export function getDashboardRoutes() {
               contentHtml = result.value;
             }
           } else {
-            // Serve from DB blob (survives Railway redeploys)
+            // Serve from DB blob
             const blobCol = type === "resume" ? "resume_docx" : type === "cover" ? "cover_docx" : type === "evidence" ? "evidence_map_json" : "verifier_json";
             const blobRow = await query(`SELECT ${blobCol} FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1`, [jobId]);
             const blob = blobRow.rows[0]?.[blobCol];
             if (!blob) {
-              return c.json({ error: `File not found. Try regenerating the packet.` }, 404);
+              return c.json({ error: `No ${type} data available. Try regenerating the packet.` }, 404);
             }
             if (type === "evidence" || type === "verifier") {
               const jsonContent = typeof blob === "string" ? JSON.parse(blob) : blob;
@@ -417,29 +413,26 @@ export function getDashboardRoutes() {
               return c.json({ error: "Invalid type" }, 400);
           }
 
-          if (!filePath) {
-            return c.json({ error: `No ${type} file available` }, 404);
-          }
-
-          // Resolve path: try relative first (new format), then absolute (old format)
-          let resolvedPath = filePath.startsWith("/") ? filePath : workspacePath(filePath);
-          if (!fs.existsSync(resolvedPath) && filePath.startsWith("/")) {
-            const asRelative = workspacePath(filePath.replace(/^\/app\//, "").replace(/^\/home\/user\/Job-Hunt\//, ""));
-            if (fs.existsSync(asRelative)) {
-              resolvedPath = asRelative;
+          // Try disk first, then DB blob
+          let resolvedPath = "";
+          if (filePath) {
+            resolvedPath = filePath.startsWith("/") ? filePath : workspacePath(filePath);
+            if (!fs.existsSync(resolvedPath) && filePath.startsWith("/")) {
+              const asRelative = workspacePath(filePath.replace(/^\/app\//, "").replace(/^\/home\/user\/Job-Hunt\//, ""));
+              if (fs.existsSync(asRelative)) resolvedPath = asRelative;
             }
           }
 
           let fileBuffer: Buffer;
-          if (fs.existsSync(resolvedPath)) {
+          if (resolvedPath && fs.existsSync(resolvedPath)) {
             fileBuffer = fs.readFileSync(resolvedPath);
           } else {
-            // Serve from DB blob (survives Railway redeploys)
+            // Serve from DB blob
             const blobCol = type === "resume" ? "resume_docx" : type === "cover" ? "cover_docx" : type === "evidence" ? "evidence_map_json" : "verifier_json";
             const blobRow = await query(`SELECT ${blobCol} FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1`, [jobId]);
             const blob = blobRow.rows[0]?.[blobCol];
             if (!blob) {
-              return c.json({ error: "File not found. Try regenerating the packet." }, 404);
+              return c.json({ error: `No ${type} data available. Try regenerating the packet.` }, 404);
             }
             fileBuffer = Buffer.isBuffer(blob) ? blob : Buffer.from(typeof blob === "string" ? blob : JSON.stringify(blob));
           }
@@ -595,56 +588,90 @@ export function getDashboardRoutes() {
           }));
           const combinedEvidence = [...resumePointers, ...clPointers];
 
-          // Phase 4: Build output files (DOCX, evidence JSON, verifier JSON)
-          logger?.info(`📁 [generate-packet] Phase 4: Building output files...`);
-          let buildResult: any;
+          // Phase 4: Render DOCX and save to DB (primary) + filesystem (best-effort)
+          logger?.info(`📁 [generate-packet] Phase 4: Rendering DOCX and saving to DB...`);
+          const truthPass = Boolean(packetResult.pass);
+          const evidenceJson = JSON.stringify(combinedEvidence, null, 2);
+          const verifierJson = JSON.stringify(packetResult.final_report, null, 2);
+          let resumeBuffer: Buffer | null = null;
+          let coverBuffer: Buffer | null = null;
+          let diskFiles = 0;
+
+          // Render DOCX from JSON
           try {
-            buildResult = await buildOutputTool.execute!({
+            const inventory = (() => { try { return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8")); } catch { return { profile: { name: "Candidate" } }; } })();
+            const profile = inventory.profile || {};
+            resumeBuffer = await renderResumeDocx(packetResult.resume, profile);
+            coverBuffer = await renderCoverLetterDocx(packetResult.cover_letter, profile);
+            logger?.info(`✅ [generate-packet] DOCX rendered: resume=${resumeBuffer.length}B, cover=${coverBuffer.length}B`);
+          } catch (renderErr: any) {
+            logger?.error(`⚠️ [generate-packet] DOCX render failed: ${renderErr.message}`);
+          }
+
+          // Save to DB (critical path — this is what makes packets visible)
+          try {
+            await query(`DELETE FROM artifacts WHERE job_id = $1`, [jobId]);
+            await query(`DELETE FROM evidence_map WHERE job_id = $1`, [jobId]);
+            await query(
+              `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass, resume_docx, cover_docx, evidence_map_json, verifier_json)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+              [jobId, "", "", "", "", "v2", "gpt-4o", truthPass, resumeBuffer, coverBuffer, evidenceJson, verifierJson],
+            );
+            for (const ev of combinedEvidence) {
+              await query(
+                `INSERT INTO evidence_map (job_id, claim_id, claim_text, evidence_quote, evidence_source_key, confidence)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [jobId, ev.evidence_id || "", ev.claim_text, ev.evidence_quote, ev.evidence_source_key, ev.confidence],
+              ).catch((e: any) => logger?.error(`⚠️ [generate-packet] Evidence insert error: ${e.message}`));
+            }
+            logger?.info(`💾 [generate-packet] Artifacts saved to DB for job_id=${jobId}`);
+          } catch (dbErr: any) {
+            logger?.error(`❌ [generate-packet] DB save failed: ${dbErr.message}`);
+            logGen({ jobId, company: job.company, title: job.title, status: "error", message: `DB save failed: ${dbErr.message}`, phase: "db-save" });
+            return c.json({
+              error: `Resume generated but failed to save to database: ${dbErr.message}`,
+              phase: "db-save",
+              hint: "The resume was generated successfully but couldn't be saved. This is a database error.",
+            }, 500);
+          }
+
+          // Write to filesystem (best-effort, not required)
+          try {
+            const buildResult = await buildOutputTool.execute!({
               context: {
-                job_id: jobId,
-                company: job.company,
-                title: job.title,
-                resume: packetResult.resume,
-                cover_letter: packetResult.cover_letter,
-                evidenceMap: combinedEvidence,
-                verifierResult: packetResult.final_report,
-                scoringBreakdown: job.breakdown_json || {},
-                totalScore: job.total_score || 0,
-                skip_pdf: false,
+                job_id: jobId, company: job.company, title: job.title,
+                resume: packetResult.resume, cover_letter: packetResult.cover_letter,
+                evidenceMap: combinedEvidence, verifierResult: packetResult.final_report,
+                scoringBreakdown: job.breakdown_json || {}, totalScore: job.total_score || 0,
+                skip_pdf: true,
               },
               mastra,
             } as any);
-            logger?.info(`✅ [generate-packet] Phase 4 complete: ${buildResult?.files?.length || 0} files`);
-          } catch (phase4Err: any) {
-            logger?.error(`❌ [generate-packet] Phase 4 failed: ${phase4Err.message}`);
-            logGen({ jobId, company: job.company, title: job.title, status: "error", message: phase4Err.message, phase: "build-output" });
-            return c.json({
-              error: `Resume generated but failed to save files: ${phase4Err.message}`,
-              phase: "build-output",
-              hint: "The resume and cover letter were generated successfully by AI, but saving the DOCX files failed. This may be a server disk or LibreOffice issue.",
-            }, 500);
+            diskFiles = buildResult?.files?.length || 0;
+            logger?.info(`📁 [generate-packet] Disk files: ${diskFiles}`);
+          } catch (diskErr: any) {
+            logger?.warn(`⚠️ [generate-packet] Disk write failed (non-critical): ${diskErr.message}`);
           }
 
           // Update job status
           await query(
             "UPDATE jobs SET status = $1 WHERE job_id = $2",
-            [packetResult.pass ? "generated" : "generated-unverified", jobId],
+            [truthPass ? "generated" : "generated-unverified", jobId],
           );
 
           const resumeExp = packetResult.resume?.experience || [];
-          logger?.info(`✅ [generate-packet] Done! pass=${packetResult.pass}, files=${buildResult?.files?.length || 0}`);
-          logGen({ jobId, company: job.company, title: job.title, status: "success", message: `${resumeExp.length} roles, ${buildResult?.files?.length || 0} files, truth: ${packetResult.pass ? "PASS" : "REVIEW"}`, phase: "done" });
+          logger?.info(`✅ [generate-packet] Done! pass=${truthPass}, diskFiles=${diskFiles}`);
+          logGen({ jobId, company: job.company, title: job.title, status: "success", message: `${resumeExp.length} roles, truth: ${truthPass ? "PASS" : "REVIEW"}, saved to DB`, phase: "done" });
 
           return c.json({
             success: true,
             job_id: jobId,
             company: job.company,
             title: job.title,
-            truth_pass: packetResult.pass,
+            truth_pass: truthPass,
             attempts_used: packetResult.attempts_used,
             evidence_count: combinedEvidence.length,
-            files: buildResult?.files?.length || 0,
-            output_dir: buildResult?.outputDir || "",
+            files: diskFiles,
             resume_summary: packetResult.resume?.professional_summary || "",
             resume_roles: resumeExp.length,
             resume_bullets: resumeExp.reduce((s: number, e: any) => s + (e?.bullets?.length || 0), 0),
@@ -824,7 +851,7 @@ export function getDashboardRoutes() {
                   mastra,
                 } as any);
 
-                // Phase 3: Combine evidence
+                // Phase 3: Combine evidence + render DOCX + save to DB
                 const resumePointers = (packetResult.resume?.evidence_pointers || []).map((p: any) => ({
                   claim_text: p.claim_text, evidence_id: p.source_hash, evidence_quote: p.evidence_quote,
                   evidence_source_key: p.source_hash, confidence: p.confidence,
@@ -833,23 +860,38 @@ export function getDashboardRoutes() {
                   claim_text: p.claim_text, evidence_id: p.source_hash, evidence_quote: p.evidence_quote,
                   evidence_source_key: p.source_hash, confidence: p.confidence,
                 }));
+                const allEvidence = [...resumePointers, ...clPointers];
+                const truthPass = Boolean(packetResult.pass);
 
-                // Phase 4: Build output files
-                await buildOutputTool.execute!({
-                  context: {
-                    job_id: job.job_id, company: fullJob.company, title: fullJob.title,
-                    resume: packetResult.resume, cover_letter: packetResult.cover_letter,
-                    evidenceMap: [...resumePointers, ...clPointers],
-                    verifierResult: packetResult.final_report,
-                    scoringBreakdown: fullJob.breakdown_json || {}, totalScore: fullJob.total_score || 0,
-                    skip_pdf: false,
-                  },
-                  mastra,
-                } as any);
+                // Render DOCX
+                let resumeBuf: Buffer | null = null;
+                let coverBuf: Buffer | null = null;
+                try {
+                  const inv = (() => { try { return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8")); } catch { return { profile: { name: "Candidate" } }; } })();
+                  resumeBuf = await renderResumeDocx(packetResult.resume, inv.profile || {});
+                  coverBuf = await renderCoverLetterDocx(packetResult.cover_letter, inv.profile || {});
+                } catch (e: any) {
+                  logger?.warn(`⚠️ [auto-generate] DOCX render failed: ${e.message}`);
+                }
+
+                // Save to DB
+                await query(`DELETE FROM artifacts WHERE job_id = $1`, [job.job_id]);
+                await query(`DELETE FROM evidence_map WHERE job_id = $1`, [job.job_id]);
+                await query(
+                  `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass, resume_docx, cover_docx, evidence_map_json, verifier_json)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                  [job.job_id, "", "", "", "", "v2", "gpt-4o", truthPass, resumeBuf, coverBuf, JSON.stringify(allEvidence, null, 2), JSON.stringify(packetResult.final_report, null, 2)],
+                );
+                for (const ev of allEvidence) {
+                  await query(
+                    `INSERT INTO evidence_map (job_id, claim_id, claim_text, evidence_quote, evidence_source_key, confidence) VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [job.job_id, ev.evidence_id || "", ev.claim_text, ev.evidence_quote, ev.evidence_source_key, ev.confidence],
+                  ).catch(() => {});
+                }
 
                 // Update status
                 await query("UPDATE jobs SET status = $1 WHERE job_id = $2",
-                  [packetResult.pass ? "generated" : "generated-unverified", job.job_id]);
+                  [truthPass ? "generated" : "generated-unverified", job.job_id]);
 
                 success++;
                 logger?.info(`✅ [auto-generate] ${job.company} — ${job.title}: done (pass=${packetResult.pass})`);
