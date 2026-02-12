@@ -29,6 +29,8 @@ async function ensureProfileTable() {
       current_draft JSONB,
       gaps JSONB DEFAULT '[]'::jsonb,
       qa_history JSONB DEFAULT '[]'::jsonb,
+      questions JSONB DEFAULT '[]'::jsonb,
+      error_message TEXT,
       interview_round INTEGER DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -38,6 +40,16 @@ async function ensureProfileTable() {
   // Add columns if table already exists (idempotent migration)
   await query(`ALTER TABLE profile_sessions ADD COLUMN IF NOT EXISTS target_role TEXT DEFAULT ''`).catch(() => {});
   await query(`ALTER TABLE profile_sessions ADD COLUMN IF NOT EXISTS interview_focus TEXT DEFAULT 'leadership'`).catch(() => {});
+  await query(`ALTER TABLE profile_sessions ADD COLUMN IF NOT EXISTS questions JSONB DEFAULT '[]'::jsonb`).catch(() => {});
+  await query(`ALTER TABLE profile_sessions ADD COLUMN IF NOT EXISTS error_message TEXT`).catch(() => {});
+  // Ensure app_settings table exists for inventory persistence
+  await query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `).catch(() => {});
   dbInitialized = true;
 }
 
@@ -75,7 +87,7 @@ export function getProfileBuilderRoutes() {
       },
     },
 
-    /* ── Upload resume & kick off parsing ───────────────────────── */
+    /* ── Upload resume & kick off parsing (returns immediately) ──── */
     {
       path: "/api/profile/upload",
       method: "POST" as const,
@@ -105,7 +117,7 @@ export function getProfileBuilderRoutes() {
 
           logger?.info(`[profileBuilder] Parsing resume: ${fileName} (${buffer.length} bytes), targetRole="${targetRole}", focus="${interviewFocus}"`);
 
-          // 1. Extract raw text
+          // 1. Extract raw text (fast — no LLM needed)
           const { rawText, format } = await parseResumeBuffer(buffer, fileName);
           if (!rawText || rawText.trim().length < 50) {
             return c.json({ error: "Could not extract meaningful text from the uploaded file. Please try a different format." }, 400);
@@ -113,40 +125,51 @@ export function getProfileBuilderRoutes() {
 
           logger?.info(`[profileBuilder] Extracted ${rawText.length} chars as ${format}`);
 
-          // 2. Structure with LLM
-          logger?.info("[profileBuilder] Structuring resume with LLM...");
-          const { draft, gaps } = await structureResume(rawText, interviewFocus);
-
-          // 3. Generate first round of questions (role-aware)
-          const questions = await generateInterviewQuestions(draft, gaps, [], { targetRole, interviewFocus });
-
-          // 4. Save session to DB
+          // 2. Save session immediately with status "processing"
           await query(
-            `INSERT INTO profile_sessions (session_id, status, raw_resume_text, resume_filename, resume_format, target_role, interview_focus, current_draft, gaps, qa_history, interview_round)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, '[]'::jsonb, 1)`,
-            [
-              sessionId,
-              "interviewing",
-              rawText,
-              fileName,
-              format,
-              targetRole,
-              interviewFocus,
-              JSON.stringify(draft),
-              JSON.stringify(gaps),
-            ],
+            `INSERT INTO profile_sessions (session_id, status, raw_resume_text, resume_filename, resume_format, target_role, interview_focus, current_draft, gaps, qa_history, questions, interview_round)
+             VALUES ($1, 'processing', $2, $3, $4, $5, $6, '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 0)`,
+            [sessionId, rawText, fileName, format, targetRole, interviewFocus],
           );
 
-          logger?.info(`[profileBuilder] Session ${sessionId} created with ${gaps.length} gaps`);
+          logger?.info(`[profileBuilder] Session ${sessionId} created, starting background processing`);
 
-          return c.json({
-            sessionId,
-            status: "interviewing",
-            draft,
-            gaps,
-            questions,
-            interviewRound: 1,
-          });
+          // 3. Return immediately — UI will poll /api/profile/session/:id
+          // 4. Background processing (non-blocking)
+          (async () => {
+            try {
+              // Phase 1: Structure resume with LLM
+              logger?.info(`[profileBuilder] [${sessionId}] Structuring resume...`);
+              await query(
+                "UPDATE profile_sessions SET status = 'structuring', updated_at = NOW() WHERE session_id = $1",
+                [sessionId],
+              );
+              const { draft, gaps } = await structureResume(rawText, interviewFocus);
+
+              // Phase 2: Generate interview questions
+              logger?.info(`[profileBuilder] [${sessionId}] Generating questions...`);
+              await query(
+                "UPDATE profile_sessions SET status = 'generating_questions', current_draft = $1, gaps = $2, updated_at = NOW() WHERE session_id = $3",
+                [JSON.stringify(draft), JSON.stringify(gaps), sessionId],
+              );
+              const questions = await generateInterviewQuestions(draft, gaps, [], { targetRole, interviewFocus });
+
+              // Phase 3: Mark ready for interview
+              await query(
+                `UPDATE profile_sessions SET status = 'interviewing', current_draft = $1, gaps = $2, questions = $3, interview_round = 1, updated_at = NOW() WHERE session_id = $4`,
+                [JSON.stringify(draft), JSON.stringify(gaps), JSON.stringify(questions), sessionId],
+              );
+              logger?.info(`[profileBuilder] [${sessionId}] Ready for interview (${gaps.length} gaps, ${questions.length} questions)`);
+            } catch (err: any) {
+              logger?.error(`[profileBuilder] [${sessionId}] Background processing failed: ${err.message}`);
+              await query(
+                "UPDATE profile_sessions SET status = 'error', error_message = $1, updated_at = NOW() WHERE session_id = $2",
+                [err?.message || String(err), sessionId],
+              ).catch(() => {});
+            }
+          })();
+
+          return c.json({ sessionId, status: "processing" });
         } catch (err: any) {
           logger?.error(`[profileBuilder] Upload error: ${err.message}`);
           return c.json({ error: err.message }, 500);
@@ -175,10 +198,12 @@ export function getProfileBuilderRoutes() {
             status: row.status,
             draft: row.current_draft,
             gaps: row.gaps,
+            questions: row.questions || [],
             qaHistory: row.qa_history,
             interviewRound: row.interview_round,
             resumeFilename: row.resume_filename,
             createdAt: row.created_at,
+            errorMessage: row.error_message,
           });
         } catch (err: any) {
           logger?.error(`[profileBuilder] Session fetch error: ${err.message}`);
@@ -332,17 +357,27 @@ export function getProfileBuilderRoutes() {
             finalDraft = { ...finalDraft, ...body.edits };
           }
 
-          // Backup existing inventory
-          const inventoryPath = workspacePath("experience_inventory.json");
-          if (fs.existsSync(inventoryPath)) {
-            const backupPath = workspacePath("experience_inventory.backup.json");
-            fs.copyFileSync(inventoryPath, backupPath);
-            logger?.info(`[profileBuilder] Backed up existing inventory to ${backupPath}`);
-          }
+          // Store inventory in DB (survives Railway redeploys)
+          const inventoryJson = JSON.stringify(finalDraft, null, 2);
+          await query(
+            `INSERT INTO app_settings (key, value, updated_at) VALUES ('experience_inventory', $1, NOW())
+             ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+            [inventoryJson],
+          );
+          logger?.info(`[profileBuilder] Saved inventory to DB for ${finalDraft.profile.name}`);
 
-          // Write the new inventory
-          fs.writeFileSync(inventoryPath, JSON.stringify(finalDraft, null, 2), "utf-8");
-          logger?.info(`[profileBuilder] Wrote experience_inventory.json for ${finalDraft.profile.name}`);
+          // Also write to filesystem (best-effort, may not survive Railway redeploy)
+          try {
+            const inventoryPath = workspacePath("experience_inventory.json");
+            if (fs.existsSync(inventoryPath)) {
+              const backupPath = workspacePath("experience_inventory.backup.json");
+              fs.copyFileSync(inventoryPath, backupPath);
+            }
+            fs.writeFileSync(inventoryPath, inventoryJson, "utf-8");
+            logger?.info(`[profileBuilder] Wrote experience_inventory.json to disk`);
+          } catch (diskErr: any) {
+            logger?.warn(`[profileBuilder] Disk write failed (non-critical): ${diskErr.message}`);
+          }
 
           // Mark session as finalized
           await query(
@@ -369,6 +404,14 @@ export function getProfileBuilderRoutes() {
       path: "/api/profile/current",
       method: "GET" as const,
       createHandler: async () => async (c: any) => {
+        // Check DB first (survives Railway redeploys)
+        try {
+          const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
+          if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
+            return c.json(JSON.parse(dbResult.rows[0].value));
+          }
+        } catch { /* fall through to filesystem */ }
+
         const inventoryPath = workspacePath("experience_inventory.json");
         if (!fs.existsSync(inventoryPath)) {
           return c.json({ error: "No profile found. Upload a resume to get started." }, 404);

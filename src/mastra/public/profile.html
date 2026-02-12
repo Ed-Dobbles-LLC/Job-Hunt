@@ -393,7 +393,7 @@
 
     async function uploadResume() {
       if (!fileInput.files.length) { showToast('Please select a resume file first.', 'error'); return; }
-      showLoading('Parsing your resume...');
+      showLoading('Uploading resume...');
       const formData = new FormData();
       formData.append('resume', fileInput.files[0]);
       formData.append('targetRole', document.getElementById('targetRole').value.trim());
@@ -405,15 +405,67 @@
         if (!res.ok) throw new Error(data.error || 'Upload failed');
 
         sessionId = data.sessionId;
-        currentDraft = data.draft;
-        currentGaps = data.gaps || [];
-        currentQuestions = data.questions || [];
-        interviewRound = data.interviewRound || 1;
 
-        hideLoading();
-        goToPanel('interview');
-        renderQuestions();
+        // If already ready (unlikely but handle fast path)
+        if (data.status === 'interviewing') {
+          currentDraft = data.draft;
+          currentGaps = data.gaps || [];
+          currentQuestions = data.questions || [];
+          interviewRound = data.interviewRound || 1;
+          hideLoading();
+          goToPanel('interview');
+          renderQuestions();
+          return;
+        }
+
+        // Poll for background processing to complete
+        showLoading('Analyzing your resume with AI...');
+        await pollForReady(data.sessionId);
       } catch (err) { hideLoading(); showToast(err.message, 'error'); }
+    }
+
+    async function pollForReady(sid) {
+      const statusMessages = {
+        'processing': 'Extracting resume content...',
+        'structuring': 'Building your experience profile with AI...',
+        'generating_questions': 'Generating interview questions...',
+      };
+      const maxPolls = 120; // 4 minutes max (2s intervals)
+      for (let i = 0; i < maxPolls; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const res = await fetch('/api/profile/session/' + sid);
+          const data = await res.json();
+
+          if (data.status === 'interviewing') {
+            sessionId = sid;
+            currentDraft = data.draft;
+            currentGaps = data.gaps || [];
+            currentQuestions = data.questions || [];
+            interviewRound = data.interviewRound || 1;
+            hideLoading();
+            goToPanel('interview');
+            renderQuestions();
+            showToast('Resume parsed successfully!', 'success');
+            return;
+          }
+
+          if (data.status === 'error') {
+            hideLoading();
+            showToast('Processing failed: ' + (data.errorMessage || 'Unknown error'), 'error');
+            return;
+          }
+
+          // Update loading text based on phase
+          const msg = statusMessages[data.status] || 'Processing your resume...';
+          document.getElementById('loadingText').textContent = msg;
+        } catch (err) {
+          // Network error during poll — keep trying
+          console.warn('Poll error:', err);
+        }
+      }
+      hideLoading();
+      showToast('Processing is taking longer than expected. Please try refreshing.', 'error');
     }
 
     function renderQuestions() {
@@ -613,7 +665,7 @@
 
     function showLoading(text) { document.getElementById('loadingText').textContent = text; document.getElementById('loadingOverlay').classList.add('active'); }
     function hideLoading() { document.getElementById('loadingOverlay').classList.remove('active'); }
-    function showToast(msg, type) { const el = document.getElementById('toast'); el.textContent = msg; el.className = 'toast visible ' + type; setTimeout(() => el.className = 'toast', 4000); }
+    function showToast(msg, type) { const el = document.getElementById('toast'); el.textContent = msg; el.className = 'toast visible ' + type; const dur = type === 'error' ? 10000 : 4000; setTimeout(() => el.className = 'toast', dur); }
     function esc(str) { if (str == null) return ''; const d = document.createElement('div'); d.textContent = String(str); return d.innerHTML; }
   </script>
 </body>

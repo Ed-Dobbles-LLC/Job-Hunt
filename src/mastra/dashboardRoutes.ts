@@ -31,6 +31,21 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Load experience inventory — checks DB first, then filesystem */
+async function loadInventoryProfile(): Promise<Record<string, any>> {
+  try {
+    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
+    if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
+      return JSON.parse(dbResult.rows[0].value);
+    }
+  } catch { /* fall through to filesystem */ }
+  try {
+    return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8"));
+  } catch {
+    return { profile: { name: "Candidate" } };
+  }
+}
+
 export function getDashboardRoutes() {
   return [
     {
@@ -478,16 +493,16 @@ export function getDashboardRoutes() {
             }, 400);
           }
 
-          // Preflight: check inventory file exists
+          // Preflight: check inventory exists (DB or filesystem)
           try {
-            const invPath = require("./tools/paths").workspacePath("experience_inventory.json");
-            if (!require("fs").existsSync(invPath)) {
+            const inv = await loadInventoryProfile();
+            if (!inv.profile || inv.profile.name === "Candidate") {
               return c.json({
                 error: "Experience inventory not found. Go to Profile Builder to upload and finalize your resume first.",
                 phase: "preflight",
               }, 400);
             }
-          } catch { /* path check is best-effort */ }
+          } catch { /* check is best-effort */ }
 
           // Load job
           const jobResult = await query(
@@ -599,7 +614,7 @@ export function getDashboardRoutes() {
 
           // Render DOCX from JSON
           try {
-            const inventory = (() => { try { return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8")); } catch { return { profile: { name: "Candidate" } }; } })();
+            const inventory = await loadInventoryProfile();
             const profile = inventory.profile || {};
             resumeBuffer = await renderResumeDocx(packetResult.resume, profile);
             coverBuffer = await renderCoverLetterDocx(packetResult.cover_letter, profile);
@@ -867,7 +882,7 @@ export function getDashboardRoutes() {
                 let resumeBuf: Buffer | null = null;
                 let coverBuf: Buffer | null = null;
                 try {
-                  const inv = (() => { try { return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8")); } catch { return { profile: { name: "Candidate" } }; } })();
+                  const inv = await loadInventoryProfile();
                   resumeBuf = await renderResumeDocx(packetResult.resume, inv.profile || {});
                   coverBuf = await renderCoverLetterDocx(packetResult.cover_letter, inv.profile || {});
                 } catch (e: any) {

@@ -28,7 +28,16 @@ import type { JDRequirements } from "./extractJDRequirementsTool";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
-function loadInventory(): Record<string, any> {
+async function loadInventory(): Promise<Record<string, any>> {
+  // Check DB first (survives Railway redeploys)
+  try {
+    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
+    if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
+      return JSON.parse(dbResult.rows[0].value);
+    }
+  } catch { /* fall through to filesystem */ }
+
+  // Fallback to filesystem
   try {
     const inventoryPath = workspacePath("experience_inventory.json");
     return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
@@ -267,7 +276,7 @@ export const generateVerifiedPacketTool = createTool({
 
     logger?.info(`🔄 [generateVerifiedPacket] Target: ${company} — ${title}`);
 
-    const inventory = loadInventory();
+    const inventory = await loadInventory();
     const allowlist = buildEntityAllowlist(inventory);
     logger?.info(`🔄 [generateVerifiedPacket] Inventory and allowlist loaded`);
 

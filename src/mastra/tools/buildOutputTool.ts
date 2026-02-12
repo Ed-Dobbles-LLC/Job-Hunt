@@ -17,7 +17,16 @@ function sanitizeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "_");
 }
 
-function loadInventory(): Record<string, any> {
+async function loadInventory(): Promise<Record<string, any>> {
+  // Check DB first (survives Railway redeploys)
+  try {
+    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
+    if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
+      return JSON.parse(dbResult.rows[0].value);
+    }
+  } catch { /* fall through to filesystem */ }
+
+  // Fallback to filesystem
   try {
     const inventoryPath = workspacePath("experience_inventory.json");
     return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
@@ -86,7 +95,7 @@ export const buildOutputTool = createTool({
     logger?.info(`📁 [buildOutput] Creating output at: ${outputDir}`);
     fs.mkdirSync(outputDir, { recursive: true });
 
-    const inventory = loadInventory();
+    const inventory = await loadInventory();
     const profile = inventory.profile || {};
     const files: string[] = [];
     const vr = context.verifierResult as Record<string, unknown>;
