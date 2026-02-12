@@ -6,6 +6,11 @@ import pino from "pino";
 import { NonRetriableError } from "inngest";
 import { z } from "zod";
 
+// Alias OPENAI_API_KEY → AI_INTEGRATIONS_OPENAI_API_KEY so all tools find it
+if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && process.env.OPENAI_API_KEY) {
+  process.env.AI_INTEGRATIONS_OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+}
+
 import { sharedPostgresStorage } from "./storage";
 import { inngest, inngestServe } from "./inngest";
 
