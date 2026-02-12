@@ -1688,7 +1688,7 @@
     async function autoGeneratePackets() {
       showToast('Generating packets for top matches...', 'info');
       try {
-        const res = await fetch('/api/dashboard/auto-generate-packets?topN=10&minScore=30', { method: 'POST' });
+        const res = await fetch('/api/dashboard/auto-generate-packets?topN=20&minScore=0', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
           if (data.queued === 0) {
