@@ -126,6 +126,12 @@ const DEFAULT_DENYLIST: DenylistEntry[] = [
     category: "placeholder_name",
   },
   {
+    pattern: "Ed Martinez",
+    regex: /\bEd\s+Martinez\b/gi,
+    reason: "Placeholder name (Ed Martinez — default example persona)",
+    category: "placeholder_name",
+  },
+  {
     pattern: "Acme",
     regex: /\bAcme\b/gi,
     reason: "Placeholder company name (Acme)",

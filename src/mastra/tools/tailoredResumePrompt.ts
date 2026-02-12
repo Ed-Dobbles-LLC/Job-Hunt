@@ -59,11 +59,17 @@ export const ResumeExperienceSchema = z.object({
   start_date: z.string().describe("Start date from inventory (e.g., 2021-03)"),
   end_date: z.string().describe("End date from inventory (e.g., present)"),
   location: z.string().describe("Location from inventory"),
+  scope_line: z
+    .string()
+    .optional()
+    .describe(
+      "One-line enterprise scope context for this role: business unit size, team headcount, budget, geographic scope. Use ONLY facts from inventory. E.g., '$4B+ business unit | 60+ FTEs | $17M budget | North America'",
+    ),
   bullets: z
     .array(ResumeBulletSchema)
     .min(1)
-    .max(6)
-    .describe("3-6 tailored bullets per role, each with evidence"),
+    .max(8)
+    .describe("3-8 tailored bullets per role, each with evidence. Lead with mandate/transformation bullet."),
 });
 
 export const TailoredResumeSchema = z.object({
@@ -73,27 +79,36 @@ export const TailoredResumeSchema = z.object({
   target_company: z
     .string()
     .describe("The company being applied to"),
+  executive_headline: z
+    .string()
+    .describe(
+      "Executive positioning headline displayed directly under the candidate's name. Should be a C-suite or senior executive title that matches the target role. E.g., 'Chief Data & Analytics Officer', 'VP/SVP, Data & Analytics', 'Enterprise Data Strategy Executive'. Must reflect the candidate's actual level from inventory.",
+    ),
   professional_summary: z
     .string()
     .describe(
-      "3-4 sentence summary tailored to the target role. Only use facts from inventory.",
+      "4-6 sentence executive summary anchored to measurable enterprise impact. Must immediately answer: (1) What scale? (team size, budget, enterprise value), (2) What transformation? (AI, digital, data modernization), (3) What financial impact? (revenue, cost savings, ROI). Open with the candidate's actual scope, not generic 'accomplished executive' language. Use board-ready tone. Only use facts from inventory.",
+    ),
+  core_competencies: z
+    .array(z.string())
+    .min(8)
+    .max(14)
+    .describe(
+      "8-14 enterprise-level competency keywords for ATS and AI screening. Frame strategically, not tactically. Include terms like: Enterprise Data Strategy, Data Governance, Digital Transformation, AI/ML Strategy & Deployment, Revenue & Pricing Optimization, Forecasting & Demand Planning, Commercial Analytics, Organizational Transformation, P&L Influence, Board & C-Suite Advisory, Organizational Design, Change Management. Only include competencies supported by inventory evidence.",
     ),
   experience: z
     .array(ResumeExperienceSchema)
     .min(1)
     .max(5)
-    .describe("Work experience entries, ordered by relevance then recency"),
+    .describe("Work experience entries, ordered by relevance then recency. Include ALL relevant roles — a 25+ year career should show 4-5 roles to demonstrate depth."),
   skills: z.object({
-    technical: z
+    enterprise_capabilities: z
       .array(z.string())
-      .describe("Technical skills from inventory that match the JD"),
-    leadership: z
-      .array(z.string())
-      .describe("Leadership skills from inventory that match the JD"),
-    data_science: z
+      .describe("Strategic enterprise capabilities from inventory that match the JD. Frame at executive level: 'AI/ML Strategy & Deployment' not just 'Machine Learning'. Include: Revenue Optimization, Forecasting & Demand Planning, Commercial Analytics, Organizational Transformation, Board Advisory, etc."),
+    tools_and_platforms: z
       .array(z.string())
       .optional()
-      .describe("Data science skills from inventory that match the JD"),
+      .describe("Technical tools as a secondary sub-list. Include platforms (Snowflake, AWS, Tableau) and languages (Python, R, SQL) only if relevant to the JD."),
   }),
   education: z.array(
     z.object({
@@ -125,7 +140,60 @@ export const TailoredResumeSchema = z.object({
 export type TailoredResume = z.infer<typeof TailoredResumeSchema>;
 
 export function buildResumeSystemPrompt(): string {
-  return `You are a precision resume-tailoring engine. You produce a JSON object conforming to the TailoredResume schema.
+  return `You are a retained executive search resume-tailoring engine. You produce resumes that convert at the C-suite and board-advisory level. Your output is a JSON object conforming to the TailoredResume schema.
+
+## YOUR AUDIENCE
+Retained executive recruiters who review resumes in 30-45 seconds. They are looking for:
+- Immediate signal of executive scale (enterprise value, budget, team size)
+- Transformation narrative (what did this person build, change, or create?)
+- Financial impact anchored to real numbers
+- Board-readiness indicators
+
+## RESUME ARCHITECTURE (top to bottom)
+
+1. **EXECUTIVE HEADLINE** (executive_headline field)
+   A C-suite or senior executive title positioned directly under the candidate's name.
+   Examples: "Chief Data & Analytics Officer", "SVP, Enterprise Data Strategy & AI"
+   - Match the level of the target role
+   - If candidate's inventory shows VP-level, headline as VP/SVP level
+   - If candidate's inventory shows C-suite board exposure, headline at C-suite level
+
+2. **EXECUTIVE SUMMARY** (professional_summary field)
+   4-6 sentences. This is the most important section. It must IMMEDIATELY answer:
+   - **What scale?** Team size, budget responsibility, enterprise value influenced
+   - **What transformation?** AI, data modernization, digital, organizational
+   - **What financial impact?** Revenue driven, cost savings, ROI delivered
+   Format: "[Scale fact]. [Transformation narrative]. [Financial impact]. [Differentiator]."
+   DO NOT open with generic phrases like "Accomplished executive" or "Results-driven leader."
+   Instead, lead with specifics: "Data & analytics executive who built and scaled a 60+ person organization managing $17M in annual spend across a $300M+ enterprise..."
+
+3. **CORE COMPETENCIES** (core_competencies field)
+   8-14 enterprise-level keywords displayed in a grid. These serve double duty:
+   - ATS/AI screening optimization
+   - Quick executive positioning signal
+   Use STRATEGIC framing:
+   GOOD: "Enterprise Data Strategy", "AI/ML Strategy & Deployment", "Revenue Optimization", "Board & C-Suite Advisory", "Organizational Design"
+   BAD: "Python", "SQL", "Machine Learning", "Data Analysis", "Snowflake"
+   Technical tools go in the skills section, not here.
+
+4. **EXPERIENCE** (experience array)
+   Each role must include:
+   - **scope_line**: One line of enterprise context — business unit size, team headcount, budget, geographic scope. Use ONLY verifiable facts from inventory.
+   - **First bullet = Mandate bullet**: What were you hired/brought in to do? Frame as the transformation mission.
+   - **Remaining bullets**: Impact-driven, each with a metric from inventory.
+   - Allow 4-8 bullets per role (more for recent/relevant roles, fewer for older ones)
+   - For a 25+ year career, include 4-5 roles to show career depth and trajectory
+
+5. **ENTERPRISE CAPABILITIES** (skills.enterprise_capabilities)
+   Strategic competency categories, NOT tool names:
+   GOOD: "AI/ML Strategy & Deployment", "Revenue & Pricing Optimization", "Commercial Analytics", "Organizational Transformation"
+   BAD: "Python", "Spark", "XGBoost"
+
+6. **TOOLS & PLATFORMS** (skills.tools_and_platforms)
+   Technical tools as a compact sub-line. Only include if relevant to the JD.
+
+7. **EDUCATION** — as-is from inventory
+8. **CERTIFICATIONS** — all relevant certifications, not just JD-matching ones
 
 ## ABSOLUTE RULES — VIOLATION = IMMEDIATE REJECTION
 
@@ -153,18 +221,17 @@ export function buildResumeSystemPrompt(): string {
 
 5. **ATS-FRIENDLY FORMAT**
    - No tables, no columns, no graphics, no icons
-   - Plain sections: Summary, Experience, Skills, Education, Certifications
-   - Use standard action-verb bullets ("Led…", "Drove…", "Built…")
+   - Standard executive section headings
+   - Use standard action-verb bullets ("Led…", "Drove…", "Built…", "Spearheaded…", "Architected…")
 
-6. **SECTION ORDERING**
-   - professional_summary: 3-4 sentences tailored to the target role
-   - experience: ordered by RELEVANCE to the JD first, then by recency. Include 3-6 bullets per role.
-   - skills: split into technical, leadership, data_science — only include skills that appear in BOTH the inventory AND the JD requirements
-   - education: as-is from inventory
-   - certifications: as-is from inventory (only if relevant to JD)
+6. **EVIDENCE POINTERS ARRAY**
+   Produce one evidence_pointers entry per resume bullet. The claim_text must be the exact bullet text you emitted. The source_hash is the inventory bullet ID. The evidence_quote is the verbatim inventory text. Confidence >= 0.7 for all pointers.
 
-7. **EVIDENCE POINTERS ARRAY**
-   Produce one evidence_pointers entry per resume bullet. The claim_text must be the exact bullet text you emitted. The source_hash is the inventory bullet ID. The evidence_quote is the verbatim inventory text. Confidence ≥ 0.7 for all pointers.
+7. **DEFENSIBILITY**
+   Every claim must withstand the interview question: "Walk me through how you calculated that."
+   - Use ranges from inventory if ranges exist; don't convert ranges to point estimates
+   - Avoid marketing superlatives unless inventory explicitly supports them
+   - If a metric is presented as a range in inventory, keep it as a range
 
 8. **OUTPUT**
    Return ONLY the JSON object. No markdown fences, no commentary, no explanation.`;
@@ -194,9 +261,14 @@ ${JSON.stringify(allowlist, null, 2)}
 
 ## INSTRUCTIONS
 1. Read the JD requirements carefully.
-2. Select the most relevant experience bullets from the inventory.
-3. Tailor bullet wording to emphasize JD-relevant impact, but keep ALL entities and metrics verbatim from inventory.
-4. For each requirement you CANNOT support, add a gap_note — do NOT fabricate content.
-5. Include ats_keywords_used listing JD keywords you intentionally wove in.
-6. Return ONLY the TailoredResume JSON.`;
+2. Create an executive_headline that matches the seniority level of the target role.
+3. Write a professional_summary that opens with SCALE (team size, budget, enterprise value from inventory), then TRANSFORMATION, then FINANCIAL IMPACT. No generic openers.
+4. Build core_competencies with 8-14 STRATEGIC enterprise keywords (not tool names). Include ATS terms from JD like: Enterprise Data Strategy, Data Governance, Digital Transformation, P&L Influence, Commercial Analytics, Revenue Optimization, Organizational Design.
+5. For each experience entry, add a scope_line with enterprise context (business unit size, team, budget, geography) from inventory facts.
+6. Lead each role with a MANDATE bullet (what were you brought in to transform/build/lead?).
+7. Include 4-8 bullets per role, using more for recent/relevant roles.
+8. Frame skills.enterprise_capabilities at the STRATEGIC level, put tools in skills.tools_and_platforms.
+9. For each requirement you CANNOT support, add a gap_note — do NOT fabricate content.
+10. Include ats_keywords_used listing JD keywords you intentionally wove in.
+11. Return ONLY the TailoredResume JSON.`;
 }

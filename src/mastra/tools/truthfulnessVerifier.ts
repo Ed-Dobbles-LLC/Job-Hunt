@@ -154,10 +154,12 @@ export function verifyNewEntities(
     }
   }
 
+  const s = resume.skills as any;
   const skillsToCheck = [
-    ...(resume.skills.technical || []),
-    ...(resume.skills.leadership || []),
-    ...(resume.skills.data_science || []),
+    ...(s.enterprise_capabilities || s.technical || []),
+    ...(s.tools_and_platforms || []),
+    ...(s.leadership || []),
+    ...(s.data_science || []),
   ];
   for (const skill of skillsToCheck) {
     checksRun++;

@@ -954,6 +954,7 @@
           <div class="date" id="dateText"></div>
         </div>
         <div class="topbar-actions">
+          <button class="btn" onclick="purgeAllPackets()" title="Delete all generated packets so they can be regenerated with current profile">&#x1F5D1; Purge Packets</button>
           <button class="btn" onclick="refreshData()">&#x1F504; Refresh</button>
           <button class="btn btn-primary" id="triggerBtn" onclick="triggerWorkflow()">&#x26A1; Run Workflow</button>
         </div>
@@ -2060,7 +2061,7 @@
         showToast('Preferences saved! Re-scoring all jobs...', 'success');
         fetch('/api/dashboard/rescore?all=true', { method: 'POST' }).then(() => {
           let polls = 0;
-          const interval = setInterval(() => { polls++; refreshData(); if (polls >= 12) clearInterval(interval); }, 5000);
+          const interval = setInterval(() => { polls++; refreshData(true); if (polls >= 12) clearInterval(interval); }, 5000);
         });
       } catch (e) { showToast('Failed to save preferences: ' + e.message, 'error'); }
     }
@@ -2068,12 +2069,12 @@
     // Load prefs on startup
     loadPrefs();
 
-    function refreshData() {
+    async function refreshData(silent) {
+      if (!silent) showToast('Refreshing data...', 'info');
       // Purge stale artifacts from old deployments before refreshing
-      fetch('/api/dashboard/purge-stale-artifacts', { method: 'POST' }).catch(() => {});
-      loadDashboard();
-      loadJobs();
-      loadGenLog();
+      try { await fetch('/api/dashboard/purge-stale-artifacts', { method: 'POST' }); } catch {}
+      await Promise.all([loadDashboard(), loadJobs(), loadGenLog()]);
+      if (!silent) showToast('Data refreshed', 'success');
     }
 
     async function rescoreJobs() {
@@ -2087,7 +2088,7 @@
           let polls = 0;
           const pollInterval = setInterval(() => {
             polls++;
-            refreshData();
+            refreshData(true);
             if (polls >= 12) clearInterval(pollInterval); // stop after ~60s
           }, 5000);
         } else {
@@ -2095,6 +2096,22 @@
         }
       } catch (err) {
         showToast('Scoring failed: ' + err.message, 'error');
+      }
+    }
+
+    async function purgeAllPackets() {
+      if (!confirm('This will delete ALL generated resume/cover letter packets.\n\nJobs will be reset to "new" status so packets can be regenerated with your current profile.\n\nContinue?')) return;
+      try {
+        const res = await fetch('/api/dashboard/purge-all-packets', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          refreshData(true);
+        } else {
+          showToast('Purge failed: ' + (data.error || 'Unknown'), 'error');
+        }
+      } catch (err) {
+        showToast('Purge failed: ' + err.message, 'error');
       }
     }
 
@@ -2113,7 +2130,7 @@
             let polls = 0;
             const pollInterval = setInterval(() => {
               polls++;
-              refreshData();
+              refreshData(true);
               if (polls >= 60) clearInterval(pollInterval); // stop after ~10min
             }, 10000);
           }
@@ -2190,7 +2207,7 @@
           `;
           showToast(`Imported ${data.imported} jobs!`, 'success');
           // Refresh dashboard data
-          setTimeout(() => { refreshData(); }, 1000);
+          setTimeout(() => { refreshData(true); }, 1000);
         } else {
           resultEl.className = 'upload-result error';
           document.getElementById('importResultMsg').textContent = 'Import failed: ' + (data.error || 'Unknown error');

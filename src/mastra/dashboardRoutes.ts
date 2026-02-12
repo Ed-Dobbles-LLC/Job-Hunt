@@ -752,6 +752,36 @@ export function getDashboardRoutes() {
         }
       },
     },
+    /* ── Purge ALL packets (reset for regeneration) ────────── */
+    {
+      path: "/api/dashboard/purge-all-packets",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          const artifactCount = await query("SELECT COUNT(*) as count FROM artifacts");
+          const total = parseInt(artifactCount.rows[0].count);
+
+          if (total === 0) {
+            return c.json({ success: true, message: "No packets to purge", purged: 0 });
+          }
+
+          await query("DELETE FROM evidence_map");
+          await query("DELETE FROM artifacts");
+          await query(
+            "UPDATE jobs SET status = 'new' WHERE status IN ('generated', 'generated-unverified')",
+          );
+
+          logger?.info(`🧹 [purge-all] Removed ALL ${total} artifact records for regeneration`);
+          return c.json({ success: true, purged: total, message: `Removed all ${total} packets. Jobs are ready for regeneration.` });
+        } catch (err: any) {
+          logger?.error(`❌ [purge-all] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
     /* ── Re-score jobs ────────────────────────────────────── */
     {
       path: "/api/dashboard/rescore",

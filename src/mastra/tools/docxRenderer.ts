@@ -16,10 +16,12 @@ import type { TailoredCoverLetter } from "./tailoredCoverLetterPrompt";
 
 const FONT = "Calibri";
 const NAME_SIZE = 28;
+const HEADLINE_SIZE = 22;
 const CONTACT_SIZE = 18;
 const HEADING_SIZE = 22;
 const BODY_SIZE = 20;
 const SUB_HEADING_SIZE = 20;
+const COMPETENCY_SIZE = 19;
 const BULLET_INDENT = convertInchesToTwip(0.25);
 const SECTION_SPACING_AFTER = 60;
 const BULLET_SPACING_AFTER = 40;
@@ -87,25 +89,46 @@ export async function renderResumeDocx(
   const children: Paragraph[] = [];
   const renderedSections = new Set<string>();
 
+  // ── Name ──
   children.push(
     new Paragraph({
       children: [
         new TextRun({
-          text: safePrimitive(profile.name),
+          text: safePrimitive(profile.name).toUpperCase(),
           bold: true,
           size: NAME_SIZE,
           font: FONT,
         }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 20 },
+      spacing: { after: 10 },
     }),
   );
 
+  // ── Executive Headline ──
+  const headline = (resume as any).executive_headline;
+  if (headline) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: safePrimitive(headline),
+            size: HEADLINE_SIZE,
+            font: FONT,
+            color: "333333",
+          }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 10 },
+      }),
+    );
+  }
+
+  // ── Contact Info ──
   const contactParts = [
-    profile.email,
-    profile.phone,
     profile.location,
+    profile.phone,
+    profile.email,
     profile.linkedin,
   ].filter(Boolean);
 
@@ -126,9 +149,10 @@ export async function renderResumeDocx(
     );
   }
 
+  // ── Executive Summary ──
   if (resume.professional_summary && !renderedSections.has("SUMMARY")) {
     renderedSections.add("SUMMARY");
-    children.push(sectionHeading("Professional Summary"));
+    children.push(sectionHeading("Executive Summary"));
     children.push(
       new Paragraph({
         children: [
@@ -143,11 +167,51 @@ export async function renderResumeDocx(
     );
   }
 
+  // ── Core Competencies ──
+  const coreCompetencies = (resume as any).core_competencies;
+  if (
+    Array.isArray(coreCompetencies) &&
+    coreCompetencies.length > 0 &&
+    !renderedSections.has("COMPETENCIES")
+  ) {
+    renderedSections.add("COMPETENCIES");
+    children.push(sectionHeading("Core Competencies"));
+
+    // Render as rows of 3 separated by pipes for clean ATS-friendly grid
+    const items = coreCompetencies.map(safePrimitive);
+    const rowSize = 3;
+    for (let i = 0; i < items.length; i += rowSize) {
+      const row = items.slice(i, i + rowSize);
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: row.join("    |    "),
+              size: COMPETENCY_SIZE,
+              font: FONT,
+            }),
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 30 },
+        }),
+      );
+    }
+    // Add spacing after the competencies block
+    children.push(
+      new Paragraph({
+        children: [],
+        spacing: { after: 40 },
+      }),
+    );
+  }
+
+  // ── Experience ──
   if (resume.experience?.length > 0 && !renderedSections.has("EXPERIENCE")) {
     renderedSections.add("EXPERIENCE");
-    children.push(sectionHeading("Experience"));
+    children.push(sectionHeading("Professional Experience"));
 
     for (const exp of resume.experience) {
+      // Role title (bold) | Company (bold)
       children.push(
         new Paragraph({
           children: [
@@ -174,6 +238,7 @@ export async function renderResumeDocx(
         }),
       );
 
+      // Location | Date Range
       children.push(
         new Paragraph({
           children: [
@@ -185,10 +250,30 @@ export async function renderResumeDocx(
               color: "666666",
             }),
           ],
-          spacing: { after: 40 },
+          spacing: { after: 20 },
         }),
       );
 
+      // Scope line (enterprise context)
+      const scopeLine = (exp as any).scope_line;
+      if (scopeLine) {
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: safePrimitive(scopeLine),
+                italics: true,
+                size: SUB_HEADING_SIZE - 2,
+                font: FONT,
+                color: "444444",
+              }),
+            ],
+            spacing: { after: 40 },
+          }),
+        );
+      }
+
+      // Bullets
       for (const bullet of exp.bullets) {
         const bulletText =
           typeof bullet === "string"
@@ -211,76 +296,136 @@ export async function renderResumeDocx(
     }
   }
 
-  const allSkills: string[] = [];
-  if (resume.skills) {
-    if (Array.isArray(resume.skills)) {
-      allSkills.push(...resume.skills.map(safePrimitive));
-    } else if (typeof resume.skills === "object") {
-      const s = resume.skills as Record<string, unknown>;
-      for (const category of ["technical", "leadership", "data_science"]) {
-        const arr = s[category];
-        if (Array.isArray(arr)) {
-          allSkills.push(...arr.map(safePrimitive));
+  // ── Skills / Enterprise Capabilities ──
+  const skills = resume.skills as any;
+  if (skills && !renderedSections.has("SKILLS")) {
+    const enterpriseCaps = skills.enterprise_capabilities || skills.technical || [];
+    const toolsAndPlatforms = skills.tools_and_platforms || [];
+    // Backward compat: support old schema fields
+    const leadership = skills.leadership || [];
+    const dataScience = skills.data_science || [];
+
+    const hasNewFormat = skills.enterprise_capabilities !== undefined;
+
+    if (hasNewFormat) {
+      // New executive format
+      if (enterpriseCaps.length > 0 || toolsAndPlatforms.length > 0) {
+        renderedSections.add("SKILLS");
+        children.push(sectionHeading("Enterprise Capabilities & Tools"));
+
+        if (enterpriseCaps.length > 0) {
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Enterprise Capabilities: ",
+                  bold: true,
+                  size: BODY_SIZE,
+                  font: FONT,
+                }),
+                new TextRun({
+                  text: enterpriseCaps.map(safePrimitive).join(",  "),
+                  size: BODY_SIZE,
+                  font: FONT,
+                }),
+              ],
+              spacing: { after: BULLET_SPACING_AFTER },
+            }),
+          );
+        }
+
+        if (toolsAndPlatforms.length > 0) {
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Tools & Platforms: ",
+                  bold: true,
+                  size: BODY_SIZE,
+                  font: FONT,
+                }),
+                new TextRun({
+                  text: toolsAndPlatforms.map(safePrimitive).join(",  "),
+                  size: BODY_SIZE,
+                  font: FONT,
+                }),
+              ],
+              spacing: { after: BULLET_SPACING_AFTER },
+            }),
+          );
+        }
+      }
+    } else {
+      // Legacy format — backward compatible
+      const allSkills: string[] = [];
+      if (Array.isArray(resume.skills)) {
+        allSkills.push(...(resume.skills as any[]).map(safePrimitive));
+      } else if (typeof resume.skills === "object") {
+        const s = resume.skills as Record<string, unknown>;
+        for (const category of ["technical", "leadership", "data_science"]) {
+          const arr = s[category];
+          if (Array.isArray(arr)) {
+            allSkills.push(...arr.map(safePrimitive));
+          }
+        }
+      }
+
+      if (allSkills.length > 0) {
+        renderedSections.add("SKILLS");
+        children.push(sectionHeading("Skills"));
+
+        const skillsByCategory: { label: string; items: string[] }[] = [];
+        const s = resume.skills as Record<string, unknown>;
+        if (Array.isArray(s.technical) && s.technical.length > 0) {
+          skillsByCategory.push({ label: "Technical", items: s.technical.map(safePrimitive) });
+        }
+        if (Array.isArray(s.leadership) && s.leadership.length > 0) {
+          skillsByCategory.push({ label: "Leadership", items: s.leadership.map(safePrimitive) });
+        }
+        if (Array.isArray(s.data_science) && s.data_science.length > 0) {
+          skillsByCategory.push({ label: "Data Science", items: s.data_science.map(safePrimitive) });
+        }
+
+        if (skillsByCategory.length > 0) {
+          for (const cat of skillsByCategory) {
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${cat.label}: `,
+                    bold: true,
+                    size: BODY_SIZE,
+                    font: FONT,
+                  }),
+                  new TextRun({
+                    text: cat.items.join(",  "),
+                    size: BODY_SIZE,
+                    font: FONT,
+                  }),
+                ],
+                spacing: { after: BULLET_SPACING_AFTER },
+              }),
+            );
+          }
+        } else {
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: allSkills.join(",  "),
+                  size: BODY_SIZE,
+                  font: FONT,
+                }),
+              ],
+              spacing: { after: PARAGRAPH_SPACING_AFTER },
+            }),
+          );
         }
       }
     }
   }
 
-  if (allSkills.length > 0 && !renderedSections.has("SKILLS")) {
-    renderedSections.add("SKILLS");
-    children.push(sectionHeading("Skills"));
-
-    const skillsByCategory: { label: string; items: string[] }[] = [];
-    if (resume.skills && typeof resume.skills === "object" && !Array.isArray(resume.skills)) {
-      const s = resume.skills as Record<string, unknown>;
-      if (Array.isArray(s.technical) && s.technical.length > 0) {
-        skillsByCategory.push({ label: "Technical", items: s.technical.map(safePrimitive) });
-      }
-      if (Array.isArray(s.leadership) && s.leadership.length > 0) {
-        skillsByCategory.push({ label: "Leadership", items: s.leadership.map(safePrimitive) });
-      }
-      if (Array.isArray(s.data_science) && s.data_science.length > 0) {
-        skillsByCategory.push({ label: "Data Science", items: s.data_science.map(safePrimitive) });
-      }
-    }
-
-    if (skillsByCategory.length > 0) {
-      for (const cat of skillsByCategory) {
-        children.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `${cat.label}: `,
-                bold: true,
-                size: BODY_SIZE,
-                font: FONT,
-              }),
-              new TextRun({
-                text: cat.items.join(",  "),
-                size: BODY_SIZE,
-                font: FONT,
-              }),
-            ],
-            spacing: { after: BULLET_SPACING_AFTER },
-          }),
-        );
-      }
-    } else {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: allSkills.join(",  "),
-              size: BODY_SIZE,
-              font: FONT,
-            }),
-          ],
-          spacing: { after: PARAGRAPH_SPACING_AFTER },
-        }),
-      );
-    }
-  }
-
+  // ── Education ──
   if (resume.education?.length > 0 && !renderedSections.has("EDUCATION")) {
     renderedSections.add("EDUCATION");
     children.push(sectionHeading("Education"));
@@ -312,6 +457,7 @@ export async function renderResumeDocx(
     }
   }
 
+  // ── Certifications ──
   if (
     resume.certifications &&
     resume.certifications.length > 0 &&
