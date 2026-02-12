@@ -344,8 +344,20 @@ export function getProfileBuilderRoutes() {
             return c.json({ error: "Session not found" }, 404);
           }
           const session = result.rows[0];
-          if (session.status !== "review" && session.status !== "interviewing") {
-            return c.json({ error: `Session is in '${session.status}' state. Must be 'review' or 'interviewing' to finalize.` }, 400);
+          const blockedStates = ["finalized", "error"];
+          if (blockedStates.includes(session.status)) {
+            return c.json({ error: `Session is in '${session.status}' state and cannot be finalized.` }, 400);
+          }
+
+          // If still processing, check if the draft has been populated yet
+          const processingStates = ["processing", "structuring", "generating_questions"];
+          if (processingStates.includes(session.status)) {
+            const draft = session.current_draft;
+            if (!draft || !draft.profile || !draft.profile.name) {
+              return c.json({ error: `Resume is still being analyzed (status: ${session.status}). Please wait for processing to complete.` }, 400);
+            }
+            // Draft exists from structuring phase — allow early finalize
+            logger?.info(`[profileBuilder] Early finalize from '${session.status}' state for session ${sessionId}`);
           }
 
           let finalDraft: ExperienceInventory = session.current_draft;

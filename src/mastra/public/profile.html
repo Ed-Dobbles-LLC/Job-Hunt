@@ -391,6 +391,42 @@
       }
     });
 
+    // Recover in-progress session on page load
+    (async () => {
+      const saved = localStorage.getItem('profileSessionId');
+      if (!saved) return;
+      try {
+        const res = await fetch('/api/profile/session/' + saved);
+        if (!res.ok) { localStorage.removeItem('profileSessionId'); return; }
+        const data = await res.json();
+
+        if (['processing', 'structuring', 'generating_questions'].includes(data.status)) {
+          sessionId = saved;
+          showLoading('Resuming... ' + (data.status === 'structuring' ? 'Building your experience profile with AI...' : 'Processing your resume...'));
+          await pollForReady(saved);
+        } else if (data.status === 'interviewing') {
+          sessionId = saved;
+          currentDraft = data.draft;
+          currentGaps = data.gaps || [];
+          currentQuestions = data.questions || [];
+          interviewRound = data.interviewRound || 1;
+          goToPanel('interview');
+          renderQuestions();
+          showToast('Resumed your session.', 'success');
+        } else if (data.status === 'review') {
+          sessionId = saved;
+          currentDraft = data.draft;
+          currentGaps = data.gaps || [];
+          goToPanel('review');
+        } else if (data.status === 'error') {
+          showToast('Previous session failed: ' + (data.errorMessage || 'Unknown error'), 'error');
+          localStorage.removeItem('profileSessionId');
+        } else {
+          localStorage.removeItem('profileSessionId');
+        }
+      } catch { localStorage.removeItem('profileSessionId'); }
+    })();
+
     async function uploadResume() {
       if (!fileInput.files.length) { showToast('Please select a resume file first.', 'error'); return; }
       showLoading('Uploading resume...');
@@ -405,6 +441,7 @@
         if (!res.ok) throw new Error(data.error || 'Upload failed');
 
         sessionId = data.sessionId;
+        localStorage.setItem('profileSessionId', sessionId);
 
         // If already ready (unlikely but handle fast path)
         if (data.status === 'interviewing') {
@@ -631,6 +668,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Finalize failed');
         hideLoading();
+        localStorage.removeItem('profileSessionId');
         document.getElementById('doneMessage').textContent = data.message || 'Profile saved successfully!';
         goToPanel('done');
       } catch (err) { hideLoading(); showToast(err.message, 'error'); }
@@ -638,6 +676,7 @@
 
     function startOver() {
       sessionId = null; currentDraft = null; currentGaps = []; currentQuestions = []; interviewRound = 1;
+      localStorage.removeItem('profileSessionId');
       fileInput.value = '';
       document.getElementById('fileSelected').style.display = 'none';
       goToPanel('upload');
