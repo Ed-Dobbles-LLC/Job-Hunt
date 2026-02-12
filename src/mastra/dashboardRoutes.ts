@@ -18,6 +18,14 @@ import {
 
 let dbReady = false;
 
+// In-memory generation log — survives within a single deploy
+interface GenLogEntry { ts: string; jobId: number; company: string; title: string; status: "running" | "success" | "error"; message: string; phase?: string; }
+const generationLog: GenLogEntry[] = [];
+function logGen(entry: Omit<GenLogEntry, "ts">) {
+  generationLog.unshift({ ...entry, ts: new Date().toISOString() });
+  if (generationLog.length > 100) generationLog.length = 100;
+}
+
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -462,6 +470,7 @@ export function getDashboardRoutes() {
           // Preflight: check OpenAI API key
           const hasApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
           if (!hasApiKey) {
+            logGen({ jobId, company: "?", title: "?", status: "error", message: "OpenAI API key not configured", phase: "preflight" });
             return c.json({
               error: "OpenAI API key not configured. Set OPENAI_API_KEY in Railway environment variables (Settings > Variables).",
               phase: "preflight",
@@ -493,6 +502,7 @@ export function getDashboardRoutes() {
             return c.json({ error: "Job not found", phase: "load" }, 404);
           }
           const job = jobResult.rows[0];
+          logGen({ jobId, company: job.company, title: job.title, status: "running", message: "Starting generation...", phase: "init" });
 
           if (!job.jd_raw_text || job.jd_raw_text.length < 100) {
             return c.json({
@@ -517,6 +527,7 @@ export function getDashboardRoutes() {
               logger?.info(`✅ [generate-packet] Phase 1 complete: JD requirements extracted`);
             } catch (phase1Err: any) {
               logger?.error(`❌ [generate-packet] Phase 1 failed: ${phase1Err.message}`);
+              logGen({ jobId, company: job.company, title: job.title, status: "error", message: phase1Err.message, phase: "extract-requirements" });
               return c.json({
                 error: `Failed to extract JD requirements: ${phase1Err.message}`,
                 phase: "extract-requirements",
@@ -545,6 +556,7 @@ export function getDashboardRoutes() {
             logger?.info(`✅ [generate-packet] Phase 2 complete: pass=${packetResult.pass}, attempts=${packetResult.attempts_used}`);
           } catch (phase2Err: any) {
             logger?.error(`❌ [generate-packet] Phase 2 failed: ${phase2Err.message}`);
+            logGen({ jobId, company: job.company, title: job.title, status: "error", message: phase2Err.message, phase: "generate-packet" });
             return c.json({
               error: `Failed to generate resume/cover letter: ${phase2Err.message}`,
               phase: "generate-packet",
@@ -597,6 +609,7 @@ export function getDashboardRoutes() {
             logger?.info(`✅ [generate-packet] Phase 4 complete: ${buildResult?.files?.length || 0} files`);
           } catch (phase4Err: any) {
             logger?.error(`❌ [generate-packet] Phase 4 failed: ${phase4Err.message}`);
+            logGen({ jobId, company: job.company, title: job.title, status: "error", message: phase4Err.message, phase: "build-output" });
             return c.json({
               error: `Resume generated but failed to save files: ${phase4Err.message}`,
               phase: "build-output",
@@ -612,6 +625,7 @@ export function getDashboardRoutes() {
 
           const resumeExp = packetResult.resume?.experience || [];
           logger?.info(`✅ [generate-packet] Done! pass=${packetResult.pass}, files=${buildResult?.files?.length || 0}`);
+          logGen({ jobId, company: job.company, title: job.title, status: "success", message: `${resumeExp.length} roles, ${buildResult?.files?.length || 0} files, truth: ${packetResult.pass ? "PASS" : "REVIEW"}`, phase: "done" });
 
           return c.json({
             success: true,
@@ -632,8 +646,17 @@ export function getDashboardRoutes() {
           });
         } catch (err: any) {
           logger?.error(`❌ [generate-packet] Unhandled error: ${err.message}`);
+          logGen({ jobId, company: "?", title: "?", status: "error", message: err.message, phase: "unknown" });
           return c.json({ error: err.message, phase: "unknown", stack: err.stack?.split('\n').slice(0, 5) }, 500);
         }
+      },
+    },
+    /* ── Generation log (in-memory) ───────────────────────── */
+    {
+      path: "/api/dashboard/generation-log",
+      method: "GET" as const,
+      createHandler: async () => async (c: any) => {
+        return c.json({ log: generationLog.slice(0, 50) });
       },
     },
     /* ── Purge stale artifacts (from old deployments) ────────── */
@@ -820,9 +843,11 @@ export function getDashboardRoutes() {
 
                 success++;
                 logger?.info(`✅ [auto-generate] ${job.company} — ${job.title}: done (pass=${packetResult.pass})`);
+                logGen({ jobId: job.job_id, company: job.company, title: job.title, status: "success", message: `pass=${packetResult.pass}`, phase: "auto-generate" });
               } catch (err: any) {
                 failed++;
                 logger?.error(`❌ [auto-generate] ${job.company} — ${job.title}: ${err.message}`);
+                logGen({ jobId: job.job_id, company: job.company, title: job.title, status: "error", message: err.message, phase: "auto-generate" });
               }
             }
             logger?.info(`🏁 [auto-generate] Complete: ${success} succeeded, ${failed} failed out of ${jobs.length}`);

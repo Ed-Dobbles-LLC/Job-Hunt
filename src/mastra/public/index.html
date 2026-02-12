@@ -987,6 +987,15 @@
         <!-- Stats Cards -->
         <div class="stats-grid" id="statsGrid"></div>
 
+        <!-- Generation Log (collapsible) -->
+        <div id="genLogPanel" style="display:none;margin:12px 0;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:12px 16px;max-height:220px;overflow-y:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-weight:600;font-size:13px">Generation Log</span>
+            <button onclick="document.getElementById('genLogPanel').style.display='none'" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px">&times;</button>
+          </div>
+          <div id="genLogEntries" style="font-size:12px;line-height:1.8"></div>
+        </div>
+
         <!-- Location & Work Preferences -->
         <div class="prefs-panel">
           <div class="prefs-header" onclick="togglePrefs()">
@@ -1192,7 +1201,14 @@
 
     async function api(path, opts) {
       const res = await fetch(API + path, opts);
-      return res.json();
+      const data = await res.json();
+      if (!res.ok && !data.success) {
+        const msg = data.error || `HTTP ${res.status}`;
+        const phase = data.phase ? ` [${data.phase}]` : '';
+        const hint = data.hint ? '\n' + data.hint : '';
+        throw new Error(`${msg}${phase}${hint}`);
+      }
+      return data;
     }
 
     function formatDate(d) {
@@ -1238,7 +1254,9 @@
       const el = document.getElementById('toast');
       el.textContent = msg;
       el.className = 'toast visible ' + type;
-      setTimeout(() => el.className = 'toast', 3000);
+      const duration = type === 'error' ? 10000 : 3000;
+      setTimeout(() => el.className = 'toast', duration);
+      if (type === 'error') console.error('[toast]', msg);
     }
 
     async function loadDashboard() {
@@ -1270,6 +1288,26 @@
         `;
       } catch (e) {
         console.error('Dashboard load error:', e);
+      }
+    }
+
+    async function loadGenLog() {
+      try {
+        const data = await api('/generation-log');
+        const entries = data.log || [];
+        const panel = document.getElementById('genLogPanel');
+        const el = document.getElementById('genLogEntries');
+        if (entries.length === 0) { panel.style.display = 'none'; return; }
+        panel.style.display = 'block';
+        el.innerHTML = entries.slice(0, 20).map(e => {
+          const icon = e.status === 'success' ? '&#x2705;' : e.status === 'error' ? '&#x274C;' : '&#x23F3;';
+          const time = new Date(e.ts).toLocaleTimeString();
+          const color = e.status === 'error' ? 'var(--coral)' : e.status === 'success' ? 'var(--green)' : 'var(--text-dim)';
+          const phase = e.phase ? ` <span style="color:var(--text-dim)">[${esc(e.phase)}]</span>` : '';
+          return `<div style="color:${color};padding:2px 0">${icon} <strong>${time}</strong> ${esc(e.company)} — ${esc(e.title)}${phase}: ${esc(e.message)}</div>`;
+        }).join('');
+      } catch (e) {
+        // gen log is non-critical
       }
     }
 
@@ -1467,15 +1505,18 @@
           showToast(`Packet generated! ${data.resume_roles} roles, ${data.resume_bullets} bullets, ${data.evidence_count} evidence entries. Truth: ${data.truth_pass ? 'PASS' : 'REVIEW'}`, 'success');
           loadJobs();
           loadDashboard();
+          loadGenLog();
         } else {
           const hint = data.hint ? '\n' + data.hint : '';
           const phase = data.phase ? ` [${data.phase}]` : '';
           showToast(`Generation failed${phase}: ${data.error || 'Unknown'}${hint}`, 'error');
           if (btn) { btn.disabled = false; btn.innerHTML = '&#x26A1; Generate Packet'; }
+          loadGenLog();
         }
       } catch (e) {
         showToast('Generation failed: ' + e.message, 'error');
         if (btn) { btn.disabled = false; btn.innerHTML = '&#x26A1; Generate Packet'; }
+        loadGenLog();
       }
     }
 
@@ -2016,6 +2057,7 @@
       fetch('/api/dashboard/purge-stale-artifacts', { method: 'POST' }).catch(() => {});
       loadDashboard();
       loadJobs();
+      loadGenLog();
     }
 
     async function rescoreJobs() {
