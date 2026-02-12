@@ -87,14 +87,15 @@
     .field { margin-bottom: 16px; }
     .field label { display: block; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
 
-    .field input {
+    .field input, .field select {
       width: 100%; padding: 11px 14px; background: var(--surface2); border: 1px solid var(--border);
       border-radius: 10px; color: var(--text); font-size: 14px;
       font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
       transition: border-color 0.15s;
     }
-    .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .field input:focus, .field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
     .field input::placeholder { color: var(--text-muted); }
+    .field select option { background: var(--surface2); color: var(--text); }
 
     .badge {
       display: inline-block; padding: 2px 10px; border-radius: 6px; font-size: 11px;
@@ -184,14 +185,30 @@
         for (const f of fields) {
           const badgeClass = f.source === 'database' ? 'db' : f.source === 'environment' ? 'env' : 'unset';
           const badgeText = f.source === 'database' ? 'DB' : f.source === 'environment' ? 'ENV' : 'Not Set';
-          const inputType = f.secret ? 'password' : 'text';
-          const placeholder = f.secret ? (f.hasValue ? '(hidden - enter new value to change)' : 'Enter value...') : 'Enter value...';
           const displayValue = f.secret ? '' : f.value;
+
+          let inputHtml;
+          if (f.options && f.options.length > 0) {
+            const optionsHtml = f.options.map(o => {
+              const labels = { 'prefer': 'Yes, prefer', 'will-do': 'Yes, will do', 'no': 'No, will not do' };
+              const label = labels[o] || o;
+              return `<option value="${o}" ${displayValue === o ? 'selected' : ''}>${label}</option>`;
+            }).join('');
+            inputHtml = `<select id="setting-${f.key}" data-key="${f.key}">
+              <option value="" ${!displayValue ? 'selected' : ''}>-- Not set --</option>
+              ${optionsHtml}
+            </select>`;
+          } else {
+            const inputType = f.secret ? 'password' : 'text';
+            const placeholder = f.secret ? (f.hasValue ? '(hidden - enter new value to change)' : 'Enter value...') : (f.placeholder || 'Enter value...');
+            inputHtml = `<input type="${inputType}" id="setting-${f.key}" data-key="${f.key}"
+                     value="${displayValue}" placeholder="${placeholder}">`;
+          }
+
           html += `
             <div class="field">
               <label>${f.label} <span class="badge ${badgeClass}">${badgeText}</span></label>
-              <input type="${inputType}" id="setting-${f.key}" data-key="${f.key}"
-                     value="${displayValue}" placeholder="${placeholder}">
+              ${inputHtml}
             </div>`;
         }
         html += '</div>';
@@ -212,7 +229,7 @@
       btn.textContent = 'Saving...';
 
       const updates = {};
-      const inputs = document.querySelectorAll('input[data-key]');
+      const inputs = document.querySelectorAll('[data-key]');
       for (const input of inputs) {
         const key = input.dataset.key;
         const val = input.value.trim();

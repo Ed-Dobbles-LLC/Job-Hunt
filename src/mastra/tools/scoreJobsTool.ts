@@ -357,7 +357,9 @@ export function scoreSingleJob(
 
   // Location preferences from DB (passed via locationPrefs param) or fallback
   const prefMetros: string[] = (locationPrefs?.metros || ["chicago"]).map((m: string) => m.toLowerCase().trim());
-  const remotePref: string = (locationPrefs?.remote || "yes").toLowerCase().trim(); // "yes", "no", "hybrid-ok"
+  const prefRemote: string = (locationPrefs?.prefRemote || "will-do").toLowerCase().trim();
+  const prefHybrid: string = (locationPrefs?.prefHybrid || "will-do").toLowerCase().trim();
+  const prefOnsite: string = (locationPrefs?.prefOnsite || "will-do").toLowerCase().trim();
 
   // Detect work arrangement from JD text and remote_hybrid field
   const allText = `${jd} ${remoteHybrid} ${location}`;
@@ -377,21 +379,43 @@ export function scoreSingleJob(
   else if (isOnsite) workArrangement = daysInOffice ? `On-site (${daysInOffice} days/week)` : "On-site";
   else if (remoteHybrid) workArrangement = remoteHybrid;
 
-  // Location matching
+  // Determine if the work arrangement matches user preferences
+  const arrangementAcceptable =
+    (isRemote && prefRemote !== "no") ||
+    (isHybrid && prefHybrid !== "no") ||
+    (isOnsite && prefOnsite !== "no") ||
+    (!isRemote && !isHybrid && !isOnsite); // unknown = don't penalize
+
+  const arrangementPreferred =
+    (isRemote && prefRemote === "prefer") ||
+    (isHybrid && prefHybrid === "prefer") ||
+    (isOnsite && prefOnsite === "prefer");
+
+  // Metro matching
   const metroHits = prefMetros.filter(
     (metro) => location.includes(metro) || jd.includes(metro),
   );
   const locationMatchesMetro = metroHits.length > 0;
-  const locationMatchesRemote = isRemote && (remotePref === "yes" || remotePref === "hybrid-ok");
-  const locationMatchesHybrid = isHybrid && (remotePref === "yes" || remotePref === "hybrid-ok");
-  const locationMatch = locationMatchesMetro || locationMatchesRemote || locationMatchesHybrid;
+  const locationMatch = (locationMatchesMetro || isRemote) && arrangementAcceptable;
 
-  breakdown.location_fit = locationMatch ? w.location_fit : Math.round(w.location_fit * 0.375);
+  // Score: full if preferred + metro, scaled down otherwise
+  if (arrangementPreferred && (locationMatchesMetro || isRemote)) {
+    breakdown.location_fit = w.location_fit;
+  } else if (locationMatch) {
+    breakdown.location_fit = Math.round(w.location_fit * 0.75);
+  } else if (arrangementAcceptable) {
+    breakdown.location_fit = Math.round(w.location_fit * 0.375);
+  } else {
+    breakdown.location_fit = 0;
+  }
+
   breakdown._work_arrangement = workArrangement;
   breakdown._days_in_office = daysInOffice;
   breakdown._is_remote = isRemote;
   breakdown._is_hybrid = isHybrid;
+  breakdown._is_onsite = isOnsite;
   breakdown._location_metro_hits = metroHits;
+  breakdown._arrangement_acceptable = arrangementAcceptable;
 
   categories.location_fit = {
     score: breakdown.location_fit,
@@ -490,12 +514,12 @@ export function scoreSingleJob(
     riskFlags.push("High buzzword density with weak business grounding");
   }
 
-  if (!locationMatch) {
+  if (!arrangementAcceptable) {
+    const typeLabel = isRemote ? "remote" : isHybrid ? "hybrid" : isOnsite ? "in-office" : "unknown";
+    riskFlags.push(`${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} position — marked as "will not do"`);
+  } else if (!locationMatch && !isRemote) {
     const prefList = prefMetros.join(", ");
-    riskFlags.push(`No preferred location match (not ${prefList}${remotePref === "yes" ? "/remote" : remotePref === "hybrid-ok" ? "/hybrid" : ""})`);
-  }
-  if (isRemote && remotePref === "no") {
-    riskFlags.push("Remote position — you prefer in-office/hybrid");
+    riskFlags.push(`Not in preferred metro (${prefList})`);
   }
 
   const REASON_KEYS = ["execution_mode_reason", "spec_inflation_reason"];
@@ -660,20 +684,27 @@ export const scoreJobsTool = createTool({
     const topN = context.topN || 10;
 
     // Load location preferences from DB
-    let locationPrefs = { metros: ["chicago"], remote: "yes" };
+    let locationPrefs: { metros: string[]; prefRemote: string; prefHybrid: string; prefOnsite: string } = {
+      metros: ["chicago"], prefRemote: "will-do", prefHybrid: "will-do", prefOnsite: "will-do",
+    };
     try {
-      const metrosResult = await query("SELECT value FROM app_settings WHERE key = 'preferred_metros'");
-      const remoteResult = await query("SELECT value FROM app_settings WHERE key = 'remote_preference'");
-      if (metrosResult.rows.length > 0 && metrosResult.rows[0].value) {
-        locationPrefs.metros = metrosResult.rows[0].value.split(",").map((m: string) => m.trim().toLowerCase()).filter(Boolean);
-      }
-      if (remoteResult.rows.length > 0 && remoteResult.rows[0].value) {
-        locationPrefs.remote = remoteResult.rows[0].value.trim().toLowerCase();
+      const prefKeys = ["preferred_metros", "pref_remote", "pref_hybrid", "pref_onsite"];
+      const prefResult = await query(
+        `SELECT key, value FROM app_settings WHERE key = ANY($1)`,
+        [prefKeys],
+      );
+      for (const row of prefResult.rows) {
+        if (row.key === "preferred_metros" && row.value) {
+          locationPrefs.metros = row.value.split(",").map((m: string) => m.trim().toLowerCase()).filter(Boolean);
+        }
+        if (row.key === "pref_remote" && row.value) locationPrefs.prefRemote = row.value.trim().toLowerCase();
+        if (row.key === "pref_hybrid" && row.value) locationPrefs.prefHybrid = row.value.trim().toLowerCase();
+        if (row.key === "pref_onsite" && row.value) locationPrefs.prefOnsite = row.value.trim().toLowerCase();
       }
     } catch (e: any) {
       logger?.warn(`⚠️ [scoreJobs] Could not load location prefs: ${e.message}`);
     }
-    logger?.info(`📊 [scoreJobs] Location prefs: metros=${locationPrefs.metros.join(",")}, remote=${locationPrefs.remote}`);
+    logger?.info(`📊 [scoreJobs] Location prefs: metros=${locationPrefs.metros.join(",")}, remote=${locationPrefs.prefRemote}, hybrid=${locationPrefs.prefHybrid}, onsite=${locationPrefs.prefOnsite}`);
 
     const scoredJobs: any[] = [];
 

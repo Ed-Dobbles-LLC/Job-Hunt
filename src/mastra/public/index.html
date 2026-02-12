@@ -1204,12 +1204,17 @@
       if (arrangement && arrangement !== 'Unknown') {
         const isRemote = bd._is_remote;
         const isHybrid = bd._is_hybrid;
+        const isOnsite = bd._is_onsite;
         const days = bd._days_in_office;
+        const acceptable = bd._arrangement_acceptable;
         let arrText = arrangement;
         if (isRemote && !isHybrid) arrText = 'Remote position';
         else if (isHybrid && days) arrText = `Hybrid — ${days} day${days > 1 ? 's' : ''} in office`;
-        else if (isHybrid) arrText = 'Hybrid (days in office not specified)';
-        reasons.push({ type: 'neutral', text: arrText });
+        else if (isHybrid) arrText = 'Hybrid (days not specified)';
+        else if (isOnsite && days) arrText = `In-office — ${days} day${days > 1 ? 's' : ''}/week`;
+        else if (isOnsite) arrText = 'In-office / On-site';
+        const type = acceptable === false ? 'con' : 'neutral';
+        reasons.push({ type, text: arrText });
       }
 
       // Pros

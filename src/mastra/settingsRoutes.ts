@@ -19,7 +19,9 @@ async function ensureSettingsTable() {
 const SETTING_DEFS = [
   { key: "openai_api_key", label: "OpenAI API Key", env: "OPENAI_API_KEY", secret: true, group: "AI" },
   { key: "preferred_metros", label: "Preferred Metro Areas (comma-separated)", env: "", secret: false, group: "Job Preferences", placeholder: "Chicago, New York, Dallas, Austin" },
-  { key: "remote_preference", label: "Remote Work Preference", env: "", secret: false, group: "Job Preferences", placeholder: "yes, no, or hybrid-ok" },
+  { key: "pref_remote", label: "Remote Work", env: "", secret: false, group: "Job Preferences", placeholder: "prefer, will-do, or no", options: ["prefer", "will-do", "no"] },
+  { key: "pref_hybrid", label: "Hybrid Work", env: "", secret: false, group: "Job Preferences", placeholder: "prefer, will-do, or no", options: ["prefer", "will-do", "no"] },
+  { key: "pref_onsite", label: "In-Office / On-Site", env: "", secret: false, group: "Job Preferences", placeholder: "prefer, will-do, or no", options: ["prefer", "will-do", "no"] },
   { key: "apollo_api_key", label: "Apollo API Key", env: "APOLLO_API_KEY", secret: true, group: "Job Sources" },
   { key: "clay_webhook_url", label: "Clay Outbound Webhook URL", env: "CLAY_WEBHOOK_URL", secret: false, group: "Job Sources" },
   { key: "clay_inbound_secret", label: "Clay Inbound Secret", env: "CLAY_INBOUND_SECRET", secret: true, group: "Job Sources" },
@@ -91,6 +93,8 @@ export function getSettingsRoutes() {
             value: def.secret && rawValue ? maskValue(rawValue) : rawValue,
             source,
             hasValue: !!rawValue,
+            options: (def as any).options || undefined,
+            placeholder: (def as any).placeholder || undefined,
           };
         });
         return c.json({ settings });
@@ -120,6 +124,8 @@ export function getSettingsRoutes() {
             value: def.secret && rawValue ? maskValue(rawValue) : rawValue,
             source,
             hasValue: !!rawValue,
+            options: (def as any).options || undefined,
+            placeholder: (def as any).placeholder || undefined,
           };
         });
         return c.json({ settings });
