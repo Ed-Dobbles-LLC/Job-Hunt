@@ -1657,6 +1657,8 @@
     }
 
     function refreshData() {
+      // Purge stale artifacts from old deployments before refreshing
+      fetch('/api/dashboard/purge-stale-artifacts', { method: 'POST' }).catch(() => {});
       loadDashboard();
       loadJobs();
     }

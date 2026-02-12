@@ -602,6 +602,45 @@ export function getDashboardRoutes() {
         }
       },
     },
+    /* ── Purge stale artifacts (from old deployments) ────────── */
+    {
+      path: "/api/dashboard/purge-stale-artifacts",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          // Find artifacts where the resume file doesn't exist on disk
+          const allArtifacts = await query(`SELECT id, job_id, resume_docx_path FROM artifacts`);
+          const staleIds: number[] = [];
+          for (const row of allArtifacts.rows) {
+            const filePath = row.resume_docx_path;
+            if (!filePath) { staleIds.push(row.id); continue; }
+            const resolved = filePath.startsWith("/") ? filePath : workspacePath(filePath);
+            if (!fs.existsSync(resolved)) {
+              staleIds.push(row.id);
+            }
+          }
+
+          if (staleIds.length === 0) {
+            return c.json({ success: true, message: "No stale artifacts found", purged: 0 });
+          }
+
+          await query(`DELETE FROM artifacts WHERE id = ANY($1)`, [staleIds]);
+          // Reset job status so Generate Packet button reappears
+          await query(
+            `UPDATE jobs SET status = 'new' WHERE status IN ('generated', 'generated-unverified') AND job_id NOT IN (SELECT job_id FROM artifacts)`,
+          );
+
+          logger?.info(`🧹 [purge] Removed ${staleIds.length} stale artifact records`);
+          return c.json({ success: true, purged: staleIds.length, message: `Removed ${staleIds.length} stale artifact records from previous deployments` });
+        } catch (err: any) {
+          logger?.error(`❌ [purge] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
     /* ── Re-score unscored jobs ─────────────────────────────── */
     {
       path: "/api/dashboard/rescore",
