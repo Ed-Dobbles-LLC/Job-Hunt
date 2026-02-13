@@ -26,7 +26,7 @@ import {
 } from "./truthfulnessVerifier";
 import type { JDRequirements } from "./extractJDRequirementsTool";
 import { extractClaimsLedger, summarizeLedger, type ClaimsLedger } from "./claimsLedger";
-import { classifyMandate, scoreBulletsAgainstMandate, identifyMandateGaps, type MandateProfile } from "./mandateClassifier";
+import { classifyMandate, scoreBulletsAgainstMandate, identifyMandateGaps, reorderBulletsPerRole, type MandateProfile } from "./mandateClassifier";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -183,9 +183,14 @@ function buildMandateContextForPrompt(
   scoredBullets: ReturnType<typeof scoreBulletsAgainstMandate>,
   gaps: ReturnType<typeof identifyMandateGaps>,
 ): string {
-  const topDimensions = mandate.dimensions
-    .filter((d) => d.weight >= 0.15)
-    .map((d) => `  - ${d.label}: ${(d.weight * 100).toFixed(0)}% weight`)
+  // Archetype scores (0-5 scale)
+  const archetypeScores = mandate.dimensions
+    .filter((d) => d.weight >= 0.1)
+    .map((d) => `  - ${d.label}: ${d.score_0_5}/5`)
+    .join("\n");
+
+  const top3 = mandate.top_3_archetypes
+    .map((a, i) => `  ${i + 1}. ${a.label} (${a.score}/5)`)
     .join("\n");
 
   // Group top-ranked bullets by experience ID
@@ -202,21 +207,32 @@ function buildMandateContextForPrompt(
     .join("\n");
 
   const gapLines = gaps
-    .map((g) => `  - "${g.label}" (weight ${(g.weight * 100).toFixed(0)}%): ${g.suggestion}`)
+    .map((g) => `  - "${g.label}" (weight ${g.score_0_5 ?? (g.weight * 5).toFixed(1)}/5): ${g.suggestion}`)
     .join("\n");
 
-  return `## MANDATE CLASSIFICATION (JD analysis — use this to prioritize bullets)
+  const tone = mandate.tone_guidance;
+
+  return `## MANDATE ARCHETYPE CLASSIFICATION (JD analysis — use this to prioritize)
 This job's primary mandate is: ${mandate.primary_mandate.replace(/_/g, " ").toUpperCase()}
 Seniority level detected: ${mandate.seniority_level}
 Calibrated headline suggestion: "${mandate.calibrated_headline}"
 
-### Mandate Dimensions (highest weight = prioritize these bullets)
-${topDimensions}
+### Top 3 Dominant Archetypes
+${top3}
+
+### All Archetype Scores (0-5 scale)
+${archetypeScores}
+
+### TONE CALIBRATION (${tone.seniority})
+- Summary posture: ${tone.summary_posture}
+- Bullet framing: ${tone.bullet_framing}
+- Competency emphasis: ${tone.competency_emphasis}
+- Headline tone: ${tone.headline_tone}
 
 ### Recommended Bullet Order by Role (most mandate-relevant first)
 ${bulletRanking}
 
-### IMPORTANT: For each role, place the HIGHEST-RELEVANCE bullets first (top 2-3 should align with the primary mandate).
+### IMPORTANT: First 2 bullets under each role must carry 80% of the value — align them with the top 3 archetypes.
 
 ${gaps.length > 0 ? `### MANDATE GAPS — DO NOT FABRICATE
 The following job mandates have NO strong evidence in the inventory.
