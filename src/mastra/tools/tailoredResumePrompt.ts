@@ -43,7 +43,7 @@ export type GapNote = z.infer<typeof GapNoteSchema>;
 export const ResumeBulletSchema = z.object({
   text: z
     .string()
-    .describe("The tailored resume bullet text (action verb + result + metric)"),
+    .describe("The tailored resume bullet text. MUST follow Action → Scale → Outcome format. Target 18-24 words. Max 2 lines. No filler adjectives, no passive phrasing, no duplicate metrics."),
   source_hash: z
     .string()
     .describe("Inventory bullet ID this was derived from (e.g., exp-001-b2)"),
@@ -68,8 +68,8 @@ export const ResumeExperienceSchema = z.object({
   bullets: z
     .array(ResumeBulletSchema)
     .min(1)
-    .max(8)
-    .describe("3-8 tailored bullets per role, each with evidence. Lead with mandate/transformation bullet."),
+    .max(5)
+    .describe("Tailored bullets per role: 4 max for most recent role, 3 for next 2 roles, 2 for roles older than 15 years. Each bullet: Action → Scale → Outcome, 18-24 words, max 2 lines. Lead with mandate/transformation bullet."),
 });
 
 export const TailoredResumeSchema = z.object({
@@ -152,6 +152,19 @@ Retained executive recruiters who review resumes in 30-45 seconds. They are look
 - Financial impact anchored to real numbers
 - Board-readiness indicators
 
+## STRICT 2-PAGE LIMIT
+The final rendered document MUST NOT exceed 2 pages. This is non-negotiable.
+- No reduction in font size below professional norms.
+- No margin manipulation.
+- Target 13-15 total bullets across all roles.
+- If content risks exceeding 2 pages, compress lower-priority bullets first, then tools, then condense older roles.
+- NEVER cut the most recent role first.
+
+## PAGE BALANCE
+Page 1 MUST contain: Header, Executive Summary, Core Competencies, and the most recent role (complete).
+Page 2 contains: Remaining roles, Tools & Platforms, Education, Certifications.
+The resume should feel balanced and calm across both pages — no cramming.
+
 ## RESUME ARCHITECTURE (top to bottom)
 
 1. **EXECUTIVE HEADLINE** (executive_headline field)
@@ -199,23 +212,41 @@ Retained executive recruiters who review resumes in 30-45 seconds. They are look
 
 4. **EXPERIENCE** (experience array)
    Each role must include:
-   - **scope_line**: One line of enterprise context — team headcount, business unit context, budget/investment if known. Use ONLY verifiable facts from inventory. Pipe-separated. E.g., "45-person organization | 3 business units | $8M board-approved investment"
-   - **Bullet discipline**:
-     - Start EVERY bullet with an action verb (Architected, Launched, Established, Developed, Created, Built, Designed, Partnered)
-     - Max 2 lines per bullet — tighten any that run longer
-     - The first 2 bullets under each role must carry 80% of the value (biggest financial impact, most relevant transformation)
-     - Do NOT repeat scope_line content in the first bullet. The scope_line handles team size and org context — bullets should focus on WHAT was accomplished, not WHO was led.
-   - **Bullet caps by role recency**:
-     - Most recent 2 roles: 4-5 bullets each
-     - Third role back: 3 bullets
-     - Fourth+ role: 2 bullets (promotion trajectory + single top-impact result)
-   - **No duplication**: If a fact appears in the Executive Summary, do NOT repeat it as the first bullet of a role. Use different inventory facts for bullets.
-   - Target a clean 2-page document. 15-17 total bullets across all roles.
+   - **scope_line**: One SHORT line of enterprise context — team headcount, business unit context, budget/investment if known. Use ONLY verifiable facts from inventory. Pipe-separated. E.g., "45-person org | 3 business units | $8M investment"
+   - **Clear visual separation**: Role Title, Company, Location | Dates, and Scope Line must each be distinct lines. Do NOT combine them.
+
+   **BULLET DISCIPLINE — STRICT ENFORCEMENT:**
+   - Start EVERY bullet with an action verb (Architected, Launched, Established, Developed, Created, Built, Designed, Partnered)
+   - Every bullet MUST follow: **Action → Scale → Outcome** (3-part structure)
+   - Target **18-24 words per bullet**. Never exceed 2 printed lines.
+   - The first 2 bullets under each role must carry 80% of the value
+   - Do NOT repeat scope_line content in bullets
+
+   **FILLER PHRASE BAN — remove all of these:**
+   - "serving as…" → replace with action-first phrasing
+   - "known for…" → replace with action-first phrasing
+   - "responsible for…" → replace with action-first phrasing
+   - "played a key role in…" → delete, use direct verb
+   - "core member of…" → delete, use direct verb
+   - Remove filler adjectives: "strategically", "holistically", "comprehensively", "effectively"
+   - Do NOT stack multiple metrics in a single sentence. One metric per clause.
+
+   **BULLET CAPS BY ROLE RECENCY (STRICTLY ENFORCED):**
+   - Most recent role: EXACTLY 4 bullets
+   - Second most recent role: 3 bullets
+   - Third role: 3 bullets
+   - Roles older than 15 years: 2 bullets max (promotion + single top-impact result)
+   - Total across all roles: 13-15 bullets maximum
+
+   **NO SECTION LONGER THAN 10-12 LINES** (content lines, not spacing). If a section exceeds this, compress it.
+
+   **No duplication**: If a fact appears in the Executive Summary, do NOT repeat it as the first bullet of a role. Use different inventory facts for bullets.
 
 5. **TOOLS & PLATFORMS** (skills.tools_and_platforms)
-   A single compact line of technical tools from inventory, filtered to JD relevance.
+   A single compact line — no more than 1 line of tools from inventory, filtered to JD relevance.
    Do NOT create a separate "Enterprise Capabilities" section if core_competencies already covers strategic keywords — this creates redundancy.
    When core_competencies is present, ONLY emit tools_and_platforms (skip enterprise_capabilities).
+   No tool-dumping paragraphs. Keep it tight.
 
 6. **EDUCATION** — as-is from inventory
 7. **CERTIFICATIONS** — all relevant certifications from inventory
@@ -248,7 +279,10 @@ Retained executive recruiters who review resumes in 30-45 seconds. They are look
 5. **ATS-FRIENDLY FORMAT**
    - No tables, no columns, no graphics, no icons
    - Standard section headings only: EXECUTIVE SUMMARY, CORE COMPETENCIES, PROFESSIONAL EXPERIENCE, TOOLS & PLATFORMS, EDUCATION, CERTIFICATIONS
+   - ALL CAPS section headings
+   - One line spacing before each section heading, no excessive spacing after
    - Use standard action-verb bullets ("Architected…", "Launched…", "Established…", "Developed…", "Built…", "Designed…")
+   - No orphan single-line bullets at page breaks
 
 6. **EVIDENCE POINTERS ARRAY**
    Produce one evidence_pointers entry per resume bullet. The claim_text must be the exact bullet text you emitted. The source_hash is the inventory bullet ID. The evidence_quote is the verbatim inventory text. Confidence >= 0.7 for all pointers.
@@ -260,13 +294,23 @@ Retained executive recruiters who review resumes in 30-45 seconds. They are look
    - If a metric is presented as a range in inventory, keep it as a range
    - Do NOT imply ownership of capabilities not documented in inventory
 
-8. **ANTI-REDUNDANCY**
+8. **ANTI-REDUNDANCY (STRICTLY ENFORCED)**
    - Do NOT create both "Core Competencies" and "Enterprise Capabilities" sections — pick one
    - Do NOT repeat team size in both scope_line and first bullet
    - Do NOT repeat summary claims as first bullets of roles
    - If information exists in the scope_line, do not restate it in bullet form
+   - Compare Executive Summary to first bullet of each role — if semantic overlap >60%, rewrite one
+   - Remove repeated phrases across sections: "Transforming analytics…", "Bridging technical capabilities…", "Core C-suite member…"
+   - Each section must introduce NEW information — no recycling across summary, competencies, and bullets
 
-9. **OUTPUT**
+9. **VISUAL CLARITY**
+   - No more than 10-12 content lines per section block
+   - No bullets longer than 2 printed lines
+   - No stacked metrics in a single sentence (one metric per clause)
+   - Clear separation between: Role title, Company, Scope line, Bullets
+   - The resume must feel "calm" and executive — generous white space, clear hierarchy
+
+10. **OUTPUT**
    Return ONLY the JSON object. No markdown fences, no commentary, no explanation.`;
 }
 
@@ -302,13 +346,22 @@ ${JSON.stringify(allowlist, null, 2)}
    Every fact must come from inventory. No generic openers.
 4. Build core_competencies with 8-12 STRATEGIC enterprise keywords (not tool names). Include ATS terms from JD.
 5. For each experience entry:
-   a. Add a scope_line with enterprise context (team size, business units, budget) — pipe-separated
+   a. Add a scope_line with enterprise context (team size, business units, budget) — pipe-separated, ONE short line only
    b. First 2 bullets must carry 80% of the value (biggest impact, most JD-relevant)
    c. Do NOT repeat scope_line info in bullets. Scope_line handles org context, bullets handle achievements.
-   d. Start every bullet with an action verb. Max 2 lines per bullet.
-   e. Bullet caps: 4-5 for recent roles, 3 for third role, 2 for fourth+ role. Target 15-17 total bullets.
+   d. Start every bullet with an action verb. Follow Action → Scale → Outcome format.
+   e. Target 18-24 words per bullet. Max 2 printed lines. Remove filler adjectives and passive phrasing.
+   f. STRICT bullet caps: 4 for most recent role, 3 for second and third roles, 2 for roles older than 15 years.
+   g. Total: 13-15 bullets maximum across all roles.
 6. Do NOT create both core_competencies and enterprise_capabilities — this creates redundancy. When core_competencies is present, only emit tools_and_platforms.
-7. For each JD requirement you CANNOT support, add a gap_note — do NOT fabricate content.
-8. Include ats_keywords_used listing JD keywords you intentionally wove in.
-9. Return ONLY the TailoredResume JSON.`;
+7. Tools & Platforms: limit to 1 compact line. No tool-dumping.
+8. REDUNDANCY CHECK before finalizing:
+   a. Compare Executive Summary to first bullet of each role — if overlap >60%, rewrite one.
+   b. Remove repeated phrases: "Transforming analytics…", "Bridging technical capabilities…", "Core C-suite member…"
+   c. Remove filler: "serving as…", "known for…", "responsible for…", "played a key role in…"
+   d. Each section must introduce NEW information.
+9. PAGE BALANCE: Header + Summary + Competencies + Most Recent Role = Page 1. Everything else = Page 2.
+10. For each JD requirement you CANNOT support, add a gap_note — do NOT fabricate content.
+11. Include ats_keywords_used listing JD keywords you intentionally wove in.
+12. Return ONLY the TailoredResume JSON.`;
 }

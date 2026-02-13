@@ -12,6 +12,7 @@ import {
   buildResumeUserPrompt,
   type TailoredResume,
 } from "./tailoredResumePrompt";
+import { compressResume } from "./resumeCompressor";
 import type { JDRequirements } from "./extractJDRequirementsTool";
 
 async function loadInventory(): Promise<Record<string, any>> {
@@ -119,12 +120,39 @@ export const generateResumeTool = createTool({
       temperature: 0.3,
     });
 
+    // ── Post-generation compression pass ──
+    logger?.info(`🔧 [generateResume] Running post-generation compression pass`);
+    const compressionReport = compressResume(resume);
+
+    logger?.info(`🔧 [generateResume] Compression: ${compressionReport.originalBulletCount} → ${compressionReport.finalBulletCount} bullets`);
+    if (compressionReport.removedBullets.length > 0) {
+      logger?.info(`🔧 [generateResume] Removed ${compressionReport.removedBullets.length} bullets (cap enforcement)`);
+      for (const rb of compressionReport.removedBullets) {
+        logger?.info(`  - Role ${rb.roleIndex}, bullet ${rb.bulletIndex}: ${rb.reason}`);
+      }
+    }
+    if (compressionReport.fillerPhrasesRemoved.length > 0) {
+      logger?.info(`🔧 [generateResume] Cleaned filler phrases from ${compressionReport.fillerPhrasesRemoved.length} locations`);
+    }
+    if (compressionReport.redundanciesFound.length > 0) {
+      logger?.warn(`⚠️ [generateResume] Found ${compressionReport.redundanciesFound.length} redundancies:`);
+      for (const r of compressionReport.redundanciesFound) {
+        logger?.warn(`  - ${r.location}: "${r.phrase}"`);
+      }
+    }
+    if (compressionReport.toolsTrimmed) {
+      logger?.info(`🔧 [generateResume] Tools trimmed: ${compressionReport.toolsTrimmed.before.length} → ${compressionReport.toolsTrimmed.after.length}`);
+    }
+    if (compressionReport.condensedBullets.length > 0) {
+      logger?.warn(`⚠️ [generateResume] ${compressionReport.condensedBullets.length} bullets exceed 30 words — may need manual tightening`);
+    }
+
     const totalBullets = resume.experience.reduce(
       (sum, exp) => sum + exp.bullets.length,
       0,
     );
 
-    logger?.info(`✅ [generateResume] Resume generated successfully`);
+    logger?.info(`✅ [generateResume] Resume generated and compressed successfully`);
     logger?.info(`📄 [generateResume] Bullets: ${totalBullets}, Evidence pointers: ${resume.evidence_pointers.length}, Gap notes: ${resume.gap_notes.length}`);
     logger?.info(`📄 [generateResume] ATS keywords used: ${resume.ats_keywords_used.length}`);
     logger?.info(`📄 [generateResume] Experience entries: ${resume.experience.length}`);
@@ -139,6 +167,13 @@ export const generateResumeTool = createTool({
       gap_notes: resume.gap_notes.length,
       ats_keywords: resume.ats_keywords_used.length,
       model: "gpt-4o",
+      compression: {
+        bullets_before: compressionReport.originalBulletCount,
+        bullets_after: compressionReport.finalBulletCount,
+        bullets_removed: compressionReport.removedBullets.length,
+        filler_cleaned: compressionReport.fillerPhrasesRemoved.length,
+        redundancies_found: compressionReport.redundanciesFound.length,
+      },
     };
 
     try {

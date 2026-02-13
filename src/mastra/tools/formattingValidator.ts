@@ -301,6 +301,97 @@ export function checkResumeSections(xml: string): FormattingViolation[] {
   return violations;
 }
 
+// ── Executive Quality Checks ──────────────────────────────────────
+
+const FILLER_PHRASES: { regex: RegExp; label: string }[] = [
+  { regex: /\bserving as\b/gi, label: '"serving as…"' },
+  { regex: /\bknown for\b/gi, label: '"known for…"' },
+  { regex: /\bresponsible for\b/gi, label: '"responsible for…"' },
+  { regex: /\bplayed a key role\b/gi, label: '"played a key role…"' },
+  { regex: /\bcore member of\b/gi, label: '"core member of…"' },
+  { regex: /\bserved as\b/gi, label: '"served as…"' },
+  { regex: /\btasked with\b/gi, label: '"tasked with…"' },
+  { regex: /\bin charge of\b/gi, label: '"in charge of…"' },
+];
+
+/**
+ * Check for filler phrases that should be replaced with action-first phrasing.
+ */
+export function checkFillerPhrases(xml: string): FormattingViolation[] {
+  const violations: FormattingViolation[] = [];
+  const plainText = extractPlainText(xml);
+
+  for (const { regex, label } of FILLER_PHRASES) {
+    regex.lastIndex = 0;
+    const matches = plainText.match(regex) || [];
+    if (matches.length > 0) {
+      violations.push({
+        check: "FILLER_PHRASE",
+        severity: "warning",
+        message: `Found filler phrase ${label} (${matches.length} occurrence${matches.length > 1 ? "s" : ""})`,
+        location: "document",
+        details: `Replace ${label} with action-first phrasing. Executive resumes should lead with verbs: Architected, Launched, Built, etc.`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Check bullet word count — target 18-24 words, warn if >30.
+ * Bullets are identified by "• " prefix in the document text.
+ */
+export function checkBulletLength(xml: string): FormattingViolation[] {
+  const violations: FormattingViolation[] = [];
+  const plainText = extractPlainText(xml);
+
+  // Split by bullet markers
+  const bulletPattern = /•\s+([^•]+)/g;
+  let match: RegExpExecArray | null;
+  let bulletIndex = 0;
+
+  while ((match = bulletPattern.exec(plainText)) !== null) {
+    bulletIndex++;
+    const bulletText = match[1].trim();
+    const wordCount = bulletText.split(/\s+/).filter(w => w.length > 0).length;
+
+    if (wordCount > 35) {
+      violations.push({
+        check: "BULLET_TOO_LONG",
+        severity: "warning",
+        message: `Bullet #${bulletIndex} is ${wordCount} words (target: 18-24, max recommended: 30)`,
+        location: "experience",
+        details: `"${bulletText.substring(0, 60)}..." — compress using Action → Scale → Outcome format.`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Check total bullet count — should be 13-15 for a 2-page resume.
+ */
+export function checkTotalBulletCount(xml: string): FormattingViolation[] {
+  const violations: FormattingViolation[] = [];
+  const plainText = extractPlainText(xml);
+  const bulletMatches = plainText.match(/•\s+/g) || [];
+  const count = bulletMatches.length;
+
+  if (count > 17) {
+    violations.push({
+      check: "TOO_MANY_BULLETS",
+      severity: "warning",
+      message: `Resume has ${count} bullets (target: 13-15, max: 17)`,
+      location: "experience",
+      details: `Too many bullets risk exceeding 2 pages. Reduce to 13-15 total by trimming older roles first.`,
+    });
+  }
+
+  return violations;
+}
+
 export async function validateResumeFormatting(
   docxBuffer: Buffer,
   profile: {
@@ -341,6 +432,16 @@ export async function validateResumeFormatting(
     checksRun++;
     violations.push(...checkPageCount(pageCount, 2, "Resume"));
   }
+
+  // ── Executive Quality Checks ──
+  checksRun++;
+  violations.push(...checkFillerPhrases(xml));
+
+  checksRun++;
+  violations.push(...checkBulletLength(xml));
+
+  checksRun++;
+  violations.push(...checkTotalBulletCount(xml));
 
   const criticalCount = violations.filter((v) => v.severity === "critical").length;
   const warningCount = violations.filter((v) => v.severity === "warning").length;

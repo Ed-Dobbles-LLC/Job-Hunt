@@ -27,6 +27,7 @@ import {
 import type { JDRequirements } from "./extractJDRequirementsTool";
 import { extractClaimsLedger, summarizeLedger, type ClaimsLedger } from "./claimsLedger";
 import { classifyMandate, scoreBulletsAgainstMandate, identifyMandateGaps, reorderBulletsPerRole, type MandateProfile } from "./mandateClassifier";
+import { compressResume } from "./resumeCompressor";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -207,7 +208,7 @@ function buildMandateContextForPrompt(
     .join("\n");
 
   const gapLines = gaps
-    .map((g) => `  - "${g.label}" (weight ${g.score_0_5 ?? (g.weight * 5).toFixed(1)}/5): ${g.suggestion}`)
+    .map((g) => `  - "${g.label}" (weight ${(g.weight * 5).toFixed(1)}/5): ${g.suggestion}`)
     .join("\n");
 
   const tone = mandate.tone_guidance;
@@ -413,6 +414,13 @@ export const generateVerifiedPacketTool = createTool({
             label: `resume-attempt${attempt}`,
             logger,
           });
+
+          // Run post-generation compression pass
+          logger?.info(`🔧 [generateVerifiedPacket] Attempt ${attempt}: Running resume compression pass`);
+          const compressionReport = compressResume(currentResume);
+          logger?.info(`🔧 [generateVerifiedPacket] Compression: ${compressionReport.originalBulletCount} → ${compressionReport.finalBulletCount} bullets, ${compressionReport.fillerPhrasesRemoved.length} filler phrases cleaned, ${compressionReport.redundanciesFound.length} redundancies found`);
+          writeDebugArtifact(`attempt${attempt}_compression_report`, compressionReport, context.job_id);
+
           logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Resume generated (${currentResume.experience.length} roles, ${currentResume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0)} bullets)`);
           writeDebugArtifact(`attempt${attempt}_resume_output`, currentResume, context.job_id);
 
@@ -457,6 +465,11 @@ export const generateVerifiedPacketTool = createTool({
               label: `resume-correction-attempt${attempt}`,
               logger,
             });
+
+            // Run post-correction compression pass
+            const correctionCompressionReport = compressResume(currentResume);
+            logger?.info(`🔧 [generateVerifiedPacket] Attempt ${attempt}: Post-correction compression: ${correctionCompressionReport.originalBulletCount} → ${correctionCompressionReport.finalBulletCount} bullets`);
+
             logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Corrected resume generated`);
             writeDebugArtifact(`attempt${attempt}_resume_corrected`, currentResume, context.job_id);
           } else {
