@@ -738,26 +738,66 @@ export async function runWorkflowDirectly(mastra: any): Promise<{ digestSent: bo
   const logger = mastra?.getLogger();
   logger?.info("🚀 [DirectRunner] Starting workflow execution (no Inngest)");
 
-  // Step 1: Fetch and parse emails
-  logger?.info("▶️ [DirectRunner] Step 1: Fetch and parse emails");
-  const step1Result = await executeFetchAndParse({ mastra });
+  // Mark any stale "running" runs older than 2 hours as failed
+  try {
+    const staleResult = await query(
+      `UPDATE runs SET end_ts = NOW(), status = 'failed'
+       WHERE status = 'running' AND start_ts < NOW() - INTERVAL '2 hours'
+       RETURNING run_id`,
+    );
+    if (staleResult.rows.length > 0) {
+      logger?.warn(
+        `🧹 [DirectRunner] Cleaned up ${staleResult.rows.length} stale runs: ${staleResult.rows.map((r: any) => r.run_id).join(", ")}`,
+      );
+    }
+  } catch (err) {
+    logger?.warn(`⚠️ [DirectRunner] Failed to clean stale runs: ${err}`);
+  }
 
-  // Step 2: Enrich jobs with web search
-  logger?.info("▶️ [DirectRunner] Step 2: Enrich jobs");
-  const step2Result = await executeEnrichJobs({ inputData: step1Result, mastra });
+  let runId: string | undefined;
 
-  // Step 3: Score and shortlist
-  logger?.info("▶️ [DirectRunner] Step 3: Score and shortlist");
-  const step3Result = await executeScoreAndShortlist({ inputData: step2Result, mastra });
+  try {
+    // Step 1: Fetch and parse emails
+    logger?.info("▶️ [DirectRunner] Step 1: Fetch and parse emails");
+    const step1Result = await executeFetchAndParse({ mastra });
+    runId = step1Result.runId;
 
-  // Step 4: Generate packets
-  logger?.info("▶️ [DirectRunner] Step 4: Generate packets");
-  const step4Result = await executeGeneratePackets({ inputData: step3Result, mastra });
+    // Step 2: Enrich jobs with web search
+    logger?.info("▶️ [DirectRunner] Step 2: Enrich jobs");
+    const step2Result = await executeEnrichJobs({ inputData: step1Result, mastra });
 
-  // Step 5: Send digest
-  logger?.info("▶️ [DirectRunner] Step 5: Send digest");
-  const step5Result = await executeSendDigest({ inputData: step4Result, mastra });
+    // Step 3: Score and shortlist
+    logger?.info("▶️ [DirectRunner] Step 3: Score and shortlist");
+    const step3Result = await executeScoreAndShortlist({ inputData: step2Result, mastra });
 
-  logger?.info(`✅ [DirectRunner] Workflow complete: ${step5Result.summary}`);
-  return step5Result;
+    // Step 4: Generate packets
+    logger?.info("▶️ [DirectRunner] Step 4: Generate packets");
+    const step4Result = await executeGeneratePackets({ inputData: step3Result, mastra });
+
+    // Step 5: Send digest
+    logger?.info("▶️ [DirectRunner] Step 5: Send digest");
+    const step5Result = await executeSendDigest({ inputData: step4Result, mastra });
+
+    logger?.info(`✅ [DirectRunner] Workflow complete: ${step5Result.summary}`);
+    return step5Result;
+  } catch (err: any) {
+    logger?.error(`❌ [DirectRunner] Workflow failed: ${err.message}\n${err.stack}`);
+
+    // Mark this run as failed so it doesn't stay "running" forever
+    if (runId) {
+      try {
+        await query(
+          "UPDATE runs SET end_ts = NOW(), status = 'failed' WHERE run_id = $1",
+          [runId],
+        );
+      } catch (dbErr) {
+        logger?.error(`❌ [DirectRunner] Could not update run ${runId} to failed: ${dbErr}`);
+      }
+    }
+
+    return {
+      digestSent: false,
+      summary: `Workflow failed: ${err.message}`,
+    };
+  }
 }
