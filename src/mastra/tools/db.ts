@@ -159,6 +159,12 @@ export async function initDatabase(): Promise<void> {
         key_phrases JSONB DEFAULT '[]'::jsonb,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS processed_gmail_ids (
+        gmail_id TEXT PRIMARY KEY,
+        processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        jobs_found INTEGER NOT NULL DEFAULT 0
+      );
     `);
   } finally {
     client.release();

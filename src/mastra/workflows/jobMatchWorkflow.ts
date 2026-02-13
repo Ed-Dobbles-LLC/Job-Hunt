@@ -40,7 +40,7 @@ async function executeFetchAndParse({ mastra }: { mastra?: any; inputData?: any 
     logger?.info("📧 [Step 1] Fetching from Gmail");
     const { fetchEmailsFromLabel } = await import("../tools/gmailClient");
     const gmailLabel = process.env.GMAIL_LABEL || "Job Alerts";
-    emailsData = await fetchEmailsFromLabel(gmailLabel, 20);
+    emailsData = await fetchEmailsFromLabel(gmailLabel, 50);
   }
 
   if (emailsData.length === 0) {
@@ -54,8 +54,35 @@ async function executeFetchAndParse({ mastra }: { mastra?: any; inputData?: any 
     };
   }
 
+  // Filter out emails we've already processed
+  const allGmailIds = emailsData.map((e: any) => e.id);
+  const alreadyProcessed = await query(
+    "SELECT gmail_id FROM processed_gmail_ids WHERE gmail_id = ANY($1)",
+    [allGmailIds],
+  );
+  const processedSet = new Set(alreadyProcessed.rows.map((r: any) => r.gmail_id));
+  const originalCount = emailsData.length;
+  emailsData = emailsData.filter((e: any) => !processedSet.has(e.id));
+
+  if (processedSet.size > 0) {
+    logger?.info(
+      `📧 [Step 1] Skipped ${processedSet.size} already-processed emails, ${emailsData.length} new to parse`,
+    );
+  }
+
+  if (emailsData.length === 0) {
+    logger?.info("📧 [Step 1] All fetched emails were already processed");
+    return {
+      newJobIds: [] as number[],
+      totalEmails: originalCount,
+      totalParsed: 0,
+      duplicateCount: 0,
+      runId,
+    };
+  }
+
   logger?.info(
-    `📧 [Step 1] Found ${emailsData.length} emails, parsing with agent...`,
+    `📧 [Step 1] Found ${emailsData.length} new emails (${originalCount} total), parsing with agent...`,
   );
 
   const allEmailBodies = emailsData
@@ -100,9 +127,29 @@ ${allEmailBodies}`,
   const allResults = allToolResults.map((r: any) => r.result || r);
   const parseResult = allResults.find((r: any) => r.newJobIds);
 
+  if (!parseResult) {
+    logger?.error(
+      `❌ [Step 1] Agent did NOT invoke parseJobsTool! Tool results: ${JSON.stringify(allResults.slice(0, 3))}. Agent text: ${(parseResponse.text || "").slice(0, 200)}`,
+    );
+  }
+
   const newJobIds = parseResult?.newJobIds || [];
   const duplicateCount = parseResult?.duplicateCount || 0;
   const totalParsed = parseResult?.totalParsed || 0;
+
+  // Mark all fetched emails as processed so we don't re-fetch them
+  for (const email of emailsData) {
+    try {
+      await query(
+        `INSERT INTO processed_gmail_ids (gmail_id, jobs_found)
+         VALUES ($1, $2)
+         ON CONFLICT (gmail_id) DO NOTHING`,
+        [email.id, totalParsed],
+      );
+    } catch (err) {
+      logger?.warn(`⚠️ [Step 1] Failed to mark email ${email.id} as processed: ${err}`);
+    }
+  }
 
   logger?.info(
     `✅ [Step 1] Parsed ${totalParsed} jobs, ${newJobIds.length} new, ${duplicateCount} duplicates`,
