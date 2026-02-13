@@ -1060,6 +1060,8 @@
         <!-- Tabs -->
         <div class="tabs">
           <button class="tab active" onclick="switchTab('jobs')">Jobs</button>
+          <button class="tab" onclick="switchTab('needsjd')">Needs JD <span class="count" id="count-needsjd" style="background:var(--yellow-soft);color:var(--yellow);padding:1px 6px;border-radius:8px;font-size:11px;margin-left:4px">0</span></button>
+          <button class="tab" onclick="switchTab('dedup')">Dedup Log</button>
           <button class="tab" onclick="switchTab('runs')">Run History</button>
         </div>
 
@@ -1093,6 +1095,42 @@
           <div class="empty-state" id="emptyJobs" style="display:none">
             <div class="icon">&#x1F4ED;</div>
             <div id="emptyJobsMsg">No jobs found. Run the workflow to fetch and process job alerts.</div>
+          </div>
+        </div>
+
+        <!-- Needs JD Panel -->
+        <div class="panel" id="panel-needsjd">
+          <div style="margin-bottom:16px;padding:12px 16px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">Jobs Missing Descriptions</div>
+            <div style="font-size:12px;color:var(--text-dim)">These jobs were ingested from LinkedIn alerts without full job descriptions. Paste a JD to enable scoring and packet generation.</div>
+          </div>
+          <div id="needsJdList" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div class="empty-state" id="emptyNeedsJd" style="display:none">
+            <div class="icon">&#x2705;</div>
+            <div>All jobs have sufficient JD text!</div>
+          </div>
+        </div>
+
+        <!-- Dedup Log Panel -->
+        <div class="panel" id="panel-dedup">
+          <div style="margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap" id="dedupStats"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Title</th>
+                  <th>Reason</th>
+                  <th>Matched With</th>
+                  <th>When</th>
+                </tr>
+              </thead>
+              <tbody id="dedupBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="emptyDedup" style="display:none">
+            <div class="icon">&#x1F4ED;</div>
+            <div>No dedup events logged yet. They'll appear after the next workflow run.</div>
           </div>
         </div>
 
@@ -1269,6 +1307,10 @@
     async function loadDashboard() {
       try {
         const data = await api('');
+        // Also update needs-enrichment count badge
+        api('/needs-enrichment').then(ne => {
+          document.getElementById('count-needsjd').textContent = ne.total || 0;
+        }).catch(() => {});
         const grid = document.getElementById('statsGrid');
         grid.innerHTML = `
           <div class="stat-card">
@@ -1651,6 +1693,100 @@
       }
     }
 
+    async function loadNeedsJd() {
+      try {
+        const data = await api('/needs-enrichment');
+        const list = document.getElementById('needsJdList');
+        const empty = document.getElementById('emptyNeedsJd');
+        document.getElementById('count-needsjd').textContent = data.total || 0;
+
+        if (!data.jobs || data.jobs.length === 0) {
+          list.innerHTML = '';
+          empty.style.display = '';
+          return;
+        }
+        empty.style.display = 'none';
+
+        list.innerHTML = data.jobs.map(j => `
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <div style="font-weight:600;font-size:14px">${esc(j.company || '-')}</div>
+              <div style="font-size:13px;color:var(--text-dim)">${esc(j.title || '-')} &middot; ${esc(j.location || '-')}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">JD: ${j.jd_length || 0} chars${j.posting_url ? ' &middot; <a href="' + esc(j.posting_url) + '" target="_blank" style="color:var(--blue)">View Posting</a>' : ''}</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <button class="btn" onclick="openJdPasteModal(${j.job_id}, '${esc(j.company)}', '${esc(j.title)}')" style="font-size:12px;padding:6px 14px;white-space:nowrap">Paste JD</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Needs JD load error:', e);
+      }
+    }
+
+    async function openJdPasteModal(jobId, company, title) {
+      const jdText = prompt(`Paste the full job description for:\n${company} — ${title}\n\n(minimum 50 characters)`);
+      if (!jdText || jdText.trim().length < 50) {
+        if (jdText !== null) showToast('JD text must be at least 50 characters', 'error');
+        return;
+      }
+      try {
+        await api('/jobs/' + jobId + '/jd', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jd_text: jdText.trim() }),
+        });
+        showToast(`JD updated for ${company} (${jdText.trim().length} chars)`, 'success');
+        loadNeedsJd();
+        loadDashboard();
+      } catch (e) {
+        showToast('Failed to update JD: ' + e.message, 'error');
+      }
+    }
+
+    async function loadDedupLog() {
+      try {
+        const data = await api('/dedup-log');
+        const tbody = document.getElementById('dedupBody');
+        const empty = document.getElementById('emptyDedup');
+        const statsEl = document.getElementById('dedupStats');
+
+        // Render 7-day stats
+        if (data.stats_7d && data.stats_7d.length > 0) {
+          const reasonLabels = { jd_hash: 'Exact Hash', canonical_url: 'Same URL', simhash_near_duplicate: 'Near-Duplicate', company_title_location_14d: 'Same Company+Title' };
+          statsEl.innerHTML = data.stats_7d.map(s => `
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;min-width:140px">
+              <div style="font-size:20px;font-weight:700">${s.count}</div>
+              <div style="font-size:11px;color:var(--text-dim)">${reasonLabels[s.reason] || s.reason}</div>
+            </div>
+          `).join('') + '<div style="font-size:11px;color:var(--text-muted);align-self:center">Last 7 days</div>';
+        } else {
+          statsEl.innerHTML = '';
+        }
+
+        if (!data.entries || data.entries.length === 0) {
+          tbody.innerHTML = '';
+          empty.style.display = '';
+          return;
+        }
+        empty.style.display = 'none';
+
+        const reasonLabels = { jd_hash: 'Exact hash match', canonical_url: 'Same URL', simhash_near_duplicate: 'Near-duplicate text', company_title_location_14d: 'Same company+title (14d)' };
+
+        tbody.innerHTML = data.entries.slice(0, 100).map(e => `
+          <tr>
+            <td style="font-weight:600;font-size:13px">${esc(e.company || '-')}</td>
+            <td style="font-size:13px">${esc(e.title || '-')}</td>
+            <td><span style="font-size:11px;padding:2px 8px;border-radius:6px;background:var(--surface2)">${reasonLabels[e.reason] || e.reason}</span></td>
+            <td style="font-size:12px;color:var(--text-dim)">${e.matched_company ? esc(e.matched_company) + ' — ' + esc(e.matched_title || '') : (e.matched_job_id ? '#' + e.matched_job_id : '-')}</td>
+            <td style="font-size:12px;color:var(--text-dim)">${formatDate(e.created_at)}</td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error('Dedup log load error:', e);
+      }
+    }
+
     async function loadRuns() {
       try {
         const data = await api('/runs');
@@ -1901,6 +2037,8 @@
       document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
       document.getElementById('panel-' + tab).classList.add('active');
       if (tab === 'runs') loadRuns();
+      if (tab === 'needsjd') loadNeedsJd();
+      if (tab === 'dedup') loadDedupLog();
     }
 
     async function triggerWorkflow() {

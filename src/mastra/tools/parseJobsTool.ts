@@ -118,6 +118,16 @@ export const parseJobsTool = createTool({
     const newJobIds: number[] = [];
     let duplicateCount = 0;
 
+    async function logDedup(job: any, reason: string, matchedJobId?: number) {
+      try {
+        await query(
+          `INSERT INTO dedup_log (company, title, location, posting_url, reason, matched_job_id)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [job.company, job.title, job.location || "", job.posting_url || "", reason, matchedJobId || null],
+        );
+      } catch { /* best-effort logging */ }
+    }
+
     for (const job of context.jobs) {
       const jdText = job.jd_text || "";
       const hashInput = jdText || `${job.company}|${job.title}|${job.location}|${job.posting_url || ""}`;
@@ -142,6 +152,7 @@ export const parseJobsTool = createTool({
         logger?.info(
           `🔄 [parseJobs] Duplicate by JD hash: ${job.company} - ${job.title}`,
         );
+        await logDedup(job, "jd_hash", existingByHash.rows[0].job_id);
         duplicateCount++;
         continue;
       }
@@ -155,6 +166,7 @@ export const parseJobsTool = createTool({
           logger?.info(
             `🔄 [parseJobs] Duplicate by URL: ${job.company} - ${job.title}`,
           );
+          await logDedup(job, "canonical_url", existingByUrl.rows[0].job_id);
           duplicateCount++;
           continue;
         }
@@ -178,6 +190,7 @@ export const parseJobsTool = createTool({
           }
         }
         if (nearDupe) {
+          await logDedup(job, "simhash_near_duplicate");
           duplicateCount++;
           continue;
         }
@@ -202,6 +215,7 @@ export const parseJobsTool = createTool({
         logger?.info(
           `🔄 [parseJobs] Duplicate by company/title/location within 14 days: ${job.company} - ${job.title}`,
         );
+        await logDedup(job, "company_title_location_14d", existingBySimilar.rows[0].job_id);
         duplicateCount++;
         continue;
       }

@@ -1206,6 +1206,101 @@ export function getDashboardRoutes() {
         }
       },
     },
+    /* ── Needs Enrichment: jobs with missing/thin JD text ───── */
+    {
+      path: "/api/dashboard/needs-enrichment",
+      method: "GET" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+          const result = await query(`
+            SELECT job_id, company, title, location, posting_url, status,
+                   COALESCE(LENGTH(jd_raw_text), 0) as jd_length,
+                   date_ingested
+            FROM jobs
+            WHERE jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100
+            ORDER BY date_ingested DESC
+          `);
+          return c.json({ jobs: result.rows, total: result.rows.length });
+        } catch (err: any) {
+          logger?.error(`❌ [needs-enrichment] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    /* ── Manually set JD text for a job ──────────────────────── */
+    {
+      path: "/api/dashboard/jobs/:id/jd",
+      method: "PUT" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        const jobId = c.req.param("id");
+        try {
+          const body = await c.req.json();
+          const jdText = body.jd_text;
+          if (!jdText || typeof jdText !== "string" || jdText.trim().length < 50) {
+            return c.json({ error: "jd_text must be at least 50 characters" }, 400);
+          }
+
+          const trimmed = jdText.trim();
+          const jdHash = computeHash(trimmed);
+          const simhash = computeSimhash(trimmed);
+          const keywords = extractKeywords(trimmed);
+
+          await query(
+            `UPDATE jobs SET jd_raw_text = $1, jd_hash = $2, simhash = $3, keywords = $4
+             WHERE job_id = $5`,
+            [trimmed, jdHash, simhash.toString(), JSON.stringify(keywords), jobId],
+          );
+
+          logger?.info(`✅ [jd-update] Updated JD text for job_id=${jobId} (${trimmed.length} chars)`);
+          return c.json({ success: true, job_id: jobId, jd_length: trimmed.length });
+        } catch (err: any) {
+          logger?.error(`❌ [jd-update] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    /* ── Dedup log: recent duplicate rejections ─────────────── */
+    {
+      path: "/api/dashboard/dedup-log",
+      method: "GET" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+          const url = new URL(c.req.url);
+          const limit = parseInt(url.searchParams.get("limit") || "100");
+
+          const result = await query(
+            `SELECT d.*, j.company as matched_company, j.title as matched_title
+             FROM dedup_log d
+             LEFT JOIN jobs j ON d.matched_job_id = j.job_id
+             ORDER BY d.created_at DESC
+             LIMIT $1`,
+            [limit],
+          );
+
+          const stats = await query(`
+            SELECT reason, COUNT(*) as count
+            FROM dedup_log
+            WHERE created_at > NOW() - INTERVAL '7 days'
+            GROUP BY reason
+            ORDER BY count DESC
+          `);
+
+          return c.json({
+            entries: result.rows,
+            total: result.rows.length,
+            stats_7d: stats.rows,
+          });
+        } catch (err: any) {
+          logger?.error(`❌ [dedup-log] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
     /* ── Excel/CSV import ───────────────────────────────────── */
     {
       path: "/api/dashboard/import-excel",

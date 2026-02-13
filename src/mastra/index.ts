@@ -243,27 +243,36 @@ if (Object.keys(mastra.getAgents()).length > 1) {
   );
 }
 
-// Simple in-process daily scheduler (replaces Inngest cron trigger)
-const cronExpr = process.env.SCHEDULE_CRON_EXPRESSION || "30 12 * * *";
-const [cronMin, cronHour] = cronExpr.split(" ").map(Number);
-let lastScheduledRunDate = "";
+// Simple in-process scheduler — supports multiple daily runs
+// SCHEDULE_CRON_EXPRESSION: morning run (default 12:30 UTC / ~7:30 AM ET)
+// SCHEDULE_CRON_EXPRESSION_2: evening run (default 00:00 UTC / ~7:00 PM ET)
+const schedules = [
+  process.env.SCHEDULE_CRON_EXPRESSION || "30 12 * * *",
+  process.env.SCHEDULE_CRON_EXPRESSION_2 || "0 0 * * *",
+].map((expr) => {
+  const [min, hour] = expr.split(" ").map(Number);
+  return { expr, min, hour, lastRunDate: "" };
+});
 
 setInterval(() => {
   const now = new Date();
   const today = now.toISOString().split("T")[0];
-  if (
-    now.getUTCHours() === cronHour &&
-    now.getUTCMinutes() === cronMin &&
-    lastScheduledRunDate !== today
-  ) {
-    lastScheduledRunDate = today;
-    console.log(`🕐 [Scheduler] Starting daily workflow (${cronExpr})`);
-    runWorkflowDirectly(mastra)
-      .then((result) => {
-        console.log(`✅ [Scheduler] Workflow completed: ${result.summary}`);
-      })
-      .catch((err) => {
-        console.error(`❌ [Scheduler] Workflow failed: ${err.message}`);
-      });
+  for (const sched of schedules) {
+    if (
+      now.getUTCHours() === sched.hour &&
+      now.getUTCMinutes() === sched.min &&
+      sched.lastRunDate !== today
+    ) {
+      sched.lastRunDate = today;
+      console.log(`🕐 [Scheduler] Starting workflow (${sched.expr})`);
+      runWorkflowDirectly(mastra)
+        .then((result) => {
+          console.log(`✅ [Scheduler] Workflow completed: ${result.summary}`);
+        })
+        .catch((err) => {
+          console.error(`❌ [Scheduler] Workflow failed: ${err.message}`);
+        });
+      break; // Only run one schedule per tick
+    }
   }
 }, 60_000);

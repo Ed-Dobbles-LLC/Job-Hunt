@@ -165,6 +165,17 @@ export async function initDatabase(): Promise<void> {
         processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         jobs_found INTEGER NOT NULL DEFAULT 0
       );
+
+      CREATE TABLE IF NOT EXISTS dedup_log (
+        id SERIAL PRIMARY KEY,
+        company TEXT,
+        title TEXT,
+        location TEXT,
+        posting_url TEXT,
+        reason TEXT NOT NULL,
+        matched_job_id BIGINT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
     `);
   } finally {
     client.release();
