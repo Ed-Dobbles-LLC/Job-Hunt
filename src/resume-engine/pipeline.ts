@@ -279,6 +279,18 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
       if (stage6.success) {
         currentResume = stage6.data.resume;
         logger?.info(`📐 [Pipeline] Layout: caps=${stage6.data.bullet_cap_result.capped}, chrono=${stage6.data.chronology_reordered}, filler=${stage6.data.filler_removals.length}`);
+
+        // Check for BLOCKED from page estimator
+        if (stage6.data.blocked) {
+          logger?.warn(`🚫 [Pipeline] BLOCKED by page estimator — resume exceeds 2 pages after all compression`);
+          logger?.warn(`📐 [Pipeline] Page estimate: ${stage6.data.page_estimate.estimated_pages} pages, ${stage6.data.page_estimate.estimated_lines} lines`);
+          logger?.warn(`📐 [Pipeline] Compression actions taken: ${stage6.data.page_budget_actions.join("; ")}`);
+        }
+
+        // Log tone violations as diagnostics
+        if (stage6.data.tone_violations.length > 0) {
+          logger?.info(`⚠️ [Pipeline] ${stage6.data.tone_violations.length} bullet tone violation(s): ${stage6.data.tone_violations.map(v => v.issue).join(", ")}`);
+        }
       }
 
       // ── STAGE 7: Truth Audit ───────────────────────────────────────
@@ -292,6 +304,21 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
       if (stage7.success) {
         currentReport = stage7.data.report;
         ownershipWarnings = stage7.data.ownershipWarnings;
+
+        // Log claim audit results
+        if (stage7.data.claimAudit.bullets_without_claims > 0) {
+          logger?.info(`📋 [Pipeline] Claim audit: ${stage7.data.claimAudit.bullets_with_claims}/${stage7.data.claimAudit.total_bullets} bullets linked to Claims Ledger`);
+        }
+
+        // Log summary opener audit
+        if (stage7.data.summaryOpenerAudit.has_banned_opener) {
+          logger?.warn(`⚠️ [Pipeline] Summary uses banned generic opener: "${stage7.data.summaryOpenerAudit.matched_pattern}"`);
+        }
+
+        // Log blocked state from truth audit
+        if (stage7.data.blocked) {
+          logger?.warn(`🚫 [Pipeline] BLOCKED by truth audit: ${stage7.data.block_reasons.join("; ")}`);
+        }
       } else {
         // If truth audit itself crashed, still track the attempt
         currentReport = null;
@@ -394,7 +421,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
         attempts_used: attemptHistory.length,
         max_attempts: maxAttempts,
         best_attempt: bestAttemptIndex,
-        pipeline_version: "7-stage-v1",
+        pipeline_version: "7-stage-v2",
         stages_run: Object.keys(stageResults),
       })],
     );
@@ -419,6 +446,25 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     for (const w of ownershipWarnings) {
       humanReviewNotes.push(`[OWNERSHIP] ${w.location}: ${w.explanation}`);
     }
+  }
+
+  // Check for BLOCKED from layout governor (last attempt)
+  const lastStage6Key = `stage6_attempt${attemptHistory.length}`;
+  const lastStage6 = stageResults[lastStage6Key];
+  if (lastStage6?.success && lastStage6.data?.blocked) {
+    humanReviewNotes.push(
+      `[BLOCKED] Resume exceeds 2-page budget after all compression. Page estimate: ${lastStage6.data.page_estimate?.estimated_pages} pages.`,
+      `Compression actions attempted: ${(lastStage6.data.page_budget_actions || []).join("; ")}`,
+    );
+  }
+
+  // Check for BLOCKED from truth audit (last attempt)
+  const lastStage7Key = `stage7_attempt${attemptHistory.length}`;
+  const lastStage7 = stageResults[lastStage7Key];
+  if (lastStage7?.success && lastStage7.data?.blocked) {
+    humanReviewNotes.push(
+      `[BLOCKED] Truth audit blocked output: ${(lastStage7.data.block_reasons || []).join("; ")}`,
+    );
   }
 
   // ── Summary ────────────────────────────────────────────────────

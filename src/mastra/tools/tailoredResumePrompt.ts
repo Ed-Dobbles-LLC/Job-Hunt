@@ -96,7 +96,7 @@ export const TailoredResumeSchema = z.object({
   professional_summary: z
     .string()
     .describe(
-      "3-5 sentence executive summary anchored to measurable enterprise impact. Max 5 lines. First sentence: identity + domain (NO team size or revenue numbers). Second+ sentences: (1) What scale? (team size, budget, enterprise value), (2) What transformation? (AI, digital, data modernization), (3) What financial impact? (revenue, cost savings, ROI). Open with the candidate's domain identity, not generic language. Use board-ready tone. Only use facts from inventory.",
+      "3-5 sentence executive summary anchored to the dominant job mandate. Max 5 lines. FIRST SENTENCE RULE: Must reflect the job's primary mandate outcome (e.g., governance→control/rigor, platform→architecture/scalability, insight delivery→stakeholder clarity). Must NOT open with '[Domain] leader who has...', 'Executive with a track record of...', or ANY generic role descriptor + 'who has/with'. Must NOT lead with scale, team size, or revenue. Second+ sentences: (1) What scale? (team size, budget, enterprise value), (2) What transformation? (AI, digital, data modernization), (3) What financial impact? (revenue, cost savings, ROI). Use board-ready tone. Only use facts from inventory. No repeated phrasing from first bullet.",
     ),
   core_competencies: z
     .array(z.string())
@@ -187,36 +187,48 @@ The resume should feel balanced and calm across both pages — no cramming.
    A 2-3 paragraph executive narrative. This is the most important section.
    Structure it as three distinct paragraphs separated by newlines:
 
-   **Paragraph 1 — Identity + Scale:**
-   Open with a specific identity claim and the candidate's largest verifiable scale facts.
-   "[Domain] executive who has built and led organizations of up to [largest team size] across [sectors]."
+   **Paragraph 1 — Mandate Anchor + Identity:**
+   The first sentence MUST reflect the dominant job mandate — NOT a generic identity claim.
+
+   **FIRST SENTENCE RULES (NON-NEGOTIABLE):**
+   - Must reflect the job's PRIMARY MANDATE outcome.
+   - Must NOT open with scale, team size, or revenue.
+   - Must NOT use reusable structural phrasing.
+   - Must NOT use ANY of these banned patterns:
+     * "[Domain] leader/executive who has..."
+     * "Executive with a track record of..."
+     * "Analytics executive transforming..."
+     * "Seasoned/Accomplished/Results-driven [anything]..."
+     * ANY variation of "[Role] who has" or "[Role] with [years/track record]"
+   - Must be psychologically anchored to THIS job's mandate:
+     * Governance/reporting job → lead with control, rigor, standardization
+     * Operating model transformation → lead with redesign of how insights are consumed
+     * Client/stakeholder reporting → lead with clarity and stakeholder enablement
+     * Platform modernization → lead with architecture and scalability
+     * Revenue/commercial → lead with financial impact or forecast accuracy
+     * Zero-to-one builder → lead with what was created from nothing
+   - Scale facts go in the SECOND sentence or later.
+
+   After the mandate-anchored opener, provide the candidate's largest verifiable scale facts.
    Then anchor with the headline financial impact from the most recent role.
-   DO NOT open with generic phrases: "Accomplished executive", "Results-driven leader", "Seasoned professional."
-   Instead, lead with specifics from inventory.
 
    **Paragraph 2 — Transformation + Operating Model:**
    Show the PATTERN across the candidate's career — not a list of jobs, but a narrative arc.
-   "Career defined by [pattern: building from zero, scaling, modernizing, etc.]."
    Trace 2-3 career milestones that show a consistent theme of transformation or growth.
    This paragraph answers: "What does this person DO when they arrive at a company?"
 
    **Paragraph 3 — Differentiator ("Why This Leader"):**
    State what makes this candidate rare or distinctive for THIS type of role.
    Position the combination of skills that is unusual at this level.
-   E.g., "Distinctly technical for an executive of this level — [specific technical achievement] — while maintaining fluency in [business skill]."
    This paragraph answers: "Why should I call THIS person instead of 50 other VPs?"
 
    **SUMMARY LINE LIMIT: Max 5 lines.** No blocky paragraphs. Keep it tight and scannable.
-   **FIRST SENTENCE RULES:**
-   - Do NOT mention team size in the first sentence.
-   - Do NOT mention revenue metrics in the first sentence.
-   - Lead with the candidate's identity + domain, not scale numbers.
-   - Scale facts go in the SECOND sentence or later.
+   Do NOT repeat phrasing from the first experience bullet in the summary.
 
    IMPORTANT: Every fact, number, and metric in the summary MUST come from the inventory.
 
 3. **CORE COMPETENCIES** (core_competencies field)
-   8-12 enterprise-level keywords. **MAX 2 LINES when rendered.** Compact, clustered by mandate.
+   10-12 enterprise-level keywords. **MAX 2 LINES when rendered.** Compact, clustered by mandate.
    These serve double duty:
    - ATS/AI screening optimization
    - Quick executive positioning signal
@@ -380,12 +392,15 @@ ${JSON.stringify(allowlist, null, 2)}
 1. Read the JD requirements carefully. Identify the top 3-5 mandate themes.
 2. Create an executive_headline that matches the seniority level of BOTH the target role and the candidate's actual level. Do NOT inflate.
 3. Write professional_summary as a 2-3 PARAGRAPH executive narrative (paragraphs separated by \\n\\n). MAX 5 LINES:
-   - First sentence: identity + domain. Do NOT put team size or revenue in sentence 1.
-   - Paragraph 1: Identity + Scale (who is this person, what's their biggest verifiable scope)
+   - First sentence: MUST reflect the job's dominant mandate — NOT a generic identity claim.
+     BANNED: "[Domain] leader who has...", "Executive with a track record of...", any "[Role] who/with..."
+     REQUIRED: Psychologically anchor the opener to the job's primary mandate.
+   - Paragraph 1: Mandate Anchor + Scale (lead with mandate-specific outcome, then verifiable scope)
    - Paragraph 2: Transformation pattern (what do they DO when they arrive — build, modernize, scale?)
    - Paragraph 3: Differentiator (why THIS person for THIS role — the rare combination)
    Every fact must come from inventory. No generic openers. No hedging language.
-4. Build core_competencies with 8-12 STRATEGIC enterprise keywords (not tool names). Include ATS terms from JD.
+   Do NOT repeat phrasing from first experience bullet.
+4. Build core_competencies with 10-12 STRATEGIC enterprise keywords (not tool names). Include ATS terms from JD.
 5. For each experience entry:
    a. Add a scope_line with enterprise context (team size, business units, budget) — pipe-separated, ONE short line only
    b. First 2 bullets must carry 80% of the value (biggest impact, most JD-relevant)

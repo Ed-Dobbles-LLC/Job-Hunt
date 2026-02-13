@@ -18,11 +18,39 @@ import { query } from "./db";
 import type { TailoredResume } from "./tailoredResumePrompt";
 import type { MandateProfile } from "./mandateClassifier";
 
-// ── Thresholds ──────────────────────────────────────────────────
-const SUMMARY_OVERLAP_THRESHOLD = 0.40;   // >40% overlap = too similar (tightened from 50%)
-const COMPETENCY_OVERLAP_THRESHOLD = 0.60; // >60% overlap = too similar (tightened from 70%)
-const BULLET_SIMILARITY_THRESHOLD = 0.50;  // >50% top-3 bullet similarity = too similar
-const MIN_ROLES_WITH_DIFFERENT_TOP2 = 0.5; // At least 50% of roles must have different top-2 bullets
+// ── Thresholds (tightened for elite-caliber differentiation) ────
+const SUMMARY_OVERLAP_THRESHOLD = 0.30;   // >30% overlap = too similar (tightened from 40%)
+const COMPETENCY_OVERLAP_THRESHOLD = 0.50; // >50% overlap = too similar (tightened from 60%)
+const BULLET_SIMILARITY_THRESHOLD = 0.40;  // >40% top-3 bullet similarity = too similar (tightened from 50%)
+const MIN_ROLES_WITH_DIFFERENT_TOP2 = 0.6; // At least 60% of roles must have different top-2 bullets (tightened from 50%)
+
+// ── Global Phrase Suppression List ──────────────────────────────
+// These stock phrases are banned across ALL outputs to force syntactic variation.
+const GLOBAL_SUPPRESSED_PHRASES = [
+  "track record of",
+  "proven ability to",
+  "extensive experience in",
+  "passionate about",
+  "results-oriented",
+  "data-driven leader",
+  "transforming organizations",
+  "cross-functional collaboration",
+  "stakeholder management",
+  "end-to-end",
+  "best-in-class",
+  "world-class",
+  "cutting-edge",
+  "state-of-the-art",
+  "leveraging data",
+  "actionable insights",
+  "data-informed decisions",
+  "driving value",
+  "unlocking value",
+  "fostering a culture of",
+  "spearheaded the development",
+  "instrumental in",
+  "at the forefront of",
+];
 
 // ── Resume Snapshot (what we store per resume) ──────────────────
 export interface ResumeSnapshot {
@@ -55,67 +83,130 @@ const ARCHETYPE_SUMMARY_FRAMING: Record<string, {
   lead_with: string;
   tone: string;
   opening_pattern: string;
+  opening_examples: string[];
+  first_sentence_anchor: string;
   avoid: string[];
+  banned_openers: string[];
 }> = {
   governance_standardization: {
     lead_with: "control, reporting rigor, operating discipline, metric standardization",
     tone: "Governance-first: emphasize frameworks, compliance, data quality, and metric discipline",
-    opening_pattern: "[Domain] leader who has established governance frameworks and standardized reporting across [scale] — delivering [metric rigor outcome].",
+    opening_pattern: "Anchor the first sentence on CONTROL and RIGOR — what this person imposes on chaos, not what they've scaled.",
+    opening_examples: [
+      "Every metric in a $4B portfolio traces to a single governed definition because [Name] built the framework that enforces it.",
+      "When reporting said one thing and finance said another, [candidate] was brought in to make the numbers speak one language.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect control, discipline, or standardization — the dominant mandate of this role.",
     avoid: ["platform modernization", "dashboard design", "founder alignment", "architecture"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   bi_platform_modernization: {
     lead_with: "architecture, data platform modernization, cloud migration, infrastructure design",
     tone: "Architecture-first: emphasize platform decisions, migration outcomes, and technical leadership at scale",
-    opening_pattern: "[Domain] executive who has architected and modernized enterprise data platforms serving [scale] — [migration/modernization outcome].",
+    opening_pattern: "Anchor the first sentence on ARCHITECTURE and SCALABILITY — what was designed and why it had to change.",
+    opening_examples: [
+      "Replaced a 15-year-old on-prem warehouse with a cloud-native lakehouse serving 2,000+ analysts across 4 business units.",
+      "The platform decision that unlocked real-time analytics for [org] was made by [candidate] — and it's still running 3 years later.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect architecture, modernization, or platform scalability — the dominant mandate of this role.",
     avoid: ["governance frameworks", "reporting cadence", "founder alignment", "KPI clarity"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   insight_delivery_automation: {
     lead_with: "insight delivery, stakeholder clarity, reporting cadence, self-service analytics",
     tone: "Delivery-first: emphasize how insights reach decision-makers, reporting automation, and stakeholder satisfaction",
-    opening_pattern: "[Domain] leader who has transformed how [org scale] consumes data — shifting from [old model] to [new model] and delivering [outcome].",
+    opening_pattern: "Anchor the first sentence on CLARITY and STAKEHOLDER ENABLEMENT — how decisions get made faster because of this person.",
+    opening_examples: [
+      "Eliminated the 3-day reporting lag that left executives flying blind — automated delivery now reaches 400+ stakeholders in real time.",
+      "Before [candidate] arrived, business leaders waited a week for answers. Now they self-serve in minutes.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect insight delivery, stakeholder enablement, or reporting clarity — the dominant mandate of this role.",
     avoid: ["platform architecture", "governance frameworks", "founder alignment", "pricing optimization"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   founder_adjacent_builder: {
     lead_with: "dashboard design, KPI clarity, founder alignment, zero-to-one analytics",
     tone: "Builder-first: emphasize what was created from scratch, speed of execution, and direct founder/CEO partnership",
-    opening_pattern: "[Domain] builder who has stood up analytics functions from zero — [what was built] — partnering directly with [founders/CEO] to [outcome].",
+    opening_pattern: "Anchor the first sentence on CREATION FROM ZERO — what didn't exist before this person showed up.",
+    opening_examples: [
+      "There was no analytics function, no data warehouse, and no reporting cadence — [candidate] built all three in 6 months.",
+      "First data hire in a Series B startup. Stood up the entire analytics stack, hired the team, and delivered the KPIs the board needed to greenlight Series C.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect zero-to-one building, speed, or founder-level partnership — the dominant mandate of this role.",
     avoid: ["enterprise governance", "platform migration", "reporting cadence", "board advisory"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   revenue_ops_forecasting: {
     lead_with: "revenue optimization, demand forecasting, pricing analytics, P&L influence",
     tone: "Revenue-first: emphasize financial outcomes, forecasting accuracy, and commercial impact",
-    opening_pattern: "[Domain] executive who has driven [revenue/margin outcome] through [analytics approach] across [scale].",
+    opening_pattern: "Anchor the first sentence on FINANCIAL IMPACT — the revenue moved, the margin protected, the forecast that held.",
+    opening_examples: [
+      "The pricing model that added $12M in annual margin wasn't inherited — it was designed, tested, and deployed by [candidate].",
+      "Forecast accuracy went from 68% to 94% within two quarters. Pipeline visibility went from monthly to daily.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect revenue impact, forecasting accuracy, or commercial analytics — the dominant mandate of this role.",
     avoid: ["governance frameworks", "platform architecture", "dashboard design", "founder alignment"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   operating_model_transformation: {
     lead_with: "operating model transformation, embedded analytics, data democratization",
     tone: "Transformation-first: emphasize before/after operating model shift and organizational change",
-    opening_pattern: "[Domain] executive who has transformed how [org] operates — from [old model] to [new model] — delivering [outcome] across [scale].",
+    opening_pattern: "Anchor the first sentence on REDESIGN OF HOW INSIGHTS ARE CONSUMED — the before/after operating model shift.",
+    opening_examples: [
+      "Replaced a centralized request-queue model with embedded analytics pods across 5 business units — self-service adoption went from 12% to 78%.",
+      "The old model: 200 ad-hoc requests per week. The new model: 3 embedded teams, zero queue, real-time decisions.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect operating model redesign, embedded analytics, or organizational transformation — the dominant mandate of this role.",
     avoid: ["governance compliance", "platform migration", "founder alignment", "reporting cadence"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   product_gtm_analytics: {
     lead_with: "product analytics, go-to-market measurement, user journey optimization",
     tone: "Product-first: emphasize product metrics, feature adoption, and GTM analytics",
-    opening_pattern: "[Domain] leader who has built product analytics capabilities driving [adoption/engagement outcome] across [scale].",
+    opening_pattern: "Anchor the first sentence on PRODUCT SIGNAL — what user behavior revealed and how it changed the product.",
+    opening_examples: [
+      "The feature adoption spike that justified a $20M product investment started with the instrumentation framework [candidate] built.",
+      "Identified the onboarding drop-off that was costing 15% of new users per month — redesigned the measurement system and closed the gap.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect product analytics, user journey optimization, or GTM measurement — the dominant mandate of this role.",
     avoid: ["enterprise governance", "platform migration", "reporting cadence", "founder alignment"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   growth_monetization: {
     lead_with: "growth analytics, experimentation velocity, conversion optimization, monetization",
     tone: "Growth-first: emphasize experimentation, conversion rates, and monetization outcomes",
-    opening_pattern: "[Domain] leader who has scaled experimentation and growth analytics — driving [conversion/revenue outcome] across [scale].",
+    opening_pattern: "Anchor the first sentence on EXPERIMENTATION VELOCITY or CONVERSION IMPACT — the growth engine this person built.",
+    opening_examples: [
+      "Took experimentation velocity from 2 tests/month to 40 — the resulting conversion lift added $8M in annual revenue.",
+      "The paywall optimization that increased ARPU by 23% came from a testing framework [candidate] built from scratch.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect experimentation, conversion optimization, or monetization — the dominant mandate of this role.",
     avoid: ["enterprise governance", "platform architecture", "reporting cadence", "board advisory"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   executive_storytelling: {
     lead_with: "board advisory, executive influence, data-driven storytelling, strategic alignment",
     tone: "Advisory-first: emphasize board-level presentations, C-suite partnership, and strategic influence",
-    opening_pattern: "[Domain] executive who partners with [C-suite/board] to translate [data capability] into [strategic outcome] across [scale].",
+    opening_pattern: "Anchor the first sentence on INFLUENCE and DECISION QUALITY — what decisions were made differently because of this person.",
+    opening_examples: [
+      "The board voted to double the AI investment after a single presentation — [candidate] built the business case and the data behind it.",
+      "When the CEO needed to decide between 3 market entry strategies, [candidate] framed the data that made the call clear.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect executive influence, board advisory, or strategic decision enablement — the dominant mandate of this role.",
     avoid: ["platform architecture", "dashboard design", "founder alignment", "experimentation"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   team_leadership_scale: {
     lead_with: "team building, organizational design, talent strategy, scaling analytics functions",
     tone: "Leadership-first: emphasize team growth, org design, and talent development at scale",
-    opening_pattern: "[Domain] leader who has built and scaled analytics organizations from [start size] to [end size] — [talent/org outcome] across [sectors].",
+    opening_pattern: "Anchor the first sentence on ORGANIZATIONAL DESIGN — what the org looked like before and after this person built it.",
+    opening_examples: [
+      "Inherited 3 analysts with no structure. Left behind a 45-person globally distributed org with 4 specialized pods and a 92% retention rate.",
+      "Designed the analytics org structure that survived 3 reorgs and a merger — because it was built around capability, not headcount.",
+    ],
+    first_sentence_anchor: "The first sentence must reflect org design, team building, or talent strategy — the dominant mandate of this role.",
     avoid: ["platform architecture", "governance compliance", "founder alignment", "experimentation"],
+    banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
 };
 
@@ -387,6 +478,19 @@ export async function checkDivergenceAgainstHistory(
     }
   }
 
+  // Also suppress globally banned stock phrases found in the resume
+  const resumeFullText = [
+    resume.professional_summary,
+    ...resume.experience.flatMap(e => e.bullets.map(b => b.text)),
+  ].join(" ").toLowerCase();
+  for (const banned of GLOBAL_SUPPRESSED_PHRASES) {
+    if (resumeFullText.includes(banned.toLowerCase())) {
+      if (!result.suppressed_phrases.includes(banned)) {
+        result.suppressed_phrases.push(banned);
+      }
+    }
+  }
+
   let worstSummaryOverlap = 0;
   let worstCompOverlap = 0;
   let worstBulletSimilarity = 0;
@@ -462,6 +566,17 @@ export async function checkDivergenceAgainstHistory(
     );
   }
 
+  // Check for globally banned stock phrases in the resume
+  const bannedPhrasesFound = result.suppressed_phrases.filter(p =>
+    GLOBAL_SUPPRESSED_PHRASES.some(g => g.toLowerCase() === p.toLowerCase()),
+  );
+  if (bannedPhrasesFound.length >= 3) {
+    result.needs_rewrite = true;
+    result.rewrite_reasons.push(
+      `${bannedPhrasesFound.length} globally banned stock phrases detected: ${bannedPhrasesFound.slice(0, 5).map(p => `"${p}"`).join(", ")}`,
+    );
+  }
+
   // Build divergence prompt if rewrite needed
   if (result.needs_rewrite) {
     result.divergence_prompt = buildDivergencePrompt(resume, priorResumes, mandate, result);
@@ -513,9 +628,18 @@ ${priorCompetencies}
 ### ARCHETYPE-DRIVEN SUMMARY FRAMING
 This job's dominant archetype is: ${mandate.primary_mandate.replace(/_/g, " ").toUpperCase()}
 
+**SUMMARY ARCHITECTURE RULE — FIRST SENTENCE:**
+${archetypeFraming.first_sentence_anchor}
+${archetypeFraming.opening_pattern}
+
+**Example openings (adapt to candidate's actual facts):**
+${archetypeFraming.opening_examples.map(e => `  - ${e}`).join("\n")}
+
 **Lead the Executive Summary with:** ${archetypeFraming.lead_with}
 **Tone:** ${archetypeFraming.tone}
-**Opening pattern:** ${archetypeFraming.opening_pattern}
+
+**BANNED OPENERS — these are REJECTED on sight:**
+${archetypeFraming.banned_openers.map(b => `  - "${b}..."`).join("\n")}
 
 **AVOID these themes in the summary** (they belong to OTHER archetypes):
 ${archetypeFraming.avoid.map(a => `  - ${a}`).join("\n")}
@@ -531,13 +655,14 @@ Use DIFFERENT language patterns. Each resume must feel linguistically distinct.
   }
 
   prompt += `
-### DIVERGENCE TARGETS
-- Summary word overlap with ANY prior resume: < 40%
-- Competency cluster overlap with ANY prior resume: < 60%
-- Top-3 bullet similarity with ANY prior resume: < 50%
-- At least 50% of roles must have DIFFERENT top-3 bullets than any prior resume
+### DIVERGENCE TARGETS (TIGHTENED)
+- Summary word overlap with ANY prior resume: < 30%
+- Competency cluster overlap with ANY prior resume: < 50%
+- Top-3 bullet similarity with ANY prior resume: < 40%
+- At least 60% of roles must have DIFFERENT top-3 bullets than any prior resume
 - Opening sentence of Executive Summary must be UNIQUE
 - Re-cluster competencies using different wording while staying truthful
+- Zero globally banned stock phrases (see suppressed list above)
 
 Return the CORRECTED TailoredResume JSON with meaningfully different framing.`;
 
@@ -557,12 +682,27 @@ export function getArchetypeSummaryFraming(
   return `## ARCHETYPE-DRIVEN SUMMARY FRAMING
 This job's dominant archetype is: ${mandate.primary_mandate.replace(/_/g, " ").toUpperCase()}
 
+### SUMMARY ARCHITECTURE RULE — FIRST SENTENCE (NON-NEGOTIABLE)
+${framing.first_sentence_anchor}
+${framing.opening_pattern}
+
+The first sentence must NOT open with scale, team size, or revenue.
+The first sentence must NOT use reusable structural phrasing like "[Domain] leader who has..."
+The first sentence must be psychologically anchored to THIS job's mandate.
+
+**Example openings (adapt to candidate's actual inventory facts):**
+${framing.opening_examples.map(e => `  - ${e}`).join("\n")}
+
+**BANNED OPENERS — these are REJECTED on sight:**
+${framing.banned_openers.map(b => `  - "${b}..."`).join("\n")}
+Do NOT open with ANY variation of these patterns. Each summary must feel unique.
+
 **Lead the Executive Summary with:** ${framing.lead_with}
 **Tone:** ${framing.tone}
-**Opening pattern (adapt to candidate's actual facts):** ${framing.opening_pattern}
 
 **AVOID these themes as the lead** (they belong to OTHER archetypes):
 ${framing.avoid.map(a => `  - ${a}`).join("\n")}
 
+Summary MUST be ≤ 5 lines. No repeated phrasing across outputs. No repetition of first bullet.
 Do NOT reuse prior summary phrasing. Each resume must have a distinct narrative arc.`;
 }

@@ -167,20 +167,103 @@ export function detectOwnershipInflation(
   return warnings;
 }
 
+// ── Claim IDs Verification ───────────────────────────────────────
+
+interface ClaimAuditResult {
+  violations: { location: string; issue: string }[];
+  total_bullets: number;
+  bullets_with_claims: number;
+  bullets_without_claims: number;
+}
+
+/**
+ * Verify that all resume bullets reference Claims Ledger IDs.
+ * Bullets without claim_ids cannot be traced to the source of truth
+ * and should be blocked.
+ */
+function verifyClaimIds(resume: TailoredResume): ClaimAuditResult {
+  const violations: { location: string; issue: string }[] = [];
+  let totalBullets = 0;
+  let withClaims = 0;
+  let withoutClaims = 0;
+
+  for (let i = 0; i < resume.experience.length; i++) {
+    for (let j = 0; j < resume.experience[i].bullets.length; j++) {
+      totalBullets++;
+      const bullet = resume.experience[i].bullets[j];
+      const claimIds = (bullet as any).claim_ids;
+
+      if (!claimIds || !Array.isArray(claimIds) || claimIds.length === 0) {
+        withoutClaims++;
+        violations.push({
+          location: `resume.experience[${i}].bullets[${j}]`,
+          issue: `Bullet "${bullet.text.substring(0, 50)}..." has no claim_ids — cannot trace to Claims Ledger`,
+        });
+      } else {
+        withClaims++;
+      }
+    }
+  }
+
+  return { violations, total_bullets: totalBullets, bullets_with_claims: withClaims, bullets_without_claims: withoutClaims };
+}
+
+// ── Summary Generic Opener Detection ────────────────────────────
+
+const BANNED_SUMMARY_OPENERS = [
+  /^data\s+(?:and\s+)?analytics?\s+(?:leader|executive)\s+who/i,
+  /^executive\s+with\s+a\s+track\s+record/i,
+  /^analytics?\s+executive\s+transform/i,
+  /^seasoned\s+(?:\w+\s+)?(?:leader|executive|professional)/i,
+  /^accomplished\s+(?:\w+\s+)?(?:leader|executive|professional)/i,
+  /^results[- ]driven\s+/i,
+  /^\w+\s+leader\s+who\s+has\b/i,
+  /^\w+\s+executive\s+who\s+has\b/i,
+  /^\w+\s+(?:leader|executive)\s+with\s+(?:\d+|over|more than)/i,
+];
+
+interface SummaryOpenerAudit {
+  has_banned_opener: boolean;
+  matched_pattern: string;
+}
+
+function auditSummaryOpener(resume: TailoredResume): SummaryOpenerAudit {
+  const summary = resume.professional_summary.trim();
+  const firstSentence = summary.split(/[.!?]/)[0] || summary;
+
+  for (const pattern of BANNED_SUMMARY_OPENERS) {
+    if (pattern.test(firstSentence)) {
+      return {
+        has_banned_opener: true,
+        matched_pattern: firstSentence.substring(0, 80),
+      };
+    }
+  }
+
+  return { has_banned_opener: false, matched_pattern: "" };
+}
+
 // ── Combined Truth Audit ─────────────────────────────────────────
 
 export interface TruthAuditResult {
   report: VerifierReport;
   ownershipWarnings: OwnershipInflationWarning[];
+  claimAudit: ClaimAuditResult;
+  summaryOpenerAudit: SummaryOpenerAudit;
+  blocked: boolean;
+  block_reasons: string[];
 }
 
 /**
  * Runs the full truth audit: the existing truthfulness verification
  * (entities, metrics, dates, placeholders, style rules, ATS risks,
- * claims ledger checks) PLUS the new ownership inflation detection.
+ * claims ledger checks) PLUS:
+ * - Ownership inflation detection
+ * - Claim IDs verification (all bullets must reference Claims Ledger)
+ * - Summary opener audit (banned generic opener detection)
  *
- * This is the primary entry point for Stage 7 of the resume tailoring
- * pipeline.
+ * Returns blocked=true if unsupported claims are detected or critical
+ * violations cannot be resolved.
  */
 export function runTruthAudit(
   resume: TailoredResume,
@@ -194,5 +277,73 @@ export function runTruthAudit(
   // Run the new ownership inflation detection
   const ownershipWarnings = detectOwnershipInflation(resume, inventory);
 
-  return { report, ownershipWarnings };
+  // Verify claim IDs on all bullets
+  const claimAudit = verifyClaimIds(resume);
+
+  // Audit summary opener for banned generic patterns
+  const summaryOpenerAudit = auditSummaryOpener(resume);
+
+  // Determine if output should be BLOCKED
+  const blockReasons: string[] = [];
+
+  // Block if unsupported metrics (new numbers that don't exist in inventory)
+  const unsupportedMetrics = report.violations.filter(
+    v => v.type === "UNSUPPORTED_METRIC" && v.severity === "critical",
+  );
+  if (unsupportedMetrics.length > 0) {
+    blockReasons.push(
+      `${unsupportedMetrics.length} unsupported metric(s) detected — no new numbers allowed`,
+    );
+  }
+
+  // Block if hallucinated entities (new tools/companies not in inventory)
+  const newEntities = report.violations.filter(
+    v => v.type === "NEW_ENTITY" && v.severity === "critical",
+  );
+  if (newEntities.length > 0) {
+    blockReasons.push(
+      `${newEntities.length} new entity/entities hallucinated — not in inventory`,
+    );
+  }
+
+  // Block if critical ownership inflation (team member -> sole contributor)
+  const criticalInflation = ownershipWarnings.filter(w => w.severity === "critical");
+  if (criticalInflation.length > 0) {
+    blockReasons.push(
+      `${criticalInflation.length} critical ownership inflation(s) — scope expanded beyond inventory`,
+    );
+  }
+
+  // Add claim audit violations to the report as warnings (non-blocking but tracked)
+  for (const v of claimAudit.violations) {
+    report.violations.push({
+      type: "STYLE_RULE_BROKEN",
+      severity: "warning",
+      location: v.location,
+      found_value: "missing claim_ids",
+      explanation: v.issue,
+    });
+    report.stats.warnings++;
+  }
+
+  // Add summary opener violation if banned pattern detected
+  if (summaryOpenerAudit.has_banned_opener) {
+    report.violations.push({
+      type: "STYLE_RULE_BROKEN",
+      severity: "warning",
+      location: "resume.professional_summary",
+      found_value: summaryOpenerAudit.matched_pattern,
+      explanation: `Summary opens with a banned generic pattern. The first sentence must be psychologically anchored to the job mandate, not a reusable template.`,
+    });
+    report.stats.warnings++;
+  }
+
+  return {
+    report,
+    ownershipWarnings,
+    claimAudit,
+    summaryOpenerAudit,
+    blocked: blockReasons.length > 0,
+    block_reasons: blockReasons,
+  };
 }

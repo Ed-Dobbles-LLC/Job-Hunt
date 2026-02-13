@@ -293,32 +293,150 @@ function adaptMandateGaps(
   }));
 }
 
+// ── Revenue Detection ────────────────────────────────────────────
+
+const REVENUE_KEYWORDS = [
+  "revenue", "arr", "mrr", "gmv", "sales", "bookings", "margin",
+  "profit", "monetiz", "pricing", "p&l", "yield", "arpu", "ltv",
+  "conversion", "upsell", "cross-sell",
+];
+
+const REVENUE_MANDATE_IDS = [
+  "revenue_ops_forecasting",
+  "growth_monetization",
+];
+
+/**
+ * Detect whether a bullet is primarily about revenue/financial outcomes.
+ * Returns true if ≥2 revenue keywords are present.
+ */
+function isRevenueDominantBullet(bulletText: string): boolean {
+  const lower = bulletText.toLowerCase();
+  let hits = 0;
+  for (const kw of REVENUE_KEYWORDS) {
+    if (lower.includes(kw)) hits++;
+    if (hits >= 2) return true;
+  }
+  return false;
+}
+
+// ── Recency Scoring ─────────────────────────────────────────────
+
+/**
+ * Compute a recency factor for a bullet based on which role it belongs to.
+ * Most recent role = 1.0, each older role decays by 0.1.
+ * Range: [0.3, 1.0]
+ */
+function computeRecencyScore(
+  experienceId: string,
+  inventory: Record<string, any>,
+): number {
+  const experience = inventory.experience || [];
+  // Experience is assumed reverse-chronological (most recent first)
+  const index = experience.findIndex((e: any) => e.id === experienceId);
+  if (index < 0) return 0.5; // Unknown role gets a neutral score
+  // Decay: 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3 (floor)
+  return Math.max(0.3, 1.0 - index * 0.1);
+}
+
+// ── Impact Scoring ──────────────────────────────────────────────
+
+/**
+ * Compute an impact score based on presence of quantifiable outcomes.
+ * Checks for: dollar amounts, percentages, multipliers, large counts.
+ * Range: [0.0, 1.0]
+ */
+function computeImpactScore(bulletText: string): number {
+  let score = 0;
+
+  // Dollar amounts
+  if (/\$[\d,.]+[MBK]?/i.test(bulletText)) score += 0.35;
+
+  // Percentages
+  if (/\d+[\d,.]*%/.test(bulletText)) score += 0.25;
+
+  // Multipliers (3x, 5x, etc.)
+  if (/\b\d+[xX]\b/.test(bulletText)) score += 0.2;
+
+  // Large counts (100+ of anything)
+  if (/\b\d{3,}[\d,]*\+?\s*(?:person|people|team|member|engineer|analyst|report|user|client|stakeholder|dashboard|pipeline|model)/i.test(bulletText)) {
+    score += 0.2;
+  }
+
+  return Math.min(1.0, score);
+}
+
 // ── Scored Bullet Adaptation ────────────────────────────────────
 
 /**
  * Convert the mandate classifier's ScoredBullet (which lacks claim_ids)
- * into the pipeline's ScoredBullet type, enriched with claim linkage
- * and optional embedding scores.
+ * into the pipeline's ScoredBullet type, enriched with claim linkage,
+ * optional embedding scores, and the new scoring formula:
+ *
+ *   score = (mandate_alignment × 2) + impact + recency
+ *
+ * mandate_alignment specifically weights the PRIMARY mandate dimension.
+ * Revenue bullets are penalized unless the job explicitly centers on revenue.
  */
 function adaptScoredBullet(
   raw: ReturnType<typeof scoreBulletsAgainstMandate>[number],
   ledger: ClaimsLedger,
   embeddingScores: Map<string, number>,
   embeddingWeight: number,
+  mandate: MandateProfile,
+  inventory: Record<string, any>,
 ): ScoredBullet {
   const claimIds = linkClaimIds(raw.bullet_id, raw.bullet_text, ledger);
   const embeddingScore = embeddingScores.get(raw.bullet_text);
 
-  // Blend mandate score with embedding score when available.
-  // mandate weight = (1 - embeddingWeight), embedding weight = embeddingWeight.
-  let totalRelevance: number;
+  // ── New scoring formula: (mandate_alignment × 2) + impact + recency ──
+
+  // 1. Mandate alignment: score against the PRIMARY mandate dimension × 2
+  const primaryDimId = mandate.primary_mandate;
+  const primaryMandateScore = raw.mandate_scores[primaryDimId] || 0;
+
+  // Also consider secondary mandates (weight × 1)
+  const secondaryIds = mandate.secondary_mandates || [];
+  let secondaryMandateScore = 0;
+  for (const secId of secondaryIds) {
+    secondaryMandateScore += (raw.mandate_scores[secId] || 0);
+  }
+  secondaryMandateScore = secondaryIds.length > 0
+    ? secondaryMandateScore / secondaryIds.length
+    : 0;
+
+  // Mandate alignment = primary × 2 + secondary × 1
+  const mandateAlignment = (primaryMandateScore * 2) + secondaryMandateScore;
+
+  // 2. Impact: quantifiable outcome presence
+  const impact = computeImpactScore(raw.bullet_text);
+
+  // 3. Recency: newer roles score higher
+  const recency = computeRecencyScore(raw.experience_id, inventory);
+
+  // 4. Revenue gravity penalty: if bullet is revenue-heavy but job mandate
+  //    does NOT center on revenue, apply a dampening factor
+  let revenueAdjustment = 1.0;
+  if (isRevenueDominantBullet(raw.bullet_text)) {
+    const jobIsRevenueFocused = REVENUE_MANDATE_IDS.includes(primaryDimId) ||
+      secondaryIds.some(id => REVENUE_MANDATE_IDS.includes(id));
+    if (!jobIsRevenueFocused) {
+      // Dampen revenue bullets when job doesn't center on revenue
+      revenueAdjustment = 0.6;
+    }
+  }
+
+  // Final composite: (mandate_alignment × 2) + impact + recency
+  // Normalized to a 0-5 scale for compatibility with downstream consumers
+  let totalRelevance = (mandateAlignment * 2 + impact + recency) * revenueAdjustment;
+
+  // Blend with embedding score when available
   if (embeddingScore !== undefined && embeddingWeight > 0) {
     const mandateWeight = 1 - embeddingWeight;
-    totalRelevance = raw.total_relevance * mandateWeight + embeddingScore * embeddingWeight;
-    totalRelevance = Math.round(totalRelevance * 1000) / 1000;
-  } else {
-    totalRelevance = raw.total_relevance;
+    totalRelevance = totalRelevance * mandateWeight + embeddingScore * 3 * embeddingWeight;
   }
+
+  totalRelevance = Math.round(totalRelevance * 1000) / 1000;
 
   return {
     bullet_id: raw.bullet_id,
@@ -416,8 +534,10 @@ export async function scoreBullets(
   }
 
   // ── Step 3: Enrich with claim IDs + blend scores ────────────
+  // Uses the new scoring formula: (mandate_alignment × 2) + impact + recency
+  // Revenue bullets are dampened unless the job centers on monetization.
   const enrichedBullets: ScoredBullet[] = rawScoredBullets.map((raw) =>
-    adaptScoredBullet(raw, ledger, embeddingScores, effectiveEmbeddingWeight),
+    adaptScoredBullet(raw, ledger, embeddingScores, effectiveEmbeddingWeight, mandate, inventory),
   );
 
   // ── Step 4: Global re-rank by blended total_relevance ───────
