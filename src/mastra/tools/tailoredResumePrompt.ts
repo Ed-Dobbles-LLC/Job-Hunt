@@ -155,48 +155,70 @@ Retained executive recruiters who review resumes in 30-45 seconds. They are look
 ## RESUME ARCHITECTURE (top to bottom)
 
 1. **EXECUTIVE HEADLINE** (executive_headline field)
-   A C-suite or senior executive title positioned directly under the candidate's name.
-   Examples: "Chief Data & Analytics Officer", "SVP, Enterprise Data Strategy & AI"
-   - Match the level of the target role
-   - If candidate's inventory shows VP-level, headline as VP/SVP level
-   - If candidate's inventory shows C-suite board exposure, headline at C-suite level
+   A calibrated professional title positioned directly under the candidate's name.
+   - Match the level of the target role AND the candidate's actual level
+   - If candidate's highest title is VP-level, headline as "VP, [Domain]" — NOT "Chief" or "SVP"
+   - If candidate's highest title is Director-level, headline as "Senior Director" or "Director" — NOT "VP"
+   - Only use C-suite framing if the candidate held a C-suite title or the target role is C-suite
+   - The headline must be defensible in an interview
 
 2. **EXECUTIVE SUMMARY** (professional_summary field)
-   4-6 sentences. This is the most important section. It must IMMEDIATELY answer:
-   - **What scale?** Team size, budget responsibility, enterprise value influenced
-   - **What transformation?** AI, data modernization, digital, organizational
-   - **What financial impact?** Revenue driven, cost savings, ROI delivered
-   Format: "[Scale fact]. [Transformation narrative]. [Financial impact]. [Differentiator]."
-   DO NOT open with generic phrases like "Accomplished executive" or "Results-driven leader."
-   Instead, lead with specifics: "Data & analytics executive who built and scaled a 60+ person organization managing $17M in annual spend across a $300M+ enterprise..."
+   A 2-3 paragraph executive narrative. This is the most important section.
+   Structure it as three distinct paragraphs separated by newlines:
+
+   **Paragraph 1 — Identity + Scale:**
+   Open with a specific identity claim and the candidate's largest verifiable scale facts.
+   "[Domain] executive who has built and led organizations of up to [largest team size] across [sectors]."
+   Then anchor with the headline financial impact from the most recent role.
+   DO NOT open with generic phrases: "Accomplished executive", "Results-driven leader", "Seasoned professional."
+   Instead, lead with specifics from inventory.
+
+   **Paragraph 2 — Transformation + Operating Model:**
+   Show the PATTERN across the candidate's career — not a list of jobs, but a narrative arc.
+   "Career defined by [pattern: building from zero, scaling, modernizing, etc.]."
+   Trace 2-3 career milestones that show a consistent theme of transformation or growth.
+   This paragraph answers: "What does this person DO when they arrive at a company?"
+
+   **Paragraph 3 — Differentiator ("Why This Leader"):**
+   State what makes this candidate rare or distinctive for THIS type of role.
+   Position the combination of skills that is unusual at this level.
+   E.g., "Distinctly technical for an executive of this level — [specific technical achievement] — while maintaining fluency in [business skill]."
+   This paragraph answers: "Why should I call THIS person instead of 50 other VPs?"
+
+   IMPORTANT: Every fact, number, and metric in the summary MUST come from the inventory.
 
 3. **CORE COMPETENCIES** (core_competencies field)
-   8-14 enterprise-level keywords displayed in a grid. These serve double duty:
+   8-12 enterprise-level keywords displayed in a grid. These serve double duty:
    - ATS/AI screening optimization
    - Quick executive positioning signal
    Use STRATEGIC framing:
    GOOD: "Enterprise Data Strategy", "AI/ML Strategy & Deployment", "Revenue Optimization", "Board & C-Suite Advisory", "Organizational Design"
    BAD: "Python", "SQL", "Machine Learning", "Data Analysis", "Snowflake"
    Technical tools go in the skills section, not here.
+   Do NOT duplicate items that will appear in skills.tools_and_platforms.
 
 4. **EXPERIENCE** (experience array)
    Each role must include:
-   - **scope_line**: One line of enterprise context — business unit size, team headcount, budget, geographic scope. Use ONLY verifiable facts from inventory.
-   - **First bullet = Mandate bullet**: What were you hired/brought in to do? Frame as the transformation mission.
-   - **Remaining bullets**: Impact-driven, each with a metric from inventory. Order by relevance to JD mandates.
-   - **Bullet caps**: 4-6 bullets for the 2 most recent/relevant roles, 2-3 bullets for older roles. Target a clean 2-page document.
-   - For a 25+ year career, include 4-5 roles to show career depth and trajectory
+   - **scope_line**: One line of enterprise context — team headcount, business unit context, budget/investment if known. Use ONLY verifiable facts from inventory. Pipe-separated. E.g., "45-person organization | 3 business units | $8M board-approved investment"
+   - **Bullet discipline**:
+     - Start EVERY bullet with an action verb (Architected, Launched, Established, Developed, Created, Built, Designed, Partnered)
+     - Max 2 lines per bullet — tighten any that run longer
+     - The first 2 bullets under each role must carry 80% of the value (biggest financial impact, most relevant transformation)
+     - Do NOT repeat scope_line content in the first bullet. The scope_line handles team size and org context — bullets should focus on WHAT was accomplished, not WHO was led.
+   - **Bullet caps by role recency**:
+     - Most recent 2 roles: 4-5 bullets each
+     - Third role back: 3 bullets
+     - Fourth+ role: 2 bullets (promotion trajectory + single top-impact result)
+   - **No duplication**: If a fact appears in the Executive Summary, do NOT repeat it as the first bullet of a role. Use different inventory facts for bullets.
+   - Target a clean 2-page document. 15-17 total bullets across all roles.
 
-5. **ENTERPRISE CAPABILITIES** (skills.enterprise_capabilities)
-   Strategic competency categories, NOT tool names:
-   GOOD: "AI/ML Strategy & Deployment", "Revenue & Pricing Optimization", "Commercial Analytics", "Organizational Transformation"
-   BAD: "Python", "Spark", "XGBoost"
+5. **TOOLS & PLATFORMS** (skills.tools_and_platforms)
+   A single compact line of technical tools from inventory, filtered to JD relevance.
+   Do NOT create a separate "Enterprise Capabilities" section if core_competencies already covers strategic keywords — this creates redundancy.
+   When core_competencies is present, ONLY emit tools_and_platforms (skip enterprise_capabilities).
 
-6. **TOOLS & PLATFORMS** (skills.tools_and_platforms)
-   Technical tools as a compact sub-line. Only include if relevant to the JD.
-
-7. **EDUCATION** — as-is from inventory
-8. **CERTIFICATIONS** — all relevant certifications, not just JD-matching ones
+6. **EDUCATION** — as-is from inventory
+7. **CERTIFICATIONS** — all relevant certifications from inventory
 
 ## ABSOLUTE RULES — VIOLATION = IMMEDIATE REJECTION
 
@@ -221,11 +243,12 @@ Retained executive recruiters who review resumes in 30-45 seconds. They are look
 4. **NUMBERS ARE SACRED**
    Copy every number, dollar amount, percentage, and metric EXACTLY from the inventory.
    Do NOT round ("~$12M"), approximate ("about $12M"), combine ("$43M total savings"), or inflate.
+   Do NOT infer budgets, revenue figures, or team sizes that aren't explicitly stated.
 
 5. **ATS-FRIENDLY FORMAT**
    - No tables, no columns, no graphics, no icons
-   - Standard executive section headings
-   - Use standard action-verb bullets ("Led…", "Drove…", "Built…", "Spearheaded…", "Architected…")
+   - Standard section headings only: EXECUTIVE SUMMARY, CORE COMPETENCIES, PROFESSIONAL EXPERIENCE, TOOLS & PLATFORMS, EDUCATION, CERTIFICATIONS
+   - Use standard action-verb bullets ("Architected…", "Launched…", "Established…", "Developed…", "Built…", "Designed…")
 
 6. **EVIDENCE POINTERS ARRAY**
    Produce one evidence_pointers entry per resume bullet. The claim_text must be the exact bullet text you emitted. The source_hash is the inventory bullet ID. The evidence_quote is the verbatim inventory text. Confidence >= 0.7 for all pointers.
@@ -235,8 +258,15 @@ Retained executive recruiters who review resumes in 30-45 seconds. They are look
    - Use ranges from inventory if ranges exist; don't convert ranges to point estimates
    - Avoid marketing superlatives unless inventory explicitly supports them
    - If a metric is presented as a range in inventory, keep it as a range
+   - Do NOT imply ownership of capabilities not documented in inventory
 
-8. **OUTPUT**
+8. **ANTI-REDUNDANCY**
+   - Do NOT create both "Core Competencies" and "Enterprise Capabilities" sections — pick one
+   - Do NOT repeat team size in both scope_line and first bullet
+   - Do NOT repeat summary claims as first bullets of roles
+   - If information exists in the scope_line, do not restate it in bullet form
+
+9. **OUTPUT**
    Return ONLY the JSON object. No markdown fences, no commentary, no explanation.`;
 }
 
@@ -263,15 +293,22 @@ ${JSON.stringify(inventory, null, 2)}
 ${JSON.stringify(allowlist, null, 2)}
 
 ## INSTRUCTIONS
-1. Read the JD requirements carefully.
-2. Create an executive_headline that matches the seniority level of the target role.
-3. Write a professional_summary that opens with SCALE (team size, budget, enterprise value from inventory), then TRANSFORMATION, then FINANCIAL IMPACT. No generic openers.
-4. Build core_competencies with 8-14 STRATEGIC enterprise keywords (not tool names). Include ATS terms from JD like: Enterprise Data Strategy, Data Governance, Digital Transformation, P&L Influence, Commercial Analytics, Revenue Optimization, Organizational Design.
-5. For each experience entry, add a scope_line with enterprise context (business unit size, team, budget, geography) from inventory facts.
-6. Lead each role with a MANDATE bullet (what were you brought in to transform/build/lead?).
-7. Bullet count per role: 4-6 bullets for the 2 most recent/relevant roles, 2-3 bullets for older roles. Target 2 total pages.
-8. Frame skills.enterprise_capabilities at the STRATEGIC level, put tools in skills.tools_and_platforms. Do NOT duplicate items that are already in core_competencies.
-9. For each requirement you CANNOT support, add a gap_note — do NOT fabricate content.
-10. Include ats_keywords_used listing JD keywords you intentionally wove in.
-11. Return ONLY the TailoredResume JSON.`;
+1. Read the JD requirements carefully. Identify the top 3-5 mandate themes.
+2. Create an executive_headline that matches the seniority level of BOTH the target role and the candidate's actual level. Do NOT inflate.
+3. Write professional_summary as a 2-3 PARAGRAPH executive narrative (paragraphs separated by \\n\\n):
+   - Paragraph 1: Identity + Scale (who is this person, what's their biggest verifiable scope)
+   - Paragraph 2: Transformation pattern (what do they DO when they arrive — build, modernize, scale?)
+   - Paragraph 3: Differentiator (why THIS person for THIS role — the rare combination)
+   Every fact must come from inventory. No generic openers.
+4. Build core_competencies with 8-12 STRATEGIC enterprise keywords (not tool names). Include ATS terms from JD.
+5. For each experience entry:
+   a. Add a scope_line with enterprise context (team size, business units, budget) — pipe-separated
+   b. First 2 bullets must carry 80% of the value (biggest impact, most JD-relevant)
+   c. Do NOT repeat scope_line info in bullets. Scope_line handles org context, bullets handle achievements.
+   d. Start every bullet with an action verb. Max 2 lines per bullet.
+   e. Bullet caps: 4-5 for recent roles, 3 for third role, 2 for fourth+ role. Target 15-17 total bullets.
+6. Do NOT create both core_competencies and enterprise_capabilities — this creates redundancy. When core_competencies is present, only emit tools_and_platforms.
+7. For each JD requirement you CANNOT support, add a gap_note — do NOT fabricate content.
+8. Include ats_keywords_used listing JD keywords you intentionally wove in.
+9. Return ONLY the TailoredResume JSON.`;
 }

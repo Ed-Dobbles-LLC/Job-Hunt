@@ -153,18 +153,23 @@ export async function renderResumeDocx(
   if (resume.professional_summary && !renderedSections.has("SUMMARY")) {
     renderedSections.add("SUMMARY");
     children.push(sectionHeading("Executive Summary"));
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: safePrimitive(resume.professional_summary),
-            size: BODY_SIZE,
-            font: FONT,
-          }),
-        ],
-        spacing: { after: PARAGRAPH_SPACING_AFTER },
-      }),
-    );
+    // Support multi-paragraph summaries (paragraphs separated by \n\n)
+    const summaryText = safePrimitive(resume.professional_summary);
+    const summaryParagraphs = summaryText.split(/\n\n+/).filter((p) => p.trim());
+    for (const para of summaryParagraphs) {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: para.trim(),
+              size: BODY_SIZE,
+              font: FONT,
+            }),
+          ],
+          spacing: { after: PARAGRAPH_SPACING_AFTER },
+        }),
+      );
+    }
   }
 
   // ── Core Competencies ──
