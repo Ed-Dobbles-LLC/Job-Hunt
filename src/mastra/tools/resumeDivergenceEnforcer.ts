@@ -19,8 +19,9 @@ import type { TailoredResume } from "./tailoredResumePrompt";
 import type { MandateProfile } from "./mandateClassifier";
 
 // ── Thresholds ──────────────────────────────────────────────────
-const SUMMARY_OVERLAP_THRESHOLD = 0.50;   // >50% overlap = too similar
-const COMPETENCY_OVERLAP_THRESHOLD = 0.70; // >70% overlap = too similar
+const SUMMARY_OVERLAP_THRESHOLD = 0.40;   // >40% overlap = too similar (tightened from 50%)
+const COMPETENCY_OVERLAP_THRESHOLD = 0.60; // >60% overlap = too similar (tightened from 70%)
+const BULLET_SIMILARITY_THRESHOLD = 0.50;  // >50% top-3 bullet similarity = too similar
 const MIN_ROLES_WITH_DIFFERENT_TOP2 = 0.5; // At least 50% of roles must have different top-2 bullets
 
 // ── Resume Snapshot (what we store per resume) ──────────────────
@@ -30,8 +31,9 @@ export interface ResumeSnapshot {
   target_role: string;
   summary_text: string;
   competencies: string[];
-  top_bullets_by_role: string[][]; // For each role, the top 2 bullet texts
+  top_bullets_by_role: string[][]; // For each role, the top 3 bullet texts
   archetype_primary: string;
+  key_phrases: string[];          // Distinctive phrases used in this resume
   created_at: string;
 }
 
@@ -41,6 +43,8 @@ export interface DivergenceResult {
   summary_overlaps: { job_id: number; company: string; overlap_pct: number }[];
   competency_overlaps: { job_id: number; company: string; overlap_pct: number }[];
   bullet_staleness: { job_id: number; company: string; unchanged_roles: number; total_roles: number }[];
+  bullet_similarity: { job_id: number; company: string; similarity_pct: number }[];
+  suppressed_phrases: string[];   // Phrases to avoid (already used in prior resumes)
   needs_rewrite: boolean;
   rewrite_reasons: string[];
   divergence_prompt: string;      // Prompt addendum for the LLM to force divergence
@@ -132,9 +136,12 @@ export async function ensureResumeHistoryTable(): Promise<void> {
         competencies JSONB DEFAULT '[]'::jsonb,
         top_bullets_by_role JSONB DEFAULT '[]'::jsonb,
         archetype_primary TEXT,
+        key_phrases JSONB DEFAULT '[]'::jsonb,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // Add key_phrases column if table already exists without it
+    await query(`ALTER TABLE resume_history ADD COLUMN IF NOT EXISTS key_phrases JSONB DEFAULT '[]'::jsonb`);
   } catch {
     // Table might already exist or DB might be unavailable — non-fatal
   }
@@ -149,15 +156,16 @@ export async function storeResumeSnapshot(
   archetypePrimary: string,
 ): Promise<void> {
   const topBulletsByRole = resume.experience.map(exp =>
-    exp.bullets.slice(0, 2).map(b => typeof b === "string" ? b : b.text),
+    exp.bullets.slice(0, 3).map(b => typeof b === "string" ? b : b.text),
   );
 
   const competencies = (resume as any).core_competencies || [];
+  const keyPhrases = extractKeyPhrases(resume);
 
   try {
     await query(
-      `INSERT INTO resume_history (job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO resume_history (job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         jobId,
         resume.target_company,
@@ -166,6 +174,7 @@ export async function storeResumeSnapshot(
         JSON.stringify(competencies),
         JSON.stringify(topBulletsByRole),
         archetypePrimary,
+        JSON.stringify(keyPhrases),
       ],
     );
   } catch {
@@ -182,7 +191,7 @@ export async function loadRecentSnapshots(
 ): Promise<ResumeSnapshot[]> {
   try {
     const result = await query(
-      `SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, created_at
+      `SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
        FROM resume_history
        WHERE job_id != $1
        ORDER BY created_at DESC
@@ -198,11 +207,75 @@ export async function loadRecentSnapshots(
       competencies: typeof row.competencies === "string" ? JSON.parse(row.competencies) : (row.competencies || []),
       top_bullets_by_role: typeof row.top_bullets_by_role === "string" ? JSON.parse(row.top_bullets_by_role) : (row.top_bullets_by_role || []),
       archetype_primary: row.archetype_primary,
+      key_phrases: typeof row.key_phrases === "string" ? JSON.parse(row.key_phrases) : (row.key_phrases || []),
       created_at: row.created_at,
     }));
   } catch {
     return []; // DB unavailable — no history to compare
   }
+}
+
+/**
+ * Extract distinctive phrases (3+ word chunks) from a resume for phrase tracking.
+ */
+function extractKeyPhrases(resume: TailoredResume): string[] {
+  const phrases: string[] = [];
+  const summary = resume.professional_summary;
+
+  // Extract 3-5 word phrases from summary sentences
+  const sentences = summary.split(/[.!?]\s+/);
+  for (const sentence of sentences) {
+    const words = sentence.trim().split(/\s+/).filter(w => w.length > 3);
+    // Sliding window of 3-4 words
+    for (let i = 0; i <= words.length - 3; i++) {
+      phrases.push(words.slice(i, i + 3).join(" ").toLowerCase());
+      if (i <= words.length - 4) {
+        phrases.push(words.slice(i, i + 4).join(" ").toLowerCase());
+      }
+    }
+  }
+
+  // Extract opening phrases from first bullet of each role
+  for (const exp of resume.experience) {
+    if (exp.bullets.length > 0) {
+      const firstBullet = exp.bullets[0].text;
+      const words = firstBullet.split(/\s+/).filter(w => w.length > 3);
+      if (words.length >= 3) {
+        phrases.push(words.slice(0, 3).join(" ").toLowerCase());
+      }
+    }
+  }
+
+  return [...new Set(phrases)];
+}
+
+/**
+ * Calculate top-3 bullet text similarity between two resumes.
+ */
+function topBulletSimilarity(
+  currentBullets: string[][],
+  priorBullets: string[][],
+): number {
+  const minRoles = Math.min(currentBullets.length, priorBullets.length);
+  if (minRoles === 0) return 0;
+
+  let totalOverlap = 0;
+  let totalComparisons = 0;
+
+  for (let i = 0; i < minRoles; i++) {
+    const current = currentBullets[i] || [];
+    const prior = priorBullets[i] || [];
+    const maxBullets = Math.min(3, current.length, prior.length);
+
+    for (let j = 0; j < maxBullets; j++) {
+      if (current[j] && prior[j]) {
+        totalOverlap += textOverlap(current[j], prior[j]);
+        totalComparisons++;
+      }
+    }
+  }
+
+  return totalComparisons > 0 ? totalOverlap / totalComparisons : 0;
 }
 
 // ── Comparison Logic ────────────────────────────────────────────
@@ -235,7 +308,7 @@ function competencyOverlap(compsA: string[], compsB: string[]): number {
 }
 
 /**
- * Check how many roles have identical top-2 bullets between two resumes.
+ * Check how many roles have identical top-3 bullets between two resumes.
  */
 function bulletStaleness(
   currentTopBullets: string[][],
@@ -248,11 +321,17 @@ function bulletStaleness(
     const currentTop = currentTopBullets[i]?.map(b => b.toLowerCase().trim()) || [];
     const priorTop = priorTopBullets[i]?.map(b => b.toLowerCase().trim()) || [];
 
-    // Both top bullets match = unchanged
-    const top1Same = currentTop[0] && priorTop[0] && textOverlap(currentTop[0], priorTop[0]) > 0.8;
-    const top2Same = currentTop[1] && priorTop[1] && textOverlap(currentTop[1], priorTop[1]) > 0.8;
+    // Check top 3 bullets for similarity
+    let sameBullets = 0;
+    const maxCheck = Math.min(3, currentTop.length, priorTop.length);
+    for (let j = 0; j < maxCheck; j++) {
+      if (currentTop[j] && priorTop[j] && textOverlap(currentTop[j], priorTop[j]) > 0.8) {
+        sameBullets++;
+      }
+    }
 
-    if (top1Same && top2Same) unchanged++;
+    // If 2+ of top-3 are the same, consider it unchanged
+    if (sameBullets >= 2) unchanged++;
   }
 
   return { unchangedRoles: unchanged, totalRoles: minRoles };
@@ -276,6 +355,8 @@ export async function checkDivergenceAgainstHistory(
     summary_overlaps: [],
     competency_overlaps: [],
     bullet_staleness: [],
+    bullet_similarity: [],
+    suppressed_phrases: [],
     needs_rewrite: false,
     rewrite_reasons: [],
     divergence_prompt: "",
@@ -287,11 +368,28 @@ export async function checkDivergenceAgainstHistory(
 
   const currentCompetencies = (resume as any).core_competencies || [];
   const currentTopBullets = resume.experience.map(exp =>
-    exp.bullets.slice(0, 2).map(b => typeof b === "string" ? b : b.text),
+    exp.bullets.slice(0, 3).map(b => typeof b === "string" ? b : b.text),
   );
+
+  // Collect all prior key phrases for suppression
+  const allPriorPhrases = new Set<string>();
+  for (const prior of priorResumes) {
+    for (const phrase of prior.key_phrases || []) {
+      allPriorPhrases.add(phrase.toLowerCase());
+    }
+  }
+
+  // Check current resume against prior phrases
+  const currentPhrases = extractKeyPhrases(resume);
+  for (const phrase of currentPhrases) {
+    if (allPriorPhrases.has(phrase)) {
+      result.suppressed_phrases.push(phrase);
+    }
+  }
 
   let worstSummaryOverlap = 0;
   let worstCompOverlap = 0;
+  let worstBulletSimilarity = 0;
   let anyBulletsStale = false;
 
   for (const prior of priorResumes) {
@@ -313,7 +411,16 @@ export async function checkDivergenceAgainstHistory(
     });
     if (compOvlp > worstCompOverlap) worstCompOverlap = compOvlp;
 
-    // Bullet staleness
+    // Top-3 bullet similarity (new)
+    const bulletSim = topBulletSimilarity(currentTopBullets, prior.top_bullets_by_role);
+    result.bullet_similarity.push({
+      job_id: prior.job_id,
+      company: prior.target_company,
+      similarity_pct: Math.round(bulletSim * 100),
+    });
+    if (bulletSim > worstBulletSimilarity) worstBulletSimilarity = bulletSim;
+
+    // Bullet staleness (role-level)
     const staleness = bulletStaleness(currentTopBullets, prior.top_bullets_by_role);
     result.bullet_staleness.push({
       job_id: prior.job_id,
@@ -326,7 +433,7 @@ export async function checkDivergenceAgainstHistory(
     }
   }
 
-  // Determine if rewrite is needed
+  // Determine if rewrite is needed (tightened thresholds)
   if (worstSummaryOverlap > SUMMARY_OVERLAP_THRESHOLD) {
     result.needs_rewrite = true;
     result.rewrite_reasons.push(
@@ -341,10 +448,17 @@ export async function checkDivergenceAgainstHistory(
     );
   }
 
+  if (worstBulletSimilarity > BULLET_SIMILARITY_THRESHOLD) {
+    result.needs_rewrite = true;
+    result.rewrite_reasons.push(
+      `Top-3 bullet similarity ${Math.round(worstBulletSimilarity * 100)}% with prior resume (threshold: ${BULLET_SIMILARITY_THRESHOLD * 100}%)`,
+    );
+  }
+
   if (anyBulletsStale) {
     result.needs_rewrite = true;
     result.rewrite_reasons.push(
-      "Top 2 bullets per role are unchanged from a prior resume — force reorder",
+      "Top 3 bullets per role are too similar to a prior resume — force reorder",
     );
   }
 
@@ -408,12 +522,22 @@ ${archetypeFraming.avoid.map(a => `  - ${a}`).join("\n")}
 `;
   }
 
+  if (divergenceResult.suppressed_phrases.length > 0) {
+    prompt += `
+### SUPPRESSED PHRASES (already used in prior resumes — DO NOT REUSE)
+${divergenceResult.suppressed_phrases.slice(0, 20).map(p => `  - "${p}"`).join("\n")}
+Use DIFFERENT language patterns. Each resume must feel linguistically distinct.
+`;
+  }
+
   prompt += `
 ### DIVERGENCE TARGETS
-- Summary word overlap with ANY prior resume: < 50%
-- Competency cluster overlap with ANY prior resume: < 70%
-- At least 50% of roles must have DIFFERENT top-2 bullets than any prior resume
+- Summary word overlap with ANY prior resume: < 40%
+- Competency cluster overlap with ANY prior resume: < 60%
+- Top-3 bullet similarity with ANY prior resume: < 50%
+- At least 50% of roles must have DIFFERENT top-3 bullets than any prior resume
 - Opening sentence of Executive Summary must be UNIQUE
+- Re-cluster competencies using different wording while staying truthful
 
 Return the CORRECTED TailoredResume JSON with meaningfully different framing.`;
 

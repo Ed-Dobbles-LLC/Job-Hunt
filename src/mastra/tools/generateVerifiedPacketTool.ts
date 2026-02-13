@@ -427,10 +427,10 @@ export const generateVerifiedPacketTool = createTool({
             logger,
           });
 
-          // Run post-generation compression pass
-          logger?.info(`🔧 [generateVerifiedPacket] Attempt ${attempt}: Running resume compression pass`);
-          const compressionReport = compressResume(currentResume);
-          logger?.info(`🔧 [generateVerifiedPacket] Compression: ${compressionReport.originalBulletCount} → ${compressionReport.finalBulletCount} bullets, ${compressionReport.fillerPhrasesRemoved.length} filler phrases cleaned, ${compressionReport.redundanciesFound.length} redundancies found`);
+          // Run post-generation compression pass (mandate-aware)
+          logger?.info(`🔧 [generateVerifiedPacket] Attempt ${attempt}: Running resume compression pass (mandate-aware)`);
+          const compressionReport = compressResume(currentResume, mandate);
+          logger?.info(`🔧 [generateVerifiedPacket] Compression: ${compressionReport.originalBulletCount} → ${compressionReport.finalBulletCount} bullets, ${compressionReport.fillerPhrasesRemoved.length} filler cleaned, ${compressionReport.passivePhrasesRemoved.length} passive cleaned, ${compressionReport.redundanciesFound.length} redundancies, mandate-reorder=${compressionReport.bulletsReorderedByMandate}, density-compress=${compressionReport.densityCompressed}`);
           writeDebugArtifact(`attempt${attempt}_compression_report`, compressionReport, context.job_id);
 
           logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Resume generated (${currentResume.experience.length} roles, ${currentResume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0)} bullets)`);
@@ -456,9 +456,9 @@ export const generateVerifiedPacketTool = createTool({
               logger,
             });
 
-            // Re-run compression on the rewritten resume
-            const rewriteCompressionReport = compressResume(currentResume);
-            logger?.info(`🔧 [generateVerifiedPacket] Post-divergence compression: ${rewriteCompressionReport.originalBulletCount} → ${rewriteCompressionReport.finalBulletCount} bullets`);
+            // Re-run compression on the rewritten resume (mandate-aware)
+            const rewriteCompressionReport = compressResume(currentResume, mandate);
+            logger?.info(`🔧 [generateVerifiedPacket] Post-divergence compression: ${rewriteCompressionReport.originalBulletCount} → ${rewriteCompressionReport.finalBulletCount} bullets, mandate-reorder=${rewriteCompressionReport.bulletsReorderedByMandate}`);
             writeDebugArtifact(`attempt${attempt}_divergence_rewrite`, currentResume, context.job_id);
           } else {
             logger?.info(`✅ [generateVerifiedPacket] Divergence check passed (compared against ${divergenceResult.compared_against} prior resumes)`);
@@ -506,9 +506,9 @@ export const generateVerifiedPacketTool = createTool({
               logger,
             });
 
-            // Run post-correction compression pass
-            const correctionCompressionReport = compressResume(currentResume);
-            logger?.info(`🔧 [generateVerifiedPacket] Attempt ${attempt}: Post-correction compression: ${correctionCompressionReport.originalBulletCount} → ${correctionCompressionReport.finalBulletCount} bullets`);
+            // Run post-correction compression pass (mandate-aware)
+            const correctionCompressionReport = compressResume(currentResume, mandate);
+            logger?.info(`🔧 [generateVerifiedPacket] Attempt ${attempt}: Post-correction compression: ${correctionCompressionReport.originalBulletCount} → ${correctionCompressionReport.finalBulletCount} bullets, mandate-reorder=${correctionCompressionReport.bulletsReorderedByMandate}`);
 
             logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Corrected resume generated`);
             writeDebugArtifact(`attempt${attempt}_resume_corrected`, currentResume, context.job_id);

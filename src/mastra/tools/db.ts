@@ -156,6 +156,7 @@ export async function initDatabase(): Promise<void> {
         competencies JSONB DEFAULT '[]'::jsonb,
         top_bullets_by_role JSONB DEFAULT '[]'::jsonb,
         archetype_primary TEXT,
+        key_phrases JSONB DEFAULT '[]'::jsonb,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);

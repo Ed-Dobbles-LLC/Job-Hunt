@@ -88,7 +88,7 @@ export const TailoredResumeSchema = z.object({
   professional_summary: z
     .string()
     .describe(
-      "4-6 sentence executive summary anchored to measurable enterprise impact. Must immediately answer: (1) What scale? (team size, budget, enterprise value), (2) What transformation? (AI, digital, data modernization), (3) What financial impact? (revenue, cost savings, ROI). Open with the candidate's actual scope, not generic 'accomplished executive' language. Use board-ready tone. Only use facts from inventory.",
+      "3-5 sentence executive summary anchored to measurable enterprise impact. Max 5 lines. First sentence: identity + domain (NO team size or revenue numbers). Second+ sentences: (1) What scale? (team size, budget, enterprise value), (2) What transformation? (AI, digital, data modernization), (3) What financial impact? (revenue, cost savings, ROI). Open with the candidate's domain identity, not generic language. Use board-ready tone. Only use facts from inventory.",
     ),
   core_competencies: z
     .array(z.string())
@@ -198,7 +198,12 @@ The resume should feel balanced and calm across both pages — no cramming.
    E.g., "Distinctly technical for an executive of this level — [specific technical achievement] — while maintaining fluency in [business skill]."
    This paragraph answers: "Why should I call THIS person instead of 50 other VPs?"
 
-   **SUMMARY LINE LIMIT: Max 6 lines.** No blocky paragraphs. Keep it tight and scannable.
+   **SUMMARY LINE LIMIT: Max 5 lines.** No blocky paragraphs. Keep it tight and scannable.
+   **FIRST SENTENCE RULES:**
+   - Do NOT mention team size in the first sentence.
+   - Do NOT mention revenue metrics in the first sentence.
+   - Lead with the candidate's identity + domain, not scale numbers.
+   - Scale facts go in the SECOND sentence or later.
 
    IMPORTANT: Every fact, number, and metric in the summary MUST come from the inventory.
 
@@ -236,6 +241,27 @@ The resume should feel balanced and calm across both pages — no cramming.
    - "career defined by…" → delete, rewrite
    - "distinctly technical for an executive of this level" → delete, rewrite
    - Remove filler adjectives: "strategically", "holistically", "comprehensively", "effectively", "successfully"
+   - "Positioned analytics as a revenue driver" → delete, rewrite
+   - "Transforming analytics into strategic growth engines" → delete, rewrite
+
+   **EXECUTIVE CONFIDENCE — MANDATORY TONE:**
+   - Every bullet must read like a senior leader briefing a board, NOT a manager describing responsibilities.
+   - No passive phrasing ("was responsible for", "was tasked with", "was involved in").
+   - No explanatory clauses that dilute impact ("which resulted in", "in order to", "with the goal of").
+   - No hedging language ("helped", "assisted", "contributed to", "supported").
+
+   **MANDATE-DRIVEN BULLET ORDERING:**
+   - The first 2 bullets per role MUST align with the dominant job mandate archetype.
+   - If the dominant mandate is NOT revenue growth, revenue metrics must NOT dominate bullets 1-2.
+   - Elevate governance, reporting, operating model, stakeholder delivery, or platform architecture bullets depending on mandate.
+   - Revenue bullets may remain but not lead unless the mandate is revenue-focused.
+
+   **PHRASE SUPPRESSION — NEVER reuse these across resumes:**
+   - "Transforming analytics into strategic growth engines"
+   - "Distinctly technical for an executive at this level"
+   - "Positioned analytics as a revenue driver"
+   - "Bridging technical capabilities with business strategy"
+   If a phrase appeared in a prior tailored resume, you MUST use different language. Each resume must have distinct language patterns.
 
    **BULLET CAPS BY ROLE RECENCY (STRICTLY ENFORCED):**
    - Most recent role: EXACTLY 4 bullets
@@ -345,20 +371,23 @@ ${JSON.stringify(allowlist, null, 2)}
 ## INSTRUCTIONS
 1. Read the JD requirements carefully. Identify the top 3-5 mandate themes.
 2. Create an executive_headline that matches the seniority level of BOTH the target role and the candidate's actual level. Do NOT inflate.
-3. Write professional_summary as a 2-3 PARAGRAPH executive narrative (paragraphs separated by \\n\\n):
+3. Write professional_summary as a 2-3 PARAGRAPH executive narrative (paragraphs separated by \\n\\n). MAX 5 LINES:
+   - First sentence: identity + domain. Do NOT put team size or revenue in sentence 1.
    - Paragraph 1: Identity + Scale (who is this person, what's their biggest verifiable scope)
    - Paragraph 2: Transformation pattern (what do they DO when they arrive — build, modernize, scale?)
    - Paragraph 3: Differentiator (why THIS person for THIS role — the rare combination)
-   Every fact must come from inventory. No generic openers.
+   Every fact must come from inventory. No generic openers. No hedging language.
 4. Build core_competencies with 8-12 STRATEGIC enterprise keywords (not tool names). Include ATS terms from JD.
 5. For each experience entry:
    a. Add a scope_line with enterprise context (team size, business units, budget) — pipe-separated, ONE short line only
    b. First 2 bullets must carry 80% of the value (biggest impact, most JD-relevant)
    c. Do NOT repeat scope_line info in bullets. Scope_line handles org context, bullets handle achievements.
-   d. Start every bullet with a direct action verb. Follow Action → Scale → Outcome format.
+   d. Start every bullet with a direct action verb. Follow Action → Scale → Outcome format. No passive, no hedging, no explanatory clauses.
    e. MAX 22 WORDS PER BULLET. No exceptions. Remove filler adjectives and passive phrasing. No stacked metrics.
    f. STRICT bullet caps: 4 for most recent role, 3 for second and third roles, 2 for roles older than 15 years.
    g. Total: 13-15 bullets maximum across all roles.
+   h. MANDATE-DRIVEN ORDERING: First 2 bullets per role must align with the dominant mandate. If mandate ≠ revenue growth, revenue bullets must NOT lead.
+   i. TRUTH RULES: Do not introduce any new numbers, tool names, or platform names not in the inventory. Do not claim ownership of systems not explicitly documented. If a JD requirement is unsupported, use transferable phrasing or omit.
 6. Do NOT create both core_competencies and enterprise_capabilities — this creates redundancy. When core_competencies is present, only emit tools_and_platforms.
 7. Tools & Platforms: limit to 1 compact line. No tool-dumping.
 8. REDUNDANCY CHECK before finalizing:

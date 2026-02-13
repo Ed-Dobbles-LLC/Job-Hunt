@@ -314,6 +314,19 @@ const FILLER_PHRASES: { regex: RegExp; label: string }[] = [
   { regex: /\bin charge of\b/gi, label: '"in charge of…"' },
   { regex: /\bcareer defined by\b/gi, label: '"career defined by…"' },
   { regex: /\bdistinctly technical for an executive\b/gi, label: '"distinctly technical for an executive…"' },
+  { regex: /\bpositioned analytics as a revenue driver\b/gi, label: '"positioned analytics as a revenue driver"' },
+  { regex: /\btransforming analytics into strategic growth engines\b/gi, label: '"transforming analytics into strategic growth engines"' },
+];
+
+const PASSIVE_PHRASES: { regex: RegExp; label: string }[] = [
+  { regex: /\bwas responsible for\b/gi, label: '"was responsible for…"' },
+  { regex: /\bwas tasked with\b/gi, label: '"was tasked with…"' },
+  { regex: /\bwas involved in\b/gi, label: '"was involved in…"' },
+  { regex: /\bwas charged with\b/gi, label: '"was charged with…"' },
+  { regex: /\bwas instrumental in\b/gi, label: '"was instrumental in…"' },
+  { regex: /\bhelped\s+\w+/gi, label: '"helped…" (hedging)' },
+  { regex: /\bassisted\s+(?:in|with)/gi, label: '"assisted in/with…" (hedging)' },
+  { regex: /\bcontributed to\b/gi, label: '"contributed to…" (hedging)' },
 ];
 
 /**
@@ -459,6 +472,58 @@ export function checkChronologicalOrder(xml: string): FormattingViolation[] {
   return violations;
 }
 
+/**
+ * Check for passive phrasing that should be replaced with action-first language.
+ */
+export function checkPassivePhrasing(xml: string): FormattingViolation[] {
+  const violations: FormattingViolation[] = [];
+  const plainText = extractPlainText(xml);
+
+  for (const { regex, label } of PASSIVE_PHRASES) {
+    regex.lastIndex = 0;
+    const matches = plainText.match(regex) || [];
+    if (matches.length > 0) {
+      violations.push({
+        check: "PASSIVE_PHRASING",
+        severity: "warning",
+        message: `Found passive/hedging phrase ${label} (${matches.length} occurrence${matches.length > 1 ? "s" : ""})`,
+        location: "document",
+        details: `Replace ${label} with direct action verbs. Executive resumes must read like a senior leader briefing a board.`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Check that the executive summary does not exceed 5 lines.
+ * Estimates lines at ~80 characters per line.
+ */
+export function checkSummaryLineCount(xml: string): FormattingViolation[] {
+  const violations: FormattingViolation[] = [];
+  const plainText = extractPlainText(xml);
+
+  // Find summary section — between SUMMARY heading and next heading
+  const summaryMatch = plainText.match(/(?:EXECUTIVE SUMMARY|PROFESSIONAL SUMMARY)\s+([\s\S]*?)(?=(?:CORE COMPETENCIES|PROFESSIONAL EXPERIENCE|EXPERIENCE|SKILLS|EDUCATION|$))/i);
+  if (summaryMatch) {
+    const summaryText = summaryMatch[1].trim();
+    const estimatedLines = Math.ceil(summaryText.length / 80);
+
+    if (estimatedLines > 5) {
+      violations.push({
+        check: "SUMMARY_TOO_LONG",
+        severity: "warning",
+        message: `Executive summary is ~${estimatedLines} lines (max: 5)`,
+        location: "summary",
+        details: `Summary should be max 5 lines for visual density compliance. Current: ~${summaryText.length} chars (~${estimatedLines} lines at 80 chars/line).`,
+      });
+    }
+  }
+
+  return violations;
+}
+
 export async function validateResumeFormatting(
   docxBuffer: Buffer,
   profile: {
@@ -515,6 +580,12 @@ export async function validateResumeFormatting(
 
   checksRun++;
   violations.push(...checkChronologicalOrder(xml));
+
+  checksRun++;
+  violations.push(...checkPassivePhrasing(xml));
+
+  checksRun++;
+  violations.push(...checkSummaryLineCount(xml));
 
   const criticalCount = violations.filter((v) => v.severity === "critical").length;
   const warningCount = violations.filter((v) => v.severity === "warning").length;
