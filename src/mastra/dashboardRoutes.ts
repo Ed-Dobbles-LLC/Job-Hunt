@@ -614,7 +614,7 @@ export function getDashboardRoutes() {
                     job_id: jobId,
                     company: job.company,
                     title: job.title,
-                    max_attempts: 2,
+                    max_attempts: 3,
                   },
                   mastra,
                 } as any);

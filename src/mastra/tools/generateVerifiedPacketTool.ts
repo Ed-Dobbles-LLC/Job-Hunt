@@ -68,7 +68,7 @@ function getOpenAI() {
   return _openai;
 }
 
-/** Wrap generateObject with timeout and actionable error messages */
+/** Wrap generateObject with timeout, rate-limit retry, and actionable error messages */
 async function safeGenerateObject<T extends z.ZodTypeAny>(opts: {
   schema: T;
   system: string;
@@ -77,38 +77,96 @@ async function safeGenerateObject<T extends z.ZodTypeAny>(opts: {
   label: string;
   logger?: any;
   timeoutMs?: number;
+  maxRetries?: number;
 }): Promise<z.infer<T>> {
-  const { schema, system, prompt, temperature, label, logger, timeoutMs = 120_000 } = opts;
+  const { schema, system, prompt, temperature, label, logger, timeoutMs = 120_000, maxRetries = 2 } = opts;
   const startMs = Date.now();
   logger?.info(`🤖 [${label}] Calling gpt-4o (timeout=${timeoutMs}ms, prompt=${prompt.length} chars)`);
 
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let lastError: Error | null = null;
 
-    const { object } = await generateObject({
-      model: getOpenAI()("gpt-4o"),
-      schema,
-      system,
-      prompt,
-      temperature,
-      abortSignal: controller.signal,
-    });
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 30_000); // 2s, 4s, 8s... max 30s
+      logger?.info(`⏳ [${label}] Retry ${attempt}/${maxRetries} after ${backoffMs}ms backoff`);
+      await new Promise(r => setTimeout(r, backoffMs));
+    }
 
-    clearTimeout(timer);
-    logger?.info(`✅ [${label}] LLM responded in ${Date.now() - startMs}ms`);
-    return object;
-  } catch (err: any) {
-    const elapsedMs = Date.now() - startMs;
-    const msg = err.message || String(err);
-    if (err.name === "AbortError" || msg.includes("abort")) {
-      throw new Error(`[${label}] LLM timed out after ${elapsedMs}ms. Prompt may be too large (${prompt.length} chars).`);
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      const { object } = await generateObject({
+        model: getOpenAI()("gpt-4o"),
+        schema,
+        system,
+        prompt,
+        temperature,
+        abortSignal: controller.signal,
+      });
+
+      clearTimeout(timer);
+      const elapsed = Date.now() - startMs;
+      logger?.info(`✅ [${label}] LLM responded in ${elapsed}ms${attempt > 0 ? ` (after ${attempt} retries)` : ""}`);
+      return object;
+    } catch (err: any) {
+      const elapsedMs = Date.now() - startMs;
+      const msg = err.message || String(err);
+
+      if (err.name === "AbortError" || msg.includes("abort")) {
+        throw new Error(`[${label}] LLM timed out after ${elapsedMs}ms. Prompt may be too large (${prompt.length} chars).`);
+      }
+      if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("API key")) {
+        throw new Error(`[${label}] OpenAI API key is invalid. Check OPENAI_API_KEY env var.`);
+      }
+
+      // Rate limit (429) — retry with backoff
+      if (msg.includes("429") || msg.includes("rate") || msg.includes("Rate limit") || msg.includes("too many requests")) {
+        logger?.warn(`⚠️ [${label}] Rate limited (attempt ${attempt + 1}/${maxRetries + 1}), will retry with backoff`);
+        lastError = new Error(`[${label}] Rate limited after ${elapsedMs}ms`);
+        continue;
+      }
+
+      // Schema validation failure — log details and retry once (model may produce valid output on second try)
+      if (msg.includes("did not match schema") || msg.includes("No object generated")) {
+        // Try to extract Zod error details from the error cause chain
+        let zodDetail = "";
+        if (err.cause && typeof err.cause === "object") {
+          try {
+            const issues = err.cause.issues || err.cause?.error?.issues || [];
+            if (issues.length > 0) {
+              zodDetail = issues.map((i: any) => `  ${(i.path || []).join(".")}: ${i.message}`).join("\n");
+            }
+          } catch { /* best effort */ }
+        }
+        if (zodDetail) {
+          logger?.warn(`⚠️ [${label}] Schema validation failed:\n${zodDetail}`);
+        } else {
+          logger?.warn(`⚠️ [${label}] Schema validation failed: ${msg.substring(0, 300)}`);
+        }
+
+        // Retry schema failures — the model often succeeds on a second attempt
+        if (attempt < maxRetries) {
+          lastError = new Error(`[${label}] Schema validation failed after ${elapsedMs}ms: ${msg.substring(0, 300)}`);
+          continue;
+        }
+      }
+
+      // Server errors (500, 502, 503) — retry
+      if (msg.includes("500") || msg.includes("502") || msg.includes("503") || msg.includes("server error") || msg.includes("Server error")) {
+        if (attempt < maxRetries) {
+          logger?.warn(`⚠️ [${label}] Server error (attempt ${attempt + 1}/${maxRetries + 1}), will retry`);
+          lastError = new Error(`[${label}] Server error after ${elapsedMs}ms: ${msg.substring(0, 300)}`);
+          continue;
+        }
+      }
+
+      throw new Error(`[${label}] LLM call failed after ${elapsedMs}ms: ${msg.substring(0, 500)}`);
     }
-    if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("API key")) {
-      throw new Error(`[${label}] OpenAI API key is invalid. Check OPENAI_API_KEY env var.`);
-    }
-    throw new Error(`[${label}] LLM call failed after ${elapsedMs}ms: ${msg.substring(0, 500)}`);
   }
+
+  // All retries exhausted
+  throw lastError || new Error(`[${label}] All ${maxRetries + 1} LLM call attempts failed`);
 }
 
 /** Write debug artifacts when DEBUG_GENERATION env var is set */

@@ -92,7 +92,7 @@ export const TailoredResumeSchema = z.object({
     ),
   core_competencies: z
     .array(z.string())
-    .min(8)
+    .min(4)
     .max(14)
     .optional()
     .describe(
@@ -101,7 +101,7 @@ export const TailoredResumeSchema = z.object({
   experience: z
     .array(ResumeExperienceSchema)
     .min(1)
-    .max(5)
+    .max(7)
     .describe("Work experience entries, ordered by relevance then recency. Include ALL relevant roles — a 25+ year career should show 4-5 roles to demonstrate depth."),
   skills: z.object({
     enterprise_capabilities: z
