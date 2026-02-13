@@ -18,6 +18,7 @@ import {
 } from "./tools/jobPostingSchema";
 import { autoGenerateInBackground } from "../resume-engine/auto-generate";
 import { jobMatchAgent } from "./agents/jobMatchAgent";
+import { isSetupComplete } from "./setupRoutes";
 
 let dbReady = false;
 
@@ -82,6 +83,16 @@ export function getDashboardRoutes() {
       path: "/dashboard",
       method: "GET" as const,
       createHandler: async () => async (c: any) => {
+        // Redirect to setup wizard if not configured yet
+        try {
+          const ready = await isSetupComplete();
+          if (!ready) {
+            return c.redirect("/setup");
+          }
+        } catch {
+          // If we can't check, just show the dashboard
+        }
+
         const found = findPublicFile("index.html");
         if (!found) {
           return c.text("Dashboard not found", 404);

@@ -3,7 +3,6 @@ import { MastraError } from "@mastra/core/error";
 import { PinoLogger } from "@mastra/loggers";
 import { LogLevel, MastraLogger } from "@mastra/core/logger";
 import pino from "pino";
-import { NonRetriableError } from "inngest";
 import { z } from "zod";
 
 // Alias OPENAI_API_KEY → AI_INTEGRATIONS_OPENAI_API_KEY so all tools find it
@@ -12,7 +11,23 @@ if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && process.env.OPENAI_API_KEY) {
 }
 
 import { sharedPostgresStorage } from "./storage";
-import { inngest, inngestServe } from "./inngest";
+
+// Inngest is optional — only loaded if keys are configured
+let inngest: any = null;
+let inngestServe: any = null;
+const inngestConfigured = !!(process.env.INNGEST_EVENT_KEY && process.env.INNGEST_SIGNING_KEY);
+if (inngestConfigured) {
+  try {
+    const inngestModule = require("./inngest");
+    inngest = inngestModule.inngest;
+    inngestServe = inngestModule.inngestServe;
+    console.log("✅ [Inngest] Loaded (keys configured)");
+  } catch (err: any) {
+    console.warn(`⚠️ [Inngest] Failed to load: ${err.message}. Workflow will run via direct scheduler.`);
+  }
+} else {
+  console.log("ℹ️ [Inngest] Skipped (no keys configured). Workflow runs via built-in scheduler.");
+}
 
 import { jobMatchWorkflow, runWorkflowDirectly } from "./workflows/jobMatchWorkflow";
 import { jobMatchAgent } from "./agents/jobMatchAgent";
@@ -20,6 +35,7 @@ import { getDashboardRoutes } from "./dashboardRoutes";
 import { getProfileBuilderRoutes } from "./profileBuilderRoutes";
 import { getJobSourceRoutes } from "./jobSourceRoutes";
 import { getSettingsRoutes } from "./settingsRoutes";
+import { getSetupRoutes, isSetupComplete } from "./setupRoutes";
 
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
@@ -102,17 +118,7 @@ export const mastra = new Mastra({
             url: c.req.url,
             error,
           });
-          if (error instanceof MastraError) {
-            if (error.id === "AGENT_MEMORY_MISSING_RESOURCE_ID") {
-              // This is typically a non-retirable error. It means that the request was not
-              // setup correctly to pass in the necessary parameters.
-              throw new NonRetriableError(error.message, { cause: error });
-            }
-          } else if (error instanceof z.ZodError) {
-            // Validation errors are never retriable.
-            throw new NonRetriableError(error.message, { cause: error });
-          }
-
+          // Log but re-throw; Inngest NonRetriableError wrapping removed since Inngest is optional
           throw error;
         }
       },
@@ -125,15 +131,16 @@ export const mastra = new Mastra({
           return c.json({ status: "ok", timestamp: new Date().toISOString() });
         },
       },
+      ...getSetupRoutes(),
       ...getDashboardRoutes(),
       ...getProfileBuilderRoutes(),
       ...getJobSourceRoutes(),
       ...getSettingsRoutes(),
-      {
+      ...(inngestConfigured && inngestServe ? [{
         path: "/api/inngest",
-        method: "ALL",
-        createHandler: async ({ mastra }) => inngestServe({ mastra, inngest }),
-      },
+        method: "ALL" as const,
+        createHandler: async ({ mastra }: any) => inngestServe({ mastra, inngest }),
+      }] : []),
 
       {
         path: "/api/import-emails",

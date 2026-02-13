@@ -33,8 +33,8 @@ const SETTING_DEFS = [
   { key: "digest_email", label: "Digest Recipient Email", env: "DIGEST_EMAIL", secret: false, group: "Email (Gmail)" },
   { key: "schedule_cron", label: "Cron Schedule", env: "SCHEDULE_CRON_EXPRESSION", secret: false, group: "Scheduling" },
   { key: "import_api_key", label: "Import API Key", env: "IMPORT_API_KEY", secret: true, group: "Security" },
-  { key: "inngest_event_key", label: "Inngest Event Key", env: "INNGEST_EVENT_KEY", secret: true, group: "Inngest" },
-  { key: "inngest_signing_key", label: "Inngest Signing Key", env: "INNGEST_SIGNING_KEY", secret: true, group: "Inngest" },
+  { key: "inngest_event_key", label: "Inngest Event Key (optional)", env: "INNGEST_EVENT_KEY", secret: true, group: "Advanced" },
+  { key: "inngest_signing_key", label: "Inngest Signing Key (optional)", env: "INNGEST_SIGNING_KEY", secret: true, group: "Advanced" },
 ];
 
 /** Get a setting value: DB first, then env var fallback */
