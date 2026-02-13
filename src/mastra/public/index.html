@@ -1502,29 +1502,82 @@
       </div>`;
     }
 
+    const PHASE_LABELS = {
+      'init': 'Starting...',
+      'queued': 'Queued...',
+      'extract-requirements': 'Analyzing JD...',
+      'extracting': 'Analyzing JD...',
+      'generate-packet': 'Generating resume & cover letter...',
+      'generating': 'Generating resume & cover letter...',
+      'render-docx': 'Rendering documents...',
+      'rendering': 'Rendering documents...',
+      'db-save': 'Saving to database...',
+      'saving': 'Saving to database...',
+      'done': 'Done!',
+    };
+
     async function generatePacket(jobId) {
       const btn = document.getElementById('gen-' + jobId);
-      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating...'; }
-      showToast('Generating application packet... This may take 1-2 minutes.', 'success');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Starting...'; }
+      showToast('Generating application packet... This takes 1-3 minutes.', 'success');
       const startTime = Date.now();
       try {
-        const data = await api('/generate-packet/' + jobId, { method: 'POST' });
-        if (data.success) {
-          showToast(`Packet generated! ${data.resume_roles} roles, ${data.resume_bullets} bullets, ${data.evidence_count} evidence entries. Truth: ${data.truth_pass ? 'PASS' : 'REVIEW'}`, 'success');
-          loadJobs();
-          loadDashboard();
-          loadGenLog();
-        } else {
-          const hint = data.hint ? '\n' + data.hint : '';
-          const phase = data.phase ? ` [${data.phase}]` : '';
-          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-          const errDetail = `${data.error || 'Unknown error'}${phase}\n${hint}\nElapsed: ${elapsed}s${data.stack ? '\n\nStack:\n' + data.stack.join('\n') : ''}`;
-          showToast(`Generation failed${phase}: ${data.error || 'Unknown'}`, 'error');
-          document.getElementById('errorBannerText').textContent = errDetail;
-          document.getElementById('errorBanner').style.display = 'block';
-          if (btn) { btn.disabled = false; btn.innerHTML = '&#x26A1; Generate Packet'; }
-          loadGenLog();
+        // Kick off async generation (returns 202 immediately)
+        const kickoff = await fetch(API + '/generate-packet/' + jobId, { method: 'POST' });
+        const kickoffData = await kickoff.json();
+
+        if (!kickoff.ok && kickoff.status !== 202) {
+          throw new Error(kickoffData.error || `HTTP ${kickoff.status}`);
         }
+
+        // Poll for status every 3 seconds
+        const POLL_INTERVAL = 3000;
+        const MAX_POLL_TIME = 600000; // 10 minute absolute max
+
+        while (Date.now() - startTime < MAX_POLL_TIME) {
+          await new Promise(r => setTimeout(r, POLL_INTERVAL));
+
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+          let statusData;
+          try {
+            const statusRes = await fetch(API + '/generate-packet/' + jobId + '/status');
+            statusData = await statusRes.json();
+          } catch (pollErr) {
+            // Network blip — keep polling
+            if (btn) btn.innerHTML = `<span class="spinner"></span> ${elapsed}s...`;
+            continue;
+          }
+
+          // Update button with current phase
+          const phaseLabel = PHASE_LABELS[statusData.phase] || statusData.phase || 'Working...';
+          if (btn) btn.innerHTML = `<span class="spinner"></span> ${phaseLabel} (${elapsed}s)`;
+
+          if (statusData.status === 'done') {
+            showToast(`Packet generated! ${statusData.resume_roles} roles, ${statusData.resume_bullets} bullets, ${statusData.evidence_count} evidence entries. Truth: ${statusData.truth_pass ? 'PASS' : 'REVIEW'}`, 'success');
+            loadJobs();
+            loadDashboard();
+            loadGenLog();
+            return; // btn stays disabled (job now has packet)
+          }
+
+          if (statusData.status === 'error') {
+            const hint = statusData.hint ? '\n' + statusData.hint : '';
+            const phase = statusData.phase ? ` [${statusData.phase}]` : '';
+            const errDetail = `${statusData.error || 'Unknown error'}${phase}\n${hint}\nElapsed: ${elapsed}s`;
+            showToast(`Generation failed${phase}: ${statusData.error || 'Unknown'}`, 'error');
+            document.getElementById('errorBannerText').textContent = errDetail;
+            document.getElementById('errorBanner').style.display = 'block';
+            if (btn) { btn.disabled = false; btn.innerHTML = '&#x26A1; Generate Packet'; }
+            loadGenLog();
+            return;
+          }
+
+          // statusData.status is still in-progress — keep polling
+        }
+
+        // Timed out waiting
+        showToast('Generation is still running in the background. Refresh the page in a minute.', 'success');
+        if (btn) { btn.disabled = false; btn.innerHTML = '&#x26A1; Generate Packet'; }
       } catch (e) {
         const msg = e.message || String(e) || 'Unknown error (check browser console)';
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

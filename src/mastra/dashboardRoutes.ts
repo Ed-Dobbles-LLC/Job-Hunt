@@ -27,6 +27,26 @@ function logGen(entry: Omit<GenLogEntry, "ts">) {
   if (generationLog.length > 100) generationLog.length = 100;
 }
 
+// In-memory packet generation status tracker (for async generation)
+interface PacketGenStatus {
+  job_id: number;
+  status: "queued" | "extracting" | "generating" | "rendering" | "saving" | "done" | "error";
+  phase: string;
+  started_at: string;
+  updated_at: string;
+  result?: any;
+  error?: string;
+  hint?: string;
+}
+const packetGenStatus = new Map<number, PacketGenStatus>();
+
+function updateGenStatus(jobId: number, update: Partial<PacketGenStatus>) {
+  const existing = packetGenStatus.get(jobId);
+  if (existing) {
+    Object.assign(existing, update, { updated_at: new Date().toISOString() });
+  }
+}
+
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -504,7 +524,7 @@ export function getDashboardRoutes() {
             }
           } catch { /* check is best-effort */ }
 
-          // Load job
+          // Load job (synchronous preflight — fast DB query)
           const jobResult = await query(
             `SELECT j.job_id, j.company, j.title, j.location, j.remote_hybrid,
                     j.jd_raw_text, j.jd_requirements, j.posting_url,
@@ -518,7 +538,6 @@ export function getDashboardRoutes() {
             return c.json({ error: "Job not found", phase: "load" }, 404);
           }
           const job = jobResult.rows[0];
-          logGen({ jobId, company: job.company, title: job.title, status: "running", message: "Starting generation...", phase: "init" });
 
           if (!job.jd_raw_text || job.jd_raw_text.length < 100) {
             return c.json({
@@ -527,180 +546,291 @@ export function getDashboardRoutes() {
             }, 400);
           }
 
-          // Phase 1: Extract JD requirements if missing
-          if (!job.jd_requirements) {
-            logger?.info(`📋 [generate-packet] Phase 1: Extracting JD requirements for job_id=${jobId}`);
+          // Check if already generating for this job
+          const existing = packetGenStatus.get(jobId);
+          if (existing && (existing.status !== "done" && existing.status !== "error")) {
+            return c.json({
+              success: true,
+              job_id: jobId,
+              async: true,
+              status: existing.status,
+              phase: existing.phase,
+              message: `Generation already in progress (${existing.phase})`,
+            }, 202);
+          }
+
+          // Initialize status tracker — return 202 immediately
+          packetGenStatus.set(jobId, {
+            job_id: jobId,
+            status: "queued",
+            phase: "init",
+            started_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          logGen({ jobId, company: job.company, title: job.title, status: "running", message: "Starting generation...", phase: "init" });
+
+          // Fire-and-forget: run the heavy pipeline in the background
+          (async () => {
             try {
-              await extractJDRequirementsTool.execute!({
-                context: {
+              // Phase 1: Extract JD requirements if missing
+              if (!job.jd_requirements) {
+                updateGenStatus(jobId, { status: "extracting", phase: "extract-requirements" });
+                logger?.info(`📋 [generate-packet] Phase 1: Extracting JD requirements for job_id=${jobId}`);
+                try {
+                  await extractJDRequirementsTool.execute!({
+                    context: {
+                      job_id: jobId,
+                      jd_text: job.jd_raw_text,
+                      company: job.company,
+                      title: job.title,
+                    },
+                    mastra,
+                  } as any);
+                  logger?.info(`✅ [generate-packet] Phase 1 complete: JD requirements extracted`);
+                } catch (phase1Err: any) {
+                  logger?.error(`❌ [generate-packet] Phase 1 failed: ${phase1Err.message}`);
+                  logGen({ jobId, company: job.company, title: job.title, status: "error", message: phase1Err.message, phase: "extract-requirements" });
+                  updateGenStatus(jobId, {
+                    status: "error",
+                    phase: "extract-requirements",
+                    error: `Failed to extract JD requirements: ${phase1Err.message}`,
+                    hint: phase1Err.message.includes("API key") || phase1Err.message.includes("401")
+                      ? "Check your OpenAI API key in Railway environment variables."
+                      : phase1Err.message.includes("rate") || phase1Err.message.includes("429")
+                      ? "OpenAI rate limit hit. Wait a moment and try again."
+                      : undefined,
+                  });
+                  return;
+                }
+              }
+
+              // Phase 2: Generate verified packet (resume + cover letter + truth verification)
+              updateGenStatus(jobId, { status: "generating", phase: "generate-packet" });
+              logger?.info(`📄 [generate-packet] Phase 2: Generating verified packet...`);
+              let packetResult: any;
+              try {
+                packetResult = await generateVerifiedPacketTool.execute!({
+                  context: {
+                    job_id: jobId,
+                    company: job.company,
+                    title: job.title,
+                    max_attempts: 2,
+                  },
+                  mastra,
+                } as any);
+                logger?.info(`✅ [generate-packet] Phase 2 complete: pass=${packetResult.pass}, attempts=${packetResult.attempts_used}`);
+              } catch (phase2Err: any) {
+                logger?.error(`❌ [generate-packet] Phase 2 failed: ${phase2Err.message}`);
+                logGen({ jobId, company: job.company, title: job.title, status: "error", message: phase2Err.message, phase: "generate-packet" });
+                updateGenStatus(jobId, {
+                  status: "error",
+                  phase: "generate-packet",
+                  error: `Failed to generate resume/cover letter: ${phase2Err.message}`,
+                  hint: phase2Err.message.includes("API key") || phase2Err.message.includes("401")
+                    ? "Check your OpenAI API key in Railway environment variables."
+                    : phase2Err.message.includes("rate") || phase2Err.message.includes("429")
+                    ? "OpenAI rate limit hit. Wait a moment and try again."
+                    : phase2Err.message.includes("All") && phase2Err.message.includes("attempts failed")
+                    ? "The AI couldn't generate a verified resume after multiple attempts. Try again — results vary between runs."
+                    : undefined,
+                });
+                return;
+              }
+
+              // Phase 3: Combine evidence pointers
+              const resumePointers = (packetResult.resume?.evidence_pointers || []).map((p: any) => ({
+                claim_text: p.claim_text,
+                evidence_id: p.source_hash,
+                evidence_quote: p.evidence_quote,
+                evidence_source_key: p.source_hash,
+                confidence: p.confidence,
+              }));
+              const clPointers = (packetResult.cover_letter?.evidence_pointers || []).map((p: any) => ({
+                claim_text: p.claim_text,
+                evidence_id: p.source_hash,
+                evidence_quote: p.evidence_quote,
+                evidence_source_key: p.source_hash,
+                confidence: p.confidence,
+              }));
+              const combinedEvidence = [...resumePointers, ...clPointers];
+
+              // Phase 4: Render DOCX and save to DB (primary) + filesystem (best-effort)
+              updateGenStatus(jobId, { status: "rendering", phase: "render-docx" });
+              logger?.info(`📁 [generate-packet] Phase 4: Rendering DOCX and saving to DB...`);
+              const truthPass = Boolean(packetResult.pass);
+              const evidenceJson = JSON.stringify(combinedEvidence, null, 2);
+              const verifierJson = JSON.stringify(packetResult.final_report, null, 2);
+              let resumeBuffer: Buffer | null = null;
+              let coverBuffer: Buffer | null = null;
+              let diskFiles = 0;
+
+              // Render DOCX from JSON
+              try {
+                const inventory = await loadInventoryProfile();
+                const profile = inventory.profile || {};
+                resumeBuffer = await renderResumeDocx(packetResult.resume, profile);
+                coverBuffer = await renderCoverLetterDocx(packetResult.cover_letter, profile);
+                logger?.info(`✅ [generate-packet] DOCX rendered: resume=${resumeBuffer.length}B, cover=${coverBuffer.length}B`);
+              } catch (renderErr: any) {
+                logger?.error(`⚠️ [generate-packet] DOCX render failed: ${renderErr.message}`);
+              }
+
+              // Save to DB (critical path — this is what makes packets visible)
+              updateGenStatus(jobId, { status: "saving", phase: "db-save" });
+              try {
+                await query(`DELETE FROM artifacts WHERE job_id = $1`, [jobId]);
+                await query(`DELETE FROM evidence_map WHERE job_id = $1`, [jobId]);
+                await query(
+                  `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass, resume_docx, cover_docx, evidence_map_json, verifier_json)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                  [jobId, "", "", "", "", "v2", "gpt-4o", truthPass, resumeBuffer, coverBuffer, evidenceJson, verifierJson],
+                );
+                for (const ev of combinedEvidence) {
+                  await query(
+                    `INSERT INTO evidence_map (job_id, claim_id, claim_text, evidence_quote, evidence_source_key, confidence)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [jobId, ev.evidence_id || "", ev.claim_text, ev.evidence_quote, ev.evidence_source_key, ev.confidence],
+                  ).catch((e: any) => logger?.error(`⚠️ [generate-packet] Evidence insert error: ${e.message}`));
+                }
+                logger?.info(`💾 [generate-packet] Artifacts saved to DB for job_id=${jobId}`);
+              } catch (dbErr: any) {
+                logger?.error(`❌ [generate-packet] DB save failed: ${dbErr.message}`);
+                logGen({ jobId, company: job.company, title: job.title, status: "error", message: `DB save failed: ${dbErr.message}`, phase: "db-save" });
+                updateGenStatus(jobId, {
+                  status: "error",
+                  phase: "db-save",
+                  error: `Resume generated but failed to save to database: ${dbErr.message}`,
+                  hint: "The resume was generated successfully but couldn't be saved. This is a database error.",
+                });
+                return;
+              }
+
+              // Write to filesystem (best-effort, not required)
+              try {
+                const buildResult = await buildOutputTool.execute!({
+                  context: {
+                    job_id: jobId, company: job.company, title: job.title,
+                    resume: packetResult.resume, cover_letter: packetResult.cover_letter,
+                    evidenceMap: combinedEvidence, verifierResult: packetResult.final_report,
+                    scoringBreakdown: job.breakdown_json || {}, totalScore: job.total_score || 0,
+                    skip_pdf: true,
+                  },
+                  mastra,
+                } as any);
+                diskFiles = buildResult?.files?.length || 0;
+                logger?.info(`📁 [generate-packet] Disk files: ${diskFiles}`);
+              } catch (diskErr: any) {
+                logger?.warn(`⚠️ [generate-packet] Disk write failed (non-critical): ${diskErr.message}`);
+              }
+
+              // Update job status
+              await query(
+                "UPDATE jobs SET status = $1 WHERE job_id = $2",
+                [truthPass ? "generated" : "generated-unverified", jobId],
+              );
+
+              const resumeExp = packetResult.resume?.experience || [];
+              logger?.info(`✅ [generate-packet] Done! pass=${truthPass}, diskFiles=${diskFiles}`);
+              logGen({ jobId, company: job.company, title: job.title, status: "success", message: `${resumeExp.length} roles, truth: ${truthPass ? "PASS" : "REVIEW"}, saved to DB`, phase: "done" });
+
+              // Mark as done with full result
+              updateGenStatus(jobId, {
+                status: "done",
+                phase: "done",
+                result: {
+                  success: true,
                   job_id: jobId,
-                  jd_text: job.jd_raw_text,
                   company: job.company,
                   title: job.title,
+                  truth_pass: truthPass,
+                  attempts_used: packetResult.attempts_used,
+                  evidence_count: combinedEvidence.length,
+                  files: diskFiles,
+                  resume_summary: packetResult.resume?.professional_summary || "",
+                  resume_roles: resumeExp.length,
+                  resume_bullets: resumeExp.reduce((s: number, e: any) => s + (e?.bullets?.length || 0), 0),
+                  ats_keywords: packetResult.resume?.ats_keywords_used || [],
+                  gap_notes: packetResult.resume?.gap_notes || [],
+                  cover_letter_words: packetResult.cover_letter?.word_count || 0,
                 },
-                mastra,
-              } as any);
-              logger?.info(`✅ [generate-packet] Phase 1 complete: JD requirements extracted`);
-            } catch (phase1Err: any) {
-              logger?.error(`❌ [generate-packet] Phase 1 failed: ${phase1Err.message}`);
-              logGen({ jobId, company: job.company, title: job.title, status: "error", message: phase1Err.message, phase: "extract-requirements" });
-              return c.json({
-                error: `Failed to extract JD requirements: ${phase1Err.message}`,
-                phase: "extract-requirements",
-                hint: phase1Err.message.includes("API key") || phase1Err.message.includes("401")
-                  ? "Check your OpenAI API key in Railway environment variables."
-                  : phase1Err.message.includes("rate") || phase1Err.message.includes("429")
-                  ? "OpenAI rate limit hit. Wait a moment and try again."
-                  : undefined,
-              }, 500);
+              });
+            } catch (err: any) {
+              const errMsg = err?.message || String(err);
+              logger?.error(`❌ [generate-packet] Unhandled error: ${errMsg}`);
+              logGen({ jobId, company: job.company || "?", title: job.title || "?", status: "error", message: errMsg, phase: "unknown" });
+              updateGenStatus(jobId, {
+                status: "error",
+                phase: "unknown",
+                error: errMsg,
+              });
             }
-          }
+          })();
 
-          // Phase 2: Generate verified packet (resume + cover letter + truth verification)
-          logger?.info(`📄 [generate-packet] Phase 2: Generating verified packet...`);
-          let packetResult: any;
-          try {
-            packetResult = await generateVerifiedPacketTool.execute!({
-              context: {
-                job_id: jobId,
-                company: job.company,
-                title: job.title,
-                max_attempts: 2,
-              },
-              mastra,
-            } as any);
-            logger?.info(`✅ [generate-packet] Phase 2 complete: pass=${packetResult.pass}, attempts=${packetResult.attempts_used}`);
-          } catch (phase2Err: any) {
-            logger?.error(`❌ [generate-packet] Phase 2 failed: ${phase2Err.message}`);
-            logGen({ jobId, company: job.company, title: job.title, status: "error", message: phase2Err.message, phase: "generate-packet" });
-            return c.json({
-              error: `Failed to generate resume/cover letter: ${phase2Err.message}`,
-              phase: "generate-packet",
-              hint: phase2Err.message.includes("API key") || phase2Err.message.includes("401")
-                ? "Check your OpenAI API key in Railway environment variables."
-                : phase2Err.message.includes("rate") || phase2Err.message.includes("429")
-                ? "OpenAI rate limit hit. Wait a moment and try again."
-                : phase2Err.message.includes("All") && phase2Err.message.includes("attempts failed")
-                ? "The AI couldn't generate a verified resume after multiple attempts. Try again — results vary between runs."
-                : undefined,
-            }, 500);
-          }
-
-          // Phase 3: Combine evidence pointers
-          const resumePointers = (packetResult.resume?.evidence_pointers || []).map((p: any) => ({
-            claim_text: p.claim_text,
-            evidence_id: p.source_hash,
-            evidence_quote: p.evidence_quote,
-            evidence_source_key: p.source_hash,
-            confidence: p.confidence,
-          }));
-          const clPointers = (packetResult.cover_letter?.evidence_pointers || []).map((p: any) => ({
-            claim_text: p.claim_text,
-            evidence_id: p.source_hash,
-            evidence_quote: p.evidence_quote,
-            evidence_source_key: p.source_hash,
-            confidence: p.confidence,
-          }));
-          const combinedEvidence = [...resumePointers, ...clPointers];
-
-          // Phase 4: Render DOCX and save to DB (primary) + filesystem (best-effort)
-          logger?.info(`📁 [generate-packet] Phase 4: Rendering DOCX and saving to DB...`);
-          const truthPass = Boolean(packetResult.pass);
-          const evidenceJson = JSON.stringify(combinedEvidence, null, 2);
-          const verifierJson = JSON.stringify(packetResult.final_report, null, 2);
-          let resumeBuffer: Buffer | null = null;
-          let coverBuffer: Buffer | null = null;
-          let diskFiles = 0;
-
-          // Render DOCX from JSON
-          try {
-            const inventory = await loadInventoryProfile();
-            const profile = inventory.profile || {};
-            resumeBuffer = await renderResumeDocx(packetResult.resume, profile);
-            coverBuffer = await renderCoverLetterDocx(packetResult.cover_letter, profile);
-            logger?.info(`✅ [generate-packet] DOCX rendered: resume=${resumeBuffer.length}B, cover=${coverBuffer.length}B`);
-          } catch (renderErr: any) {
-            logger?.error(`⚠️ [generate-packet] DOCX render failed: ${renderErr.message}`);
-          }
-
-          // Save to DB (critical path — this is what makes packets visible)
-          try {
-            await query(`DELETE FROM artifacts WHERE job_id = $1`, [jobId]);
-            await query(`DELETE FROM evidence_map WHERE job_id = $1`, [jobId]);
-            await query(
-              `INSERT INTO artifacts (job_id, resume_docx_path, cover_docx_path, evidence_map_path, verifier_json_path, prompt_version, model_used, truth_pass, resume_docx, cover_docx, evidence_map_json, verifier_json)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-              [jobId, "", "", "", "", "v2", "gpt-4o", truthPass, resumeBuffer, coverBuffer, evidenceJson, verifierJson],
-            );
-            for (const ev of combinedEvidence) {
-              await query(
-                `INSERT INTO evidence_map (job_id, claim_id, claim_text, evidence_quote, evidence_source_key, confidence)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [jobId, ev.evidence_id || "", ev.claim_text, ev.evidence_quote, ev.evidence_source_key, ev.confidence],
-              ).catch((e: any) => logger?.error(`⚠️ [generate-packet] Evidence insert error: ${e.message}`));
-            }
-            logger?.info(`💾 [generate-packet] Artifacts saved to DB for job_id=${jobId}`);
-          } catch (dbErr: any) {
-            logger?.error(`❌ [generate-packet] DB save failed: ${dbErr.message}`);
-            logGen({ jobId, company: job.company, title: job.title, status: "error", message: `DB save failed: ${dbErr.message}`, phase: "db-save" });
-            return c.json({
-              error: `Resume generated but failed to save to database: ${dbErr.message}`,
-              phase: "db-save",
-              hint: "The resume was generated successfully but couldn't be saved. This is a database error.",
-            }, 500);
-          }
-
-          // Write to filesystem (best-effort, not required)
-          try {
-            const buildResult = await buildOutputTool.execute!({
-              context: {
-                job_id: jobId, company: job.company, title: job.title,
-                resume: packetResult.resume, cover_letter: packetResult.cover_letter,
-                evidenceMap: combinedEvidence, verifierResult: packetResult.final_report,
-                scoringBreakdown: job.breakdown_json || {}, totalScore: job.total_score || 0,
-                skip_pdf: true,
-              },
-              mastra,
-            } as any);
-            diskFiles = buildResult?.files?.length || 0;
-            logger?.info(`📁 [generate-packet] Disk files: ${diskFiles}`);
-          } catch (diskErr: any) {
-            logger?.warn(`⚠️ [generate-packet] Disk write failed (non-critical): ${diskErr.message}`);
-          }
-
-          // Update job status
-          await query(
-            "UPDATE jobs SET status = $1 WHERE job_id = $2",
-            [truthPass ? "generated" : "generated-unverified", jobId],
-          );
-
-          const resumeExp = packetResult.resume?.experience || [];
-          logger?.info(`✅ [generate-packet] Done! pass=${truthPass}, diskFiles=${diskFiles}`);
-          logGen({ jobId, company: job.company, title: job.title, status: "success", message: `${resumeExp.length} roles, truth: ${truthPass ? "PASS" : "REVIEW"}, saved to DB`, phase: "done" });
-
+          // Return 202 Accepted immediately — frontend will poll for status
           return c.json({
             success: true,
             job_id: jobId,
-            company: job.company,
-            title: job.title,
-            truth_pass: truthPass,
-            attempts_used: packetResult.attempts_used,
-            evidence_count: combinedEvidence.length,
-            files: diskFiles,
-            resume_summary: packetResult.resume?.professional_summary || "",
-            resume_roles: resumeExp.length,
-            resume_bullets: resumeExp.reduce((s: number, e: any) => s + (e?.bullets?.length || 0), 0),
-            ats_keywords: packetResult.resume?.ats_keywords_used || [],
-            gap_notes: packetResult.resume?.gap_notes || [],
-            cover_letter_words: packetResult.cover_letter?.word_count || 0,
-          });
+            async: true,
+            status: "queued",
+            phase: "init",
+            message: "Packet generation started. Poll /api/dashboard/generate-packet/" + jobId + "/status for progress.",
+          }, 202);
         } catch (err: any) {
           const errMsg = err?.message || String(err);
           const errStack = err?.stack?.split('\n').slice(0, 8) || [];
-          logger?.error(`❌ [generate-packet] Unhandled error: ${errMsg}\n${errStack.join('\n')}`);
-          logGen({ jobId, company: "?", title: "?", status: "error", message: errMsg, phase: "unknown" });
-          return c.json({ error: errMsg, phase: "unknown", stack: errStack }, 500);
+          logger?.error(`❌ [generate-packet] Preflight error: ${errMsg}\n${errStack.join('\n')}`);
+          logGen({ jobId, company: "?", title: "?", status: "error", message: errMsg, phase: "preflight" });
+          return c.json({ error: errMsg, phase: "preflight", stack: errStack }, 500);
         }
+      },
+    },
+    /* ── Packet generation status (polling endpoint) ──────── */
+    {
+      path: "/api/dashboard/generate-packet/:jobId/status",
+      method: "GET" as const,
+      createHandler: async () => async (c: any) => {
+        const jobId = parseInt(c.req.param("jobId"));
+        const status = packetGenStatus.get(jobId);
+
+        if (!status) {
+          return c.json({ job_id: jobId, status: "unknown", message: "No generation in progress or recently completed for this job" }, 404);
+        }
+
+        const elapsed = ((Date.now() - new Date(status.started_at).getTime()) / 1000).toFixed(1);
+
+        if (status.status === "done") {
+          // Clean up after delivering the result (keep for 60s in case of multiple polls)
+          setTimeout(() => packetGenStatus.delete(jobId), 60_000);
+          return c.json({
+            job_id: jobId,
+            status: "done",
+            phase: "done",
+            elapsed_s: elapsed,
+            ...status.result,
+          });
+        }
+
+        if (status.status === "error") {
+          // Clean up after delivering the error
+          setTimeout(() => packetGenStatus.delete(jobId), 60_000);
+          return c.json({
+            job_id: jobId,
+            status: "error",
+            phase: status.phase,
+            elapsed_s: elapsed,
+            error: status.error,
+            hint: status.hint,
+          });
+        }
+
+        // Still in progress
+        return c.json({
+          job_id: jobId,
+          status: status.status,
+          phase: status.phase,
+          elapsed_s: elapsed,
+          message: `Generation in progress (${status.phase})...`,
+        }, 202);
       },
     },
     /* ── Generation log (in-memory) ───────────────────────── */
