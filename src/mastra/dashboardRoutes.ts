@@ -17,6 +17,7 @@ import {
   extractKeywords,
 } from "./tools/jobPostingSchema";
 import { autoGenerateInBackground } from "../resume-engine/auto-generate";
+import { jobMatchAgent } from "./agents/jobMatchAgent";
 
 let dbReady = false;
 
@@ -1225,6 +1226,114 @@ export function getDashboardRoutes() {
           return c.json({ jobs: result.rows, total: result.rows.length });
         } catch (err: any) {
           logger?.error(`❌ [needs-enrichment] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    /* ── Enrich jobs via web search (on-demand) ────────────── */
+    {
+      path: "/api/dashboard/enrich-jobs",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          const body = await c.req.json().catch(() => ({}));
+          const requestedIds: number[] | undefined = body.jobIds;
+
+          // Either use provided IDs or find all needs-enrichment jobs
+          let jobsToEnrich: any[];
+          if (requestedIds && requestedIds.length > 0) {
+            const result = await query(
+              `SELECT job_id, company, title, location, posting_url
+               FROM jobs WHERE job_id = ANY($1)
+               AND (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)`,
+              [requestedIds],
+            );
+            jobsToEnrich = result.rows;
+          } else {
+            const result = await query(
+              `SELECT job_id, company, title, location, posting_url
+               FROM jobs
+               WHERE jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100
+               ORDER BY date_ingested DESC
+               LIMIT 30`,
+            );
+            jobsToEnrich = result.rows;
+          }
+
+          if (jobsToEnrich.length === 0) {
+            return c.json({ success: true, message: "No jobs need enrichment", queued: 0 });
+          }
+
+          logger?.info(`🔍 [enrich] Starting web search enrichment for ${jobsToEnrich.length} jobs`);
+
+          // Fire-and-forget: run enrichment in background
+          (async () => {
+            const batchSize = 3;
+            let totalEnriched = 0;
+            let totalFailed = 0;
+
+            for (let i = 0; i < jobsToEnrich.length; i += batchSize) {
+              const batch = jobsToEnrich.slice(i, i + batchSize);
+              const jobSummaries = batch
+                .map((j: any) =>
+                  `- Job ID ${j.job_id}: "${j.title}" at ${j.company} (${j.location})${j.posting_url ? ` — URL: ${j.posting_url}` : ""}`,
+                )
+                .join("\n");
+
+              logger?.info(`🔍 [enrich] Batch ${Math.floor(i / batchSize) + 1}: ${batch.length} jobs`);
+
+              try {
+                const enrichResponse = await jobMatchAgent.generateLegacy(
+                  [
+                    {
+                      role: "user",
+                      content: `I need you to find full job descriptions for these ${batch.length} jobs. They were parsed from LinkedIn alerts and only have title, company, and location — no job description.
+
+YOUR PROCESS (follow this EXACTLY):
+1. For EACH job below, use the webSearch tool to search for: "[job title] [company name] job description responsibilities requirements"
+2. From the search results, extract: full responsibilities, requirements, qualifications, preferred skills, compensation/salary, and remote/hybrid status
+3. Write a comprehensive job description summary (at least 300 words) for each job based on what you find
+4. After searching ALL jobs, call the enrich-jobs tool ONCE with ALL enrichments
+
+Jobs to search:
+${jobSummaries}
+
+CRITICAL INSTRUCTIONS:
+- You MUST call webSearch BEFORE calling enrich-jobs
+- Each enrichment jd_text MUST be at least 300 characters
+- Include specific requirements, responsibilities, tools/technologies mentioned
+- If you can't find the exact posting, search for the company + role type to understand what they look for
+- ONLY use webSearch and enrich-jobs tools in this step.`,
+                    },
+                  ],
+                  { maxSteps: 10 },
+                );
+
+                const allToolResults =
+                  enrichResponse.steps?.flatMap((s: any) => s.toolResults || []) || [];
+                const allResults = allToolResults.map((r: any) => r.result || r);
+                const enrichResult = allResults.find((r: any) => r.enrichedJobIds);
+                totalEnriched += enrichResult?.enrichedCount || 0;
+              } catch (err: any) {
+                totalFailed += batch.length;
+                logger?.error(`❌ [enrich] Batch failed: ${err.message}`);
+              }
+            }
+
+            logger?.info(`✅ [enrich] Done: ${totalEnriched} enriched, ${totalFailed} failed`);
+          })();
+
+          return c.json({
+            success: true,
+            queued: jobsToEnrich.length,
+            jobs: jobsToEnrich.map((j: any) => ({ job_id: j.job_id, company: j.company, title: j.title })),
+            message: `Enriching ${jobsToEnrich.length} jobs via web search in background. Check "Needs JD" tab to see progress.`,
+          });
+        } catch (err: any) {
+          logger?.error(`❌ [enrich] Error: ${err.message}`);
           return c.json({ error: err.message }, 500);
         }
       },

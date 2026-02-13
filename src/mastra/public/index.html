@@ -1100,9 +1100,16 @@
 
         <!-- Needs JD Panel -->
         <div class="panel" id="panel-needsjd">
-          <div style="margin-bottom:16px;padding:12px 16px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">
-            <div style="font-size:14px;font-weight:600;margin-bottom:4px">Jobs Missing Descriptions</div>
-            <div style="font-size:12px;color:var(--text-dim)">These jobs were ingested from LinkedIn alerts without full job descriptions. Paste a JD to enable scoring and packet generation.</div>
+          <div style="margin-bottom:16px;padding:12px 16px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div>
+              <div style="font-size:14px;font-weight:600;margin-bottom:4px">Jobs Missing Descriptions</div>
+              <div style="font-size:12px;color:var(--text-dim)">Use web search to find them automatically, or paste manually.</div>
+            </div>
+            <button class="btn btn-primary" id="enrichAllBtn" onclick="enrichAllJobs()" style="font-size:13px;padding:8px 18px;white-space:nowrap">&#x1F50D; Search Web for All</button>
+          </div>
+          <div id="enrichProgress" style="display:none;margin-bottom:12px;padding:10px 16px;background:var(--blue-soft);border-radius:10px;font-size:13px;color:var(--blue)">
+            <span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px"></span>
+            <span id="enrichProgressText">Searching the web for job descriptions...</span>
           </div>
           <div id="needsJdList" style="display:flex;flex-direction:column;gap:8px"></div>
           <div class="empty-state" id="emptyNeedsJd" style="display:none">
@@ -1715,6 +1722,7 @@
               <div style="font-size:11px;color:var(--text-muted);margin-top:2px">JD: ${j.jd_length || 0} chars${j.posting_url ? ' &middot; <a href="' + esc(j.posting_url) + '" target="_blank" style="color:var(--blue)">View Posting</a>' : ''}</div>
             </div>
             <div style="display:flex;gap:6px;align-items:center">
+              <button class="btn btn-primary" onclick="enrichSingleJob(${j.job_id})" id="enrich-${j.job_id}" style="font-size:12px;padding:6px 14px;white-space:nowrap">&#x1F50D; Search Web</button>
               <button class="btn" onclick="openJdPasteModal(${j.job_id}, '${esc(j.company)}', '${esc(j.title)}')" style="font-size:12px;padding:6px 14px;white-space:nowrap">Paste JD</button>
             </div>
           </div>
@@ -1741,6 +1749,82 @@
         loadDashboard();
       } catch (e) {
         showToast('Failed to update JD: ' + e.message, 'error');
+      }
+    }
+
+    async function enrichAllJobs() {
+      const btn = document.getElementById('enrichAllBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:6px"></span> Searching...';
+      document.getElementById('enrichProgress').style.display = 'block';
+
+      try {
+        const data = await api('/enrich-jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        document.getElementById('enrichProgressText').textContent =
+          `Enriching ${data.queued} jobs via web search. This may take a few minutes...`;
+        showToast(`Web search started for ${data.queued} jobs`, 'success');
+
+        // Poll for completion
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          await loadNeedsJd();
+          const countEl = document.getElementById('count-needsjd');
+          const remaining = parseInt(countEl.textContent) || 0;
+          document.getElementById('enrichProgressText').textContent =
+            `Enriching jobs... ${remaining} still need JD text`;
+          if (remaining === 0 || pollCount > 40) {
+            clearInterval(pollInterval);
+            document.getElementById('enrichProgress').style.display = 'none';
+            btn.disabled = false;
+            btn.innerHTML = '&#x1F50D; Search Web for All';
+            if (remaining === 0) showToast('All jobs enriched!', 'success');
+            loadDashboard();
+            loadJobs();
+          }
+        }, 15000);
+      } catch (e) {
+        showToast('Failed to start enrichment: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '&#x1F50D; Search Web for All';
+        document.getElementById('enrichProgress').style.display = 'none';
+      }
+    }
+
+    async function enrichSingleJob(jobId) {
+      const btn = document.getElementById('enrich-' + jobId);
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;vertical-align:middle"></span>'; }
+
+      try {
+        const data = await api('/enrich-jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobIds: [jobId] }),
+        });
+        showToast(`Searching web for job #${jobId}...`, 'success');
+
+        // Poll for this specific job
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          try {
+            const ne = await api('/needs-enrichment');
+            const stillNeeds = ne.jobs.some(j => j.job_id === jobId);
+            if (!stillNeeds || pollCount > 20) {
+              clearInterval(pollInterval);
+              loadNeedsJd();
+              if (!stillNeeds) showToast(`Job #${jobId} enriched!`, 'success');
+              else showToast(`Enrichment may still be running for job #${jobId}`, 'success');
+            }
+          } catch { /* ignore poll errors */ }
+        }, 10000);
+      } catch (e) {
+        showToast('Failed: ' + e.message, 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '&#x1F50D; Search Web'; }
       }
     }
 
