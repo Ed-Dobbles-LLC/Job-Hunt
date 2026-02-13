@@ -25,6 +25,8 @@ import {
   type LineItemFix,
 } from "./truthfulnessVerifier";
 import type { JDRequirements } from "./extractJDRequirementsTool";
+import { extractClaimsLedger, summarizeLedger, type ClaimsLedger } from "./claimsLedger";
+import { classifyMandate, scoreBulletsAgainstMandate, identifyMandateGaps, type MandateProfile } from "./mandateClassifier";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -171,6 +173,63 @@ ${warningDetails}
 10. Return ONLY the corrected JSON object.`;
 }
 
+/**
+ * Build supplementary prompt context that injects mandate classification
+ * and bullet rankings into the LLM prompt, so the LLM reorders bullets
+ * based on mandate weights rather than guessing.
+ */
+function buildMandateContextForPrompt(
+  mandate: MandateProfile,
+  scoredBullets: ReturnType<typeof scoreBulletsAgainstMandate>,
+  gaps: ReturnType<typeof identifyMandateGaps>,
+): string {
+  const topDimensions = mandate.dimensions
+    .filter((d) => d.weight >= 0.15)
+    .map((d) => `  - ${d.label}: ${(d.weight * 100).toFixed(0)}% weight`)
+    .join("\n");
+
+  // Group top-ranked bullets by experience ID
+  const topBulletsByRole: Record<string, string[]> = {};
+  for (const bullet of scoredBullets.filter((b) => b.total_relevance > 0)) {
+    if (!topBulletsByRole[bullet.experience_id]) {
+      topBulletsByRole[bullet.experience_id] = [];
+    }
+    topBulletsByRole[bullet.experience_id].push(bullet.bullet_id);
+  }
+
+  const bulletRanking = Object.entries(topBulletsByRole)
+    .map(([expId, bulletIds]) => `  ${expId}: [${bulletIds.slice(0, 6).join(", ")}]`)
+    .join("\n");
+
+  const gapLines = gaps
+    .map((g) => `  - "${g.label}" (weight ${(g.weight * 100).toFixed(0)}%): ${g.suggestion}`)
+    .join("\n");
+
+  return `## MANDATE CLASSIFICATION (JD analysis — use this to prioritize bullets)
+This job's primary mandate is: ${mandate.primary_mandate.replace(/_/g, " ").toUpperCase()}
+Seniority level detected: ${mandate.seniority_level}
+Calibrated headline suggestion: "${mandate.calibrated_headline}"
+
+### Mandate Dimensions (highest weight = prioritize these bullets)
+${topDimensions}
+
+### Recommended Bullet Order by Role (most mandate-relevant first)
+${bulletRanking}
+
+### IMPORTANT: For each role, place the HIGHEST-RELEVANCE bullets first (top 2-3 should align with the primary mandate).
+
+${gaps.length > 0 ? `### MANDATE GAPS — DO NOT FABRICATE
+The following job mandates have NO strong evidence in the inventory.
+DO NOT invent experience. Instead, elevate the closest transferable bullets or add gap_notes.
+${gapLines}` : "### No mandate gaps — all job mandates have inventory coverage."}
+
+### HEADLINE CALIBRATION
+${mandate.seniority_level === "Sr Director" || mandate.seniority_level === "Director"
+  ? `This role is at ${mandate.seniority_level} level. Do NOT use "Chief ___" or "C-Suite" in the executive_headline. Use: "${mandate.calibrated_headline}" or a similar neutral executive framing.`
+  : `This role is at ${mandate.seniority_level} level. The headline "${mandate.calibrated_headline}" is appropriate.`
+}`;
+}
+
 export interface AttemptRecord {
   attempt: number;
   pass: boolean;
@@ -280,8 +339,33 @@ export const generateVerifiedPacketTool = createTool({
     const allowlist = buildEntityAllowlist(inventory);
     logger?.info(`🔄 [generateVerifiedPacket] Inventory and allowlist loaded`);
 
+    // ── Claims Ledger + Mandate Classifier (new pipeline stages) ──
+    const claimsLedger = extractClaimsLedger(inventory);
+    logger?.info(`📋 [generateVerifiedPacket] Claims ledger: ${claimsLedger.total_claims} claims (${claimsLedger.metrics.length} metrics, ${claimsLedger.tools.length} tools)`);
+
+    // Load JD raw text for mandate classification
+    let jdText = "";
+    try {
+      const jdResult = await query("SELECT jd_raw_text FROM jobs WHERE job_id = $1", [context.job_id]);
+      jdText = jdResult.rows[0]?.jd_raw_text || "";
+    } catch { /* non-fatal — mandate classification just uses requirements */ }
+
+    const mandate = classifyMandate(jdText, title, requirements as any);
+    logger?.info(`🎯 [generateVerifiedPacket] Mandate classification: primary=${mandate.primary_mandate}, seniority=${mandate.seniority_level}`);
+    logger?.info(`🎯 [generateVerifiedPacket] Calibrated headline: "${mandate.calibrated_headline}"`);
+
+    const scoredBullets = scoreBulletsAgainstMandate(inventory, mandate);
+    const mandateGaps = identifyMandateGaps(mandate, scoredBullets);
+    if (mandateGaps.length > 0) {
+      logger?.info(`⚠️ [generateVerifiedPacket] Mandate gaps (${mandateGaps.length}): ${mandateGaps.map(g => g.label).join(", ")}`);
+    }
+
+    // Build mandate context addendum for the LLM prompt
+    const mandateContext = buildMandateContextForPrompt(mandate, scoredBullets, mandateGaps);
+    writeDebugArtifact("mandate_profile", { mandate, scoredBullets: scoredBullets.slice(0, 20), mandateGaps }, context.job_id);
+
     const resumeSystemPrompt = buildResumeSystemPrompt();
-    const resumeUserPrompt = buildResumeUserPrompt(inventory, allowlist, requirements, title, company);
+    const resumeUserPrompt = buildResumeUserPrompt(inventory, allowlist, requirements, title, company) + "\n\n" + mandateContext;
     const clSystemPrompt = buildCoverLetterSystemPrompt();
     const clUserPrompt = buildCoverLetterUserPrompt(inventory, allowlist, requirements, title, company, context.company_context);
 

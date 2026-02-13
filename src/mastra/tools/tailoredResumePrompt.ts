@@ -180,8 +180,8 @@ Retained executive recruiters who review resumes in 30-45 seconds. They are look
    Each role must include:
    - **scope_line**: One line of enterprise context — business unit size, team headcount, budget, geographic scope. Use ONLY verifiable facts from inventory.
    - **First bullet = Mandate bullet**: What were you hired/brought in to do? Frame as the transformation mission.
-   - **Remaining bullets**: Impact-driven, each with a metric from inventory.
-   - Allow 4-8 bullets per role (more for recent/relevant roles, fewer for older ones)
+   - **Remaining bullets**: Impact-driven, each with a metric from inventory. Order by relevance to JD mandates.
+   - **Bullet caps**: 4-6 bullets for the 2 most recent/relevant roles, 2-3 bullets for older roles. Target a clean 2-page document.
    - For a 25+ year career, include 4-5 roles to show career depth and trajectory
 
 5. **ENTERPRISE CAPABILITIES** (skills.enterprise_capabilities)
@@ -266,8 +266,8 @@ ${JSON.stringify(allowlist, null, 2)}
 4. Build core_competencies with 8-14 STRATEGIC enterprise keywords (not tool names). Include ATS terms from JD like: Enterprise Data Strategy, Data Governance, Digital Transformation, P&L Influence, Commercial Analytics, Revenue Optimization, Organizational Design.
 5. For each experience entry, add a scope_line with enterprise context (business unit size, team, budget, geography) from inventory facts.
 6. Lead each role with a MANDATE bullet (what were you brought in to transform/build/lead?).
-7. Include 4-8 bullets per role, using more for recent/relevant roles.
-8. Frame skills.enterprise_capabilities at the STRATEGIC level, put tools in skills.tools_and_platforms.
+7. Bullet count per role: 4-6 bullets for the 2 most recent/relevant roles, 2-3 bullets for older roles. Target 2 total pages.
+8. Frame skills.enterprise_capabilities at the STRATEGIC level, put tools in skills.tools_and_platforms. Do NOT duplicate items that are already in core_competencies.
 9. For each requirement you CANNOT support, add a gap_note — do NOT fabricate content.
 10. Include ats_keywords_used listing JD keywords you intentionally wove in.
 11. Return ONLY the TailoredResume JSON.`;

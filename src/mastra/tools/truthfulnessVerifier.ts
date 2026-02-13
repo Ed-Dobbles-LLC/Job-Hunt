@@ -3,6 +3,7 @@ import type { TailoredResume } from "./tailoredResumePrompt";
 import type { TailoredCoverLetter } from "./tailoredCoverLetterPrompt";
 import type { EntityAllowlist } from "./entityAllowlist";
 import { buildEntityDenylist, checkTextAgainstDenylist } from "./entityAllowlist";
+import { extractClaimsLedger, validateAllMetricsInText, type ClaimsLedger } from "./claimsLedger";
 
 export const ViolationTypeEnum = z.enum([
   "NEW_ENTITY",
@@ -707,6 +708,212 @@ export function verifyATSRisks(
   return { violations, fixes, checksRun };
 }
 
+/**
+ * NEW CHECK: Verify professional summary claims against the claims ledger.
+ * The summary is the highest hallucination risk area — every factual claim must
+ * be backed by the inventory.
+ */
+export function verifySummaryClaims(
+  resume: TailoredResume,
+  ledger: ClaimsLedger,
+): { violations: Violation[]; fixes: LineItemFix[]; checksRun: number } {
+  const violations: Violation[] = [];
+  const fixes: LineItemFix[] = [];
+  let checksRun = 0;
+
+  checksRun++;
+  const summary = resume.professional_summary || "";
+  const metricCheck = validateAllMetricsInText(summary, ledger);
+  for (const v of metricCheck.violations) {
+    violations.push({
+      type: "UNSUPPORTED_METRIC",
+      severity: "critical",
+      location: "resume.professional_summary",
+      found_value: v.metric,
+      explanation: `Metric "${v.metric}" in professional summary not found in claims ledger. ${v.reason}`,
+    });
+    fixes.push({
+      location: "resume.professional_summary",
+      current_text: v.metric,
+      suggested_text: `[Remove "${v.metric}" or replace with a metric from the claims ledger]`,
+      reason: "No-new-numbers rule: all metrics must come from the inventory",
+      violation_type: "UNSUPPORTED_METRIC",
+    });
+  }
+
+  return { violations, fixes, checksRun };
+}
+
+/**
+ * NEW CHECK: Verify scope_line claims against the claims ledger.
+ * scope_line is a high-risk field because it synthesizes multiple facts.
+ */
+export function verifyScopeLines(
+  resume: TailoredResume,
+  ledger: ClaimsLedger,
+): { violations: Violation[]; fixes: LineItemFix[]; checksRun: number } {
+  const violations: Violation[] = [];
+  const fixes: LineItemFix[] = [];
+  let checksRun = 0;
+
+  for (let i = 0; i < resume.experience.length; i++) {
+    const scopeLine = (resume.experience[i] as any).scope_line;
+    if (!scopeLine) continue;
+
+    checksRun++;
+    const metricCheck = validateAllMetricsInText(scopeLine, ledger);
+    for (const v of metricCheck.violations) {
+      violations.push({
+        type: "UNSUPPORTED_METRIC",
+        severity: "critical",
+        location: `resume.experience[${i}].scope_line`,
+        found_value: v.metric,
+        explanation: `Metric "${v.metric}" in scope_line for ${resume.experience[i].employer} not found in claims ledger. Scope lines must only contain verified facts.`,
+      });
+      fixes.push({
+        location: `resume.experience[${i}].scope_line`,
+        current_text: v.metric,
+        suggested_text: `[Remove "${v.metric}" from scope_line — only verified inventory facts allowed]`,
+        reason: "Scope line metrics must be in claims ledger",
+        violation_type: "UNSUPPORTED_METRIC",
+      });
+    }
+  }
+
+  return { violations, fixes, checksRun };
+}
+
+/**
+ * NEW CHECK: Validate executive_headline against inventory seniority.
+ * Prevents claiming "Chief Data Officer" when inventory shows "Director".
+ */
+export function verifyHeadlineCalibration(
+  resume: TailoredResume,
+  inventory: Record<string, any>,
+): { violations: Violation[]; fixes: LineItemFix[]; checksRun: number } {
+  const violations: Violation[] = [];
+  const fixes: LineItemFix[] = [];
+  let checksRun = 0;
+
+  checksRun++;
+  const headline = (resume as any).executive_headline || "";
+  if (!headline) return { violations, fixes, checksRun };
+
+  const headlineLower = headline.toLowerCase();
+  const inventoryTitles = (inventory.experience || []).map((e: any) => e.title?.toLowerCase() || "");
+
+  // C-Suite headline check: only allow if inventory has C-suite or VP+ titles
+  const cSuiteTerms = ["chief", "cdo", "cao", "cto", "cio", "cfo", "coo", "ceo", "cmo", "cpo"];
+  const hasCsuiteHeadline = cSuiteTerms.some((t) => headlineLower.includes(t));
+
+  if (hasCsuiteHeadline) {
+    const hasCSuiteInInventory = inventoryTitles.some((t: string) =>
+      cSuiteTerms.some((c) => t.includes(c)) || t.includes("vice president") || t.includes("vp"),
+    );
+    if (!hasCSuiteInInventory) {
+      violations.push({
+        type: "NEW_ENTITY",
+        severity: "warning",
+        location: "resume.executive_headline",
+        found_value: headline,
+        explanation: `Executive headline "${headline}" claims C-suite level, but inventory titles don't include C-suite or VP roles. Use a neutral headline matching actual seniority.`,
+      });
+    }
+  }
+
+  return { violations, fixes, checksRun };
+}
+
+/**
+ * NEW CHECK: Validate cover letter body paragraphs for unledgered metrics.
+ * Extends the existing metric check to scan ALL cover letter text.
+ */
+export function verifyCoverLetterClaims(
+  coverLetter: TailoredCoverLetter,
+  ledger: ClaimsLedger,
+): { violations: Violation[]; fixes: LineItemFix[]; checksRun: number } {
+  const violations: Violation[] = [];
+  const fixes: LineItemFix[] = [];
+  let checksRun = 0;
+
+  const allText = [
+    coverLetter.opening_paragraph,
+    ...coverLetter.body_paragraphs,
+    coverLetter.closing_paragraph,
+  ].join(" ");
+
+  checksRun++;
+  const metricCheck = validateAllMetricsInText(allText, ledger);
+  for (const v of metricCheck.violations) {
+    violations.push({
+      type: "UNSUPPORTED_METRIC",
+      severity: "critical",
+      location: "cover_letter.body",
+      found_value: v.metric,
+      explanation: `Metric "${v.metric}" in cover letter body not found in claims ledger. ${v.reason}`,
+    });
+  }
+
+  return { violations, fixes, checksRun };
+}
+
+/**
+ * NEW CHECK: Validate core_competencies don't claim tools/platforms not in ledger.
+ * Core competencies should be STRATEGIC (e.g., "Revenue Optimization") not
+ * tactical tool names unless the tool is in the inventory.
+ */
+export function verifyCoreCompetencies(
+  resume: TailoredResume,
+  ledger: ClaimsLedger,
+): { violations: Violation[]; fixes: LineItemFix[]; checksRun: number } {
+  const violations: Violation[] = [];
+  const fixes: LineItemFix[] = [];
+  let checksRun = 0;
+
+  const coreCompetencies = (resume as any).core_competencies || [];
+
+  // Known tool/platform names that should NOT be in core competencies unless in ledger
+  const toolPatterns = [
+    /\b(?:looker|tableau|power\s*bi|qlik|sigma|thoughtspot)\b/i,
+    /\b(?:snowflake|databricks|bigquery|redshift|dbt)\b/i,
+    /\b(?:python|java|scala|sql|r\b|spark|tensorflow|pytorch)\b/i,
+    /\b(?:aws|gcp|azure|kubernetes|docker|airflow)\b/i,
+    /\b(?:salesforce|hubspot|marketo|workday|sap)\b/i,
+  ];
+
+  for (const comp of coreCompetencies) {
+    checksRun++;
+    const compLower = comp.toLowerCase();
+    for (const pattern of toolPatterns) {
+      const match = compLower.match(pattern);
+      if (match) {
+        // Check if this tool is in the claims ledger
+        const toolNorm = normalize(match[0]);
+        const inLedger = ledger.tools.some((t) => t.normalized === toolNorm) ||
+                         ledger.skills.some((s) => s.normalized === toolNorm);
+        if (!inLedger) {
+          violations.push({
+            type: "NEW_ENTITY",
+            severity: "critical",
+            location: "resume.core_competencies",
+            found_value: comp,
+            explanation: `Core competency "${comp}" references tool "${match[0]}" not found in claims ledger. Either remove the tool name or rephrase as a strategic capability.`,
+          });
+          fixes.push({
+            location: "resume.core_competencies",
+            current_text: comp,
+            suggested_text: `[Rephrase without naming "${match[0]}" — use strategic framing instead]`,
+            reason: "Core competencies should be strategic, not tactical tool names unless tool is in inventory",
+            violation_type: "NEW_ENTITY",
+          });
+        }
+      }
+    }
+  }
+
+  return { violations, fixes, checksRun };
+}
+
 export function runTruthfulnessVerification(
   resume: TailoredResume,
   coverLetter: TailoredCoverLetter,
@@ -756,6 +963,34 @@ export function runTruthfulnessVerification(
   allViolations.push(...atsResult.violations);
   allFixes.push(...atsResult.fixes);
   totalChecks += atsResult.checksRun;
+
+  // ── Claims Ledger checks (new hardened layer) ──
+  const ledger = extractClaimsLedger(inventory);
+
+  const summaryResult = verifySummaryClaims(resume, ledger);
+  allViolations.push(...summaryResult.violations);
+  allFixes.push(...summaryResult.fixes);
+  totalChecks += summaryResult.checksRun;
+
+  const scopeResult = verifyScopeLines(resume, ledger);
+  allViolations.push(...scopeResult.violations);
+  allFixes.push(...scopeResult.fixes);
+  totalChecks += scopeResult.checksRun;
+
+  const headlineResult = verifyHeadlineCalibration(resume, inventory);
+  allViolations.push(...headlineResult.violations);
+  allFixes.push(...headlineResult.fixes);
+  totalChecks += headlineResult.checksRun;
+
+  const clBodyResult = verifyCoverLetterClaims(coverLetter, ledger);
+  allViolations.push(...clBodyResult.violations);
+  allFixes.push(...clBodyResult.fixes);
+  totalChecks += clBodyResult.checksRun;
+
+  const compResult = verifyCoreCompetencies(resume, ledger);
+  allViolations.push(...compResult.violations);
+  allFixes.push(...compResult.fixes);
+  totalChecks += compResult.checksRun;
 
   const criticalCount = allViolations.filter((v) => v.severity === "critical").length;
   const warningCount = allViolations.filter((v) => v.severity === "warning").length;

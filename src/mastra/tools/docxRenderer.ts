@@ -296,54 +296,29 @@ export async function renderResumeDocx(
     }
   }
 
-  // ── Skills / Enterprise Capabilities ──
+  // ── Skills / Tools ──
+  // PRIORITY 3 rule: Do NOT output both "Core Competencies" and "Enterprise Capabilities"
+  // if they overlap. When core_competencies exists, only render Tools & Platforms here.
   const skills = resume.skills as any;
   if (skills && !renderedSections.has("SKILLS")) {
     const enterpriseCaps = skills.enterprise_capabilities || skills.technical || [];
     const toolsAndPlatforms = skills.tools_and_platforms || [];
-    // Backward compat: support old schema fields
     const leadership = skills.leadership || [];
     const dataScience = skills.data_science || [];
 
     const hasNewFormat = skills.enterprise_capabilities !== undefined;
+    const hasCoreCompetencies = renderedSections.has("COMPETENCIES");
 
     if (hasNewFormat) {
-      // New executive format
-      if (enterpriseCaps.length > 0 || toolsAndPlatforms.length > 0) {
-        renderedSections.add("SKILLS");
-        children.push(sectionHeading("Enterprise Capabilities & Tools"));
-
-        if (enterpriseCaps.length > 0) {
-          children.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: "Enterprise Capabilities: ",
-                  bold: true,
-                  size: BODY_SIZE,
-                  font: FONT,
-                }),
-                new TextRun({
-                  text: enterpriseCaps.map(safePrimitive).join(",  "),
-                  size: BODY_SIZE,
-                  font: FONT,
-                }),
-              ],
-              spacing: { after: BULLET_SPACING_AFTER },
-            }),
-          );
-        }
-
+      // If Core Competencies was already rendered, skip enterprise_capabilities
+      // to avoid redundancy. Only render Tools & Platforms.
+      if (hasCoreCompetencies) {
         if (toolsAndPlatforms.length > 0) {
+          renderedSections.add("SKILLS");
+          children.push(sectionHeading("Tools & Platforms"));
           children.push(
             new Paragraph({
               children: [
-                new TextRun({
-                  text: "Tools & Platforms: ",
-                  bold: true,
-                  size: BODY_SIZE,
-                  font: FONT,
-                }),
                 new TextRun({
                   text: toolsAndPlatforms.map(safePrimitive).join(",  "),
                   size: BODY_SIZE,
@@ -353,6 +328,54 @@ export async function renderResumeDocx(
               spacing: { after: BULLET_SPACING_AFTER },
             }),
           );
+        }
+      } else {
+        // No core competencies section — render both enterprise capabilities and tools
+        if (enterpriseCaps.length > 0 || toolsAndPlatforms.length > 0) {
+          renderedSections.add("SKILLS");
+          children.push(sectionHeading("Enterprise Capabilities & Tools"));
+
+          if (enterpriseCaps.length > 0) {
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "Enterprise Capabilities: ",
+                    bold: true,
+                    size: BODY_SIZE,
+                    font: FONT,
+                  }),
+                  new TextRun({
+                    text: enterpriseCaps.map(safePrimitive).join(",  "),
+                    size: BODY_SIZE,
+                    font: FONT,
+                  }),
+                ],
+                spacing: { after: BULLET_SPACING_AFTER },
+              }),
+            );
+          }
+
+          if (toolsAndPlatforms.length > 0) {
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "Tools & Platforms: ",
+                    bold: true,
+                    size: BODY_SIZE,
+                    font: FONT,
+                  }),
+                  new TextRun({
+                    text: toolsAndPlatforms.map(safePrimitive).join(",  "),
+                    size: BODY_SIZE,
+                    font: FONT,
+                  }),
+                ],
+                spacing: { after: BULLET_SPACING_AFTER },
+              }),
+            );
+          }
         }
       }
     } else {
