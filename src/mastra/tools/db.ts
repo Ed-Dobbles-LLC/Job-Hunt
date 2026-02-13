@@ -146,6 +146,18 @@ export async function initDatabase(): Promise<void> {
         sent_at TIMESTAMPTZ,
         recipient_email TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS resume_history (
+        id SERIAL PRIMARY KEY,
+        job_id BIGINT REFERENCES jobs(job_id),
+        target_company TEXT,
+        target_role TEXT,
+        summary_text TEXT,
+        competencies JSONB DEFAULT '[]'::jsonb,
+        top_bullets_by_role JSONB DEFAULT '[]'::jsonb,
+        archetype_primary TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
     `);
   } finally {
     client.release();

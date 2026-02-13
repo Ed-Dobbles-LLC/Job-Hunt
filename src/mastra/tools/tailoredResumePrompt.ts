@@ -43,7 +43,7 @@ export type GapNote = z.infer<typeof GapNoteSchema>;
 export const ResumeBulletSchema = z.object({
   text: z
     .string()
-    .describe("The tailored resume bullet text. MUST follow Action → Scale → Outcome format. Target 18-24 words. Max 2 lines. No filler adjectives, no passive phrasing, no duplicate metrics."),
+    .describe("The tailored resume bullet text. MUST follow Action → Scale → Outcome format. MAX 22 WORDS. No filler adjectives, no passive phrasing, no stacked metrics."),
   source_hash: z
     .string()
     .describe("Inventory bullet ID this was derived from (e.g., exp-001-b2)"),
@@ -198,10 +198,13 @@ The resume should feel balanced and calm across both pages — no cramming.
    E.g., "Distinctly technical for an executive of this level — [specific technical achievement] — while maintaining fluency in [business skill]."
    This paragraph answers: "Why should I call THIS person instead of 50 other VPs?"
 
+   **SUMMARY LINE LIMIT: Max 6 lines.** No blocky paragraphs. Keep it tight and scannable.
+
    IMPORTANT: Every fact, number, and metric in the summary MUST come from the inventory.
 
 3. **CORE COMPETENCIES** (core_competencies field)
-   8-12 enterprise-level keywords displayed in a grid. These serve double duty:
+   8-12 enterprise-level keywords. **MAX 2 LINES when rendered.** Compact, clustered by mandate.
+   These serve double duty:
    - ATS/AI screening optimization
    - Quick executive positioning signal
    Use STRATEGIC framing:
@@ -209,27 +212,30 @@ The resume should feel balanced and calm across both pages — no cramming.
    BAD: "Python", "SQL", "Machine Learning", "Data Analysis", "Snowflake"
    Technical tools go in the skills section, not here.
    Do NOT duplicate items that will appear in skills.tools_and_platforms.
+   Remove redundant terms. Cluster by mandate alignment.
 
-4. **EXPERIENCE** (experience array)
+4. **EXPERIENCE** (experience array) — **REVERSE CHRONOLOGICAL ORDER. Most recent first. Any deviation is a violation.**
    Each role must include:
    - **scope_line**: One SHORT line of enterprise context — team headcount, business unit context, budget/investment if known. Use ONLY verifiable facts from inventory. Pipe-separated. E.g., "45-person org | 3 business units | $8M investment"
    - **Clear visual separation**: Role Title, Company, Location | Dates, and Scope Line must each be distinct lines. Do NOT combine them.
 
    **BULLET DISCIPLINE — STRICT ENFORCEMENT:**
-   - Start EVERY bullet with an action verb (Architected, Launched, Established, Developed, Created, Built, Designed, Partnered)
+   - Start EVERY bullet with a direct action verb (Architected, Launched, Established, Developed, Created, Built, Designed, Partnered)
    - Every bullet MUST follow: **Action → Scale → Outcome** (3-part structure)
-   - Target **18-24 words per bullet**. Never exceed 2 printed lines.
+   - **MAX 22 WORDS PER BULLET.** No exceptions. Never exceed 2 printed lines.
    - The first 2 bullets under each role must carry 80% of the value
    - Do NOT repeat scope_line content in bullets
+   - Do NOT stack multiple metrics in a single sentence. One metric per clause.
 
-   **FILLER PHRASE BAN — remove all of these:**
-   - "serving as…" → replace with action-first phrasing
-   - "known for…" → replace with action-first phrasing
-   - "responsible for…" → replace with action-first phrasing
+   **FILLER PHRASE BAN — remove ALL of these:**
+   - "serving as…" → delete, use direct verb
+   - "known for…" → delete, use direct verb
+   - "responsible for…" → delete, use direct verb
    - "played a key role in…" → delete, use direct verb
    - "core member of…" → delete, use direct verb
-   - Remove filler adjectives: "strategically", "holistically", "comprehensively", "effectively"
-   - Do NOT stack multiple metrics in a single sentence. One metric per clause.
+   - "career defined by…" → delete, rewrite
+   - "distinctly technical for an executive of this level" → delete, rewrite
+   - Remove filler adjectives: "strategically", "holistically", "comprehensively", "effectively", "successfully"
 
    **BULLET CAPS BY ROLE RECENCY (STRICTLY ENFORCED):**
    - Most recent role: EXACTLY 4 bullets
@@ -349,8 +355,8 @@ ${JSON.stringify(allowlist, null, 2)}
    a. Add a scope_line with enterprise context (team size, business units, budget) — pipe-separated, ONE short line only
    b. First 2 bullets must carry 80% of the value (biggest impact, most JD-relevant)
    c. Do NOT repeat scope_line info in bullets. Scope_line handles org context, bullets handle achievements.
-   d. Start every bullet with an action verb. Follow Action → Scale → Outcome format.
-   e. Target 18-24 words per bullet. Max 2 printed lines. Remove filler adjectives and passive phrasing.
+   d. Start every bullet with a direct action verb. Follow Action → Scale → Outcome format.
+   e. MAX 22 WORDS PER BULLET. No exceptions. Remove filler adjectives and passive phrasing. No stacked metrics.
    f. STRICT bullet caps: 4 for most recent role, 3 for second and third roles, 2 for roles older than 15 years.
    g. Total: 13-15 bullets maximum across all roles.
 6. Do NOT create both core_competencies and enterprise_capabilities — this creates redundancy. When core_competencies is present, only emit tools_and_platforms.

@@ -224,9 +224,9 @@ export async function renderResumeDocx(
     renderedSections.add("COMPETENCIES");
     children.push(sectionHeading("Core Competencies"));
 
-    // Render as rows of 3 separated by pipes for clean ATS-friendly grid
+    // Render as compact 2-line max grid — 4-5 per row for tight display
     const items = coreCompetencies.map(safePrimitive);
-    const rowSize = 3;
+    const rowSize = Math.max(4, Math.ceil(items.length / 2)); // Target 2 rows
     for (let i = 0; i < items.length; i += rowSize) {
       const row = items.slice(i, i + rowSize);
       children.push(
@@ -243,11 +243,11 @@ export async function renderResumeDocx(
         }),
       );
     }
-    // Add spacing after the competencies block
+    // Compact spacing after competencies
     children.push(
       new Paragraph({
         children: [],
-        spacing: { after: 40 },
+        spacing: { after: 20 },
       }),
     );
   }

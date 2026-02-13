@@ -312,6 +312,8 @@ const FILLER_PHRASES: { regex: RegExp; label: string }[] = [
   { regex: /\bserved as\b/gi, label: '"served as…"' },
   { regex: /\btasked with\b/gi, label: '"tasked with…"' },
   { regex: /\bin charge of\b/gi, label: '"in charge of…"' },
+  { regex: /\bcareer defined by\b/gi, label: '"career defined by…"' },
+  { regex: /\bdistinctly technical for an executive\b/gi, label: '"distinctly technical for an executive…"' },
 ];
 
 /**
@@ -339,14 +341,13 @@ export function checkFillerPhrases(xml: string): FormattingViolation[] {
 }
 
 /**
- * Check bullet word count — target 18-24 words, warn if >30.
+ * Check bullet word count — target 18-22 words max, warn if >22.
  * Bullets are identified by "• " prefix in the document text.
  */
 export function checkBulletLength(xml: string): FormattingViolation[] {
   const violations: FormattingViolation[] = [];
   const plainText = extractPlainText(xml);
 
-  // Split by bullet markers
   const bulletPattern = /•\s+([^•]+)/g;
   let match: RegExpExecArray | null;
   let bulletIndex = 0;
@@ -356,11 +357,11 @@ export function checkBulletLength(xml: string): FormattingViolation[] {
     const bulletText = match[1].trim();
     const wordCount = bulletText.split(/\s+/).filter(w => w.length > 0).length;
 
-    if (wordCount > 35) {
+    if (wordCount > 22) {
       violations.push({
         check: "BULLET_TOO_LONG",
         severity: "warning",
-        message: `Bullet #${bulletIndex} is ${wordCount} words (target: 18-24, max recommended: 30)`,
+        message: `Bullet #${bulletIndex} is ${wordCount} words (max: 22)`,
         location: "experience",
         details: `"${bulletText.substring(0, 60)}..." — compress using Action → Scale → Outcome format.`,
       });
@@ -387,6 +388,72 @@ export function checkTotalBulletCount(xml: string): FormattingViolation[] {
       location: "experience",
       details: `Too many bullets risk exceeding 2 pages. Reduce to 13-15 total by trimming older roles first.`,
     });
+  }
+
+  return violations;
+}
+
+/**
+ * Check for stacked metrics in a single bullet (multiple numbers in one sentence).
+ */
+export function checkStackedMetrics(xml: string): FormattingViolation[] {
+  const violations: FormattingViolation[] = [];
+  const plainText = extractPlainText(xml);
+
+  const bulletPattern = /•\s+([^•]+)/g;
+  let match: RegExpExecArray | null;
+  let bulletIndex = 0;
+
+  while ((match = bulletPattern.exec(plainText)) !== null) {
+    bulletIndex++;
+    const bulletText = match[1].trim();
+    // Count distinct metric-like patterns (numbers with $, %, or followed by units)
+    const metricMatches = bulletText.match(/\$[\d,.]+[BMK]?|\d+[%]|\d+\+?\s*(?:FTEs?|people|team members|direct reports|business units)/gi) || [];
+
+    if (metricMatches.length > 2) {
+      violations.push({
+        check: "STACKED_METRICS",
+        severity: "warning",
+        message: `Bullet #${bulletIndex} has ${metricMatches.length} stacked metrics (max 1 per clause)`,
+        location: "experience",
+        details: `Metrics found: ${metricMatches.join(", ")} — split into separate bullets or keep one metric per clause.`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Check that experience entries are in reverse chronological order.
+ * Parses date strings from the document and flags any out-of-order roles.
+ */
+export function checkChronologicalOrder(xml: string): FormattingViolation[] {
+  const violations: FormattingViolation[] = [];
+  const plainText = extractPlainText(xml);
+
+  // Find date ranges in the format "Mon YYYY – Mon YYYY" or "Mon YYYY – Present"
+  const dateRangePattern = /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s*[–—-]\s*(?:(Present)|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4}))/gi;
+  const dates: { startYear: number; endYear: number; raw: string }[] = [];
+  let dateMatch: RegExpExecArray | null;
+
+  while ((dateMatch = dateRangePattern.exec(plainText)) !== null) {
+    const startYear = parseInt(dateMatch[1], 10);
+    const endYear = dateMatch[2] === "Present" ? 9999 : parseInt(dateMatch[3] || dateMatch[1], 10);
+    dates.push({ startYear, endYear, raw: dateMatch[0] });
+  }
+
+  // Check reverse chronological order (most recent first)
+  for (let i = 1; i < dates.length; i++) {
+    if (dates[i].endYear > dates[i - 1].endYear) {
+      violations.push({
+        check: "CHRONOLOGICAL_ORDER",
+        severity: "warning",
+        message: `Role with "${dates[i].raw}" appears after "${dates[i - 1].raw}" — expected reverse chronological order`,
+        location: "experience",
+        details: "Roles must be ordered from most recent to oldest. Move this role earlier in the document.",
+      });
+    }
   }
 
   return violations;
@@ -442,6 +509,12 @@ export async function validateResumeFormatting(
 
   checksRun++;
   violations.push(...checkTotalBulletCount(xml));
+
+  checksRun++;
+  violations.push(...checkStackedMetrics(xml));
+
+  checksRun++;
+  violations.push(...checkChronologicalOrder(xml));
 
   const criticalCount = violations.filter((v) => v.severity === "critical").length;
   const warningCount = violations.filter((v) => v.severity === "warning").length;

@@ -36,6 +36,9 @@ const FILLER_PATTERNS: { regex: RegExp; replacement: string }[] = [
   { regex: /\bserved as\s+/gi, replacement: "" },
   { regex: /\btasked with\s+/gi, replacement: "" },
   { regex: /\bin charge of\s+/gi, replacement: "" },
+  // Phrases banned by executive polish rules
+  { regex: /\bcareer defined by\s+/gi, replacement: "" },
+  { regex: /\bdistinctly technical for an executive of this level\s*[—–-]?\s*/gi, replacement: "" },
   // Filler adjectives
   { regex: /\bstrategically\s+/gi, replacement: "" },
   { regex: /\bholistically\s+/gi, replacement: "" },
@@ -52,6 +55,8 @@ const REDUNDANT_CROSS_SECTION_PHRASES = [
   "core c-suite member",
   "serving as core",
   "known for bridging",
+  "career defined by",
+  "distinctly technical for an executive",
 ];
 
 /**
@@ -219,12 +224,12 @@ export function compressResume(resume: TailoredResume): CompressionReport {
     }
   }
 
-  // ── Phase 4: Track bullet compression (word count) ──
+  // ── Phase 4: Track bullet compression (word count — max 22 words) ──
   for (let ri = 0; ri < resume.experience.length; ri++) {
     for (let bi = 0; bi < resume.experience[ri].bullets.length; bi++) {
       const bullet = resume.experience[ri].bullets[bi];
       const wc = wordCount(bullet.text);
-      if (wc > 30) {
+      if (wc > 22) {
         report.condensedBullets.push({
           roleIndex: ri,
           bulletIndex: bi,
@@ -234,6 +239,27 @@ export function compressResume(resume: TailoredResume): CompressionReport {
           wordsAfter: wc,
         });
       }
+    }
+  }
+
+  // ── Phase 4b: Enforce reverse chronological order ──
+  for (let i = 1; i < resume.experience.length; i++) {
+    const prevEnd = resume.experience[i - 1].end_date?.toLowerCase() === "present"
+      ? 9999
+      : parseInt(resume.experience[i - 1].end_date?.substring(0, 4) || "0", 10);
+    const currEnd = resume.experience[i].end_date?.toLowerCase() === "present"
+      ? 9999
+      : parseInt(resume.experience[i].end_date?.substring(0, 4) || "0", 10);
+
+    if (currEnd > prevEnd) {
+      // Swap to restore chronological order
+      const temp = resume.experience[i - 1];
+      resume.experience[i - 1] = resume.experience[i];
+      resume.experience[i] = temp;
+      report.redundanciesFound.push({
+        location: `experience[${i}]`,
+        phrase: `Role at index ${i} was out of chronological order — swapped with index ${i - 1}`,
+      });
     }
   }
 

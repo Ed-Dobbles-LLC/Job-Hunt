@@ -28,6 +28,12 @@ import type { JDRequirements } from "./extractJDRequirementsTool";
 import { extractClaimsLedger, summarizeLedger, type ClaimsLedger } from "./claimsLedger";
 import { classifyMandate, scoreBulletsAgainstMandate, identifyMandateGaps, reorderBulletsPerRole, type MandateProfile } from "./mandateClassifier";
 import { compressResume } from "./resumeCompressor";
+import {
+  ensureResumeHistoryTable,
+  checkDivergenceAgainstHistory,
+  storeResumeSnapshot,
+  getArchetypeSummaryFraming,
+} from "./resumeDivergenceEnforcer";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -381,8 +387,14 @@ export const generateVerifiedPacketTool = createTool({
     const mandateContext = buildMandateContextForPrompt(mandate, scoredBullets, mandateGaps);
     writeDebugArtifact("mandate_profile", { mandate, scoredBullets: scoredBullets.slice(0, 20), mandateGaps }, context.job_id);
 
+    // Archetype-driven summary framing (ensures each resume leads with the right narrative)
+    const archetypeFraming = getArchetypeSummaryFraming(mandate);
+
+    // Ensure resume_history table exists for divergence tracking
+    await ensureResumeHistoryTable();
+
     const resumeSystemPrompt = buildResumeSystemPrompt();
-    const resumeUserPrompt = buildResumeUserPrompt(inventory, allowlist, requirements, title, company) + "\n\n" + mandateContext;
+    const resumeUserPrompt = buildResumeUserPrompt(inventory, allowlist, requirements, title, company) + "\n\n" + mandateContext + "\n\n" + archetypeFraming;
     const clSystemPrompt = buildCoverLetterSystemPrompt();
     const clUserPrompt = buildCoverLetterUserPrompt(inventory, allowlist, requirements, title, company, context.company_context);
 
@@ -423,6 +435,34 @@ export const generateVerifiedPacketTool = createTool({
 
           logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Resume generated (${currentResume.experience.length} roles, ${currentResume.experience.reduce((s: number, e: any) => s + e.bullets.length, 0)} bullets)`);
           writeDebugArtifact(`attempt${attempt}_resume_output`, currentResume, context.job_id);
+
+          // ── Cross-resume divergence check ──
+          logger?.info(`🔀 [generateVerifiedPacket] Checking divergence against last 3 resumes...`);
+          const divergenceResult = await checkDivergenceAgainstHistory(currentResume, context.job_id, mandate);
+          writeDebugArtifact(`attempt${attempt}_divergence_check`, divergenceResult, context.job_id);
+
+          if (divergenceResult.needs_rewrite) {
+            logger?.warn(`⚠️ [generateVerifiedPacket] Divergence check FAILED — regenerating resume`);
+            for (const reason of divergenceResult.rewrite_reasons) {
+              logger?.warn(`  - ${reason}`);
+            }
+
+            currentResume = await safeGenerateObject({
+              schema: TailoredResumeSchema,
+              system: resumeSystemPrompt,
+              prompt: `${resumeUserPrompt}\n\n${divergenceResult.divergence_prompt}`,
+              temperature: 0.4,
+              label: `resume-divergence-rewrite-attempt${attempt}`,
+              logger,
+            });
+
+            // Re-run compression on the rewritten resume
+            const rewriteCompressionReport = compressResume(currentResume);
+            logger?.info(`🔧 [generateVerifiedPacket] Post-divergence compression: ${rewriteCompressionReport.originalBulletCount} → ${rewriteCompressionReport.finalBulletCount} bullets`);
+            writeDebugArtifact(`attempt${attempt}_divergence_rewrite`, currentResume, context.job_id);
+          } else {
+            logger?.info(`✅ [generateVerifiedPacket] Divergence check passed (compared against ${divergenceResult.compared_against} prior resumes)`);
+          }
 
           logger?.info(`📝 [generateVerifiedPacket] Attempt ${attempt}: Generating initial cover letter...`);
           writeDebugArtifact(`attempt${attempt}_coverLetter_prompt`, { system: clSystemPrompt, user: clUserPrompt }, context.job_id);
@@ -630,6 +670,14 @@ export const generateVerifiedPacketTool = createTool({
       logger?.info(`💾 [generateVerifiedPacket] Saved packet metadata to DB`);
     } catch (err: any) {
       logger?.error(`⚠️ [generateVerifiedPacket] Failed to save metadata: ${err.message}`);
+    }
+
+    // ── Store resume in history for future divergence checks ──
+    try {
+      await storeResumeSnapshot(finalResume, context.job_id, mandate.primary_mandate);
+      logger?.info(`💾 [generateVerifiedPacket] Resume snapshot stored in history for divergence tracking`);
+    } catch (err: any) {
+      logger?.error(`⚠️ [generateVerifiedPacket] Failed to store resume snapshot: ${err.message}`);
     }
 
     logger?.info(`\n📊 [generateVerifiedPacket] === FINAL SUMMARY ===`);
