@@ -477,9 +477,36 @@ export const generateVerifiedPacketTool = createTool({
           });
           logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Cover letter generated (${currentCoverLetter.word_count} words, ${currentCoverLetter.value_claims.length} claims)`);
           writeDebugArtifact(`attempt${attempt}_coverLetter_output`, currentCoverLetter, context.job_id);
+        } else if (!currentReport) {
+          // Previous attempt crashed before verification ran — regenerate from scratch
+          logger?.warn(`⚠️ [generateVerifiedPacket] Attempt ${attempt}: No verification report from previous attempt, regenerating from scratch`);
+
+          currentResume = await safeGenerateObject({
+            schema: TailoredResumeSchema,
+            system: resumeSystemPrompt,
+            prompt: resumeUserPrompt,
+            temperature: 0.3,
+            label: `resume-attempt${attempt}`,
+            logger,
+          });
+
+          const compressionReport = compressResume(currentResume, mandate);
+          logger?.info(`🔧 [generateVerifiedPacket] Attempt ${attempt}: Compression: ${compressionReport.originalBulletCount} → ${compressionReport.finalBulletCount} bullets`);
+          writeDebugArtifact(`attempt${attempt}_resume_output`, currentResume, context.job_id);
+
+          currentCoverLetter = await safeGenerateObject({
+            schema: TailoredCoverLetterSchema,
+            system: clSystemPrompt,
+            prompt: clUserPrompt,
+            temperature: 0.4,
+            label: `coverLetter-attempt${attempt}`,
+            logger,
+          });
+          logger?.info(`✅ [generateVerifiedPacket] Attempt ${attempt}: Fresh resume + cover letter generated`);
+          writeDebugArtifact(`attempt${attempt}_coverLetter_output`, currentCoverLetter, context.job_id);
         } else {
-          const previousViolations = currentReport!.violations;
-          const previousFixes = currentReport!.line_item_fixes;
+          const previousViolations = currentReport.violations;
+          const previousFixes = currentReport.line_item_fixes;
 
           const resumeViolations = previousViolations.filter((v) => v.location.startsWith("resume"));
           const resumeFixes = previousFixes.filter((f) => f.location.startsWith("resume"));
