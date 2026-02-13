@@ -16,6 +16,7 @@ import {
   classifyLevel,
   extractKeywords,
 } from "./tools/jobPostingSchema";
+import { autoGenerateInBackground } from "../resume-engine/auto-generate";
 
 let dbReady = false;
 
@@ -945,10 +946,18 @@ export function getDashboardRoutes() {
             context: { jobIds, topN: jobIds.length },
             mastra,
           } as any)
-            .then((result: any) => logger?.info(`✅ [rescore] Done: ${result.totalScored} scored`))
+            .then((result: any) => {
+              logger?.info(`✅ [rescore] Done: ${result.totalScored} scored`);
+              // Auto-generate packets for top recommended jobs after scoring
+              const autoGen = process.env.AUTO_GENERATE_AFTER_SCORE !== "false";
+              if (autoGen) {
+                logger?.info(`🤖 [rescore] Triggering auto-generation for top recommended jobs`);
+                autoGenerateInBackground({ mastra, minScore: 60, topN: 20, maxAttempts: 2 });
+              }
+            })
             .catch((err: any) => logger?.error(`⚠️ [rescore] Failed: ${err.message}`));
 
-          return c.json({ success: true, message: `Scoring ${jobIds.length} jobs in background`, count: jobIds.length });
+          return c.json({ success: true, message: `Scoring ${jobIds.length} jobs in background (auto-generation will follow)`, count: jobIds.length });
         } catch (err: any) {
           logger?.error(`❌ [rescore] Error: ${err.message}`);
           return c.json({ error: err.message }, 500);
@@ -1262,13 +1271,21 @@ export function getDashboardRoutes() {
 
           logger?.info(`📥 [import-excel] Done: ${newJobIds.length} new, ${duplicateCount} dupes, ${skippedCount} skipped`);
 
-          // Fire-and-forget: score in background so response returns immediately
+          // Fire-and-forget: score in background, then auto-generate packets
           if (newJobIds.length > 0) {
             scoreJobsTool.execute!({
               context: { jobIds: newJobIds, topN: newJobIds.length },
               mastra,
             } as any)
-              .then((result: any) => logger?.info(`✅ [import-excel] Background scoring complete: ${result.totalScored} scored`))
+              .then((result: any) => {
+                logger?.info(`✅ [import-excel] Background scoring complete: ${result.totalScored} scored`);
+                // Auto-generate packets for the imported jobs that score well
+                const autoGen = process.env.AUTO_GENERATE_AFTER_SCORE !== "false";
+                if (autoGen) {
+                  logger?.info(`🤖 [import-excel] Triggering auto-generation for recommended imports`);
+                  autoGenerateInBackground({ mastra, jobIds: newJobIds, minScore: 60, maxAttempts: 2 });
+                }
+              })
               .catch((err: any) => logger?.error(`⚠️ [import-excel] Background scoring failed: ${err.message}`));
           }
 

@@ -34,6 +34,7 @@ import {
   storeResumeSnapshot,
   getArchetypeSummaryFraming,
 } from "./resumeDivergenceEnforcer";
+import { runPipeline } from "../../resume-engine/pipeline";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -385,7 +386,40 @@ export const generateVerifiedPacketTool = createTool({
     const logger = mastra?.getLogger();
     const maxAttempts = context.max_attempts || DEFAULT_MAX_ATTEMPTS;
 
-    logger?.info(`🔄 [generateVerifiedPacket] Starting Generate→Verify→Correct loop for job_id=${context.job_id}`);
+    // ── 7-Stage Pipeline (default for new calls) ──
+    const usePipeline = process.env.USE_LEGACY_PIPELINE !== "true";
+    if (usePipeline) {
+      logger?.info(`🚀 [generateVerifiedPacket] Using 7-stage pipeline for job_id=${context.job_id}`);
+      const pipelineResult = await runPipeline({
+        job_id: context.job_id,
+        company: context.company,
+        title: context.title,
+        requirements: context.requirements,
+        company_context: context.company_context,
+        max_attempts: maxAttempts,
+        logger,
+      });
+      return {
+        success: pipelineResult.success,
+        job_id: pipelineResult.job_id,
+        pass: pipelineResult.pass,
+        attempts_used: pipelineResult.attempts_used,
+        max_attempts: pipelineResult.max_attempts,
+        resume: pipelineResult.resume,
+        cover_letter: pipelineResult.cover_letter,
+        final_report: pipelineResult.final_report,
+        attempt_history: pipelineResult.attempt_history,
+        human_review_required: pipelineResult.human_review_required,
+        human_review_notes: pipelineResult.human_review_notes,
+        // New pipeline fields (available via pipelineResult but not in original schema)
+        ...(pipelineResult.plaintext_resume ? { plaintext_resume: pipelineResult.plaintext_resume } : {}),
+        ...(pipelineResult.clarification_questions?.length ? { clarification_questions: pipelineResult.clarification_questions } : {}),
+        ...(pipelineResult.ownership_warnings?.length ? { ownership_warnings: pipelineResult.ownership_warnings } : {}),
+      };
+    }
+
+    // ── Legacy monolithic pipeline (fallback when USE_LEGACY_PIPELINE=true) ──
+    logger?.info(`🔄 [generateVerifiedPacket] Starting legacy Generate→Verify→Correct loop for job_id=${context.job_id}`);
     logger?.info(`🔄 [generateVerifiedPacket] Max attempts: ${maxAttempts}`);
 
     let company = context.company || "";

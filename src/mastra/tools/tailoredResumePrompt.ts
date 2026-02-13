@@ -37,6 +37,10 @@ export const GapNoteSchema = z.object({
     .describe(
       "The nearest inventory item, if any, that partially relates (bullet ID or skill)",
     ),
+  gap_severity: z
+    .enum(["must_have", "nice_to_have"])
+    .optional()
+    .describe("How critical this gap is based on the JD language"),
 });
 export type GapNote = z.infer<typeof GapNoteSchema>;
 
@@ -50,6 +54,10 @@ export const ResumeBulletSchema = z.object({
   evidence_quote: z
     .string()
     .describe("Verbatim quote from the inventory bullet"),
+  claim_ids: z
+    .array(z.string())
+    .optional()
+    .describe("Claims Ledger IDs backing this bullet (e.g., ['cl-0-metric-1', 'cl-0-tool-2']). Links to the structured claims extracted from the experience inventory."),
 });
 export type ResumeBullet = z.infer<typeof ResumeBulletSchema>;
 

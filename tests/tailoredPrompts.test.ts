@@ -615,8 +615,9 @@ describe("Cover Letter Prompt Builders", () => {
 });
 
 describe("Schema constraint enforcement", () => {
-  it("TailoredResume allows max 5 experience entries", () => {
-    const experiences = Array.from({ length: 6 }, (_, i) => ({
+  it("TailoredResume allows max 7 experience entries", () => {
+    // Schema allows max 7 experience entries
+    const experiences = Array.from({ length: 8 }, (_, i) => ({
       employer: `Company ${i}`,
       title: `Title ${i}`,
       start_date: "2020-01",
