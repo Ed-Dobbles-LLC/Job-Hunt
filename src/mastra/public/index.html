@@ -1818,14 +1818,24 @@
         if (a) {
           html += `<div class="section-title">Application Packet ${a.truth_pass ? '&#x2705; Verified' : '&#x26A0;&#xFE0F; Unverified'}</div>`;
           html += `<div class="download-grid">
-            <a class="download-card" href="/api/dashboard/preview/${jobId}/resume" target="_blank">
+            <a class="download-card" href="/api/dashboard/download/${jobId}/resume/pdf">
               <div class="icon">&#x1F4C4;</div>
-              <div class="name">Resume</div>
+              <div class="name">Resume PDF</div>
+              <div style="font-size:11px;color:var(--text-dim);margin-top:4px">Download PDF</div>
+            </a>
+            <a class="download-card" href="/api/dashboard/download/${jobId}/cover/pdf">
+              <div class="icon">&#x1F4DD;</div>
+              <div class="name">Cover Letter PDF</div>
+              <div style="font-size:11px;color:var(--text-dim);margin-top:4px">Download PDF</div>
+            </a>
+            <a class="download-card" href="/api/dashboard/preview/${jobId}/resume" target="_blank">
+              <div class="icon">&#x1F441;</div>
+              <div class="name">Preview Resume</div>
               <div style="font-size:11px;color:var(--text-dim);margin-top:4px">View in browser</div>
             </a>
             <a class="download-card" href="/api/dashboard/preview/${jobId}/cover" target="_blank">
-              <div class="icon">&#x1F4DD;</div>
-              <div class="name">Cover Letter</div>
+              <div class="icon">&#x1F441;</div>
+              <div class="name">Preview Cover</div>
               <div style="font-size:11px;color:var(--text-dim);margin-top:4px">View in browser</div>
             </a>
             <a class="download-card" href="/api/dashboard/preview/${jobId}/evidence" target="_blank">

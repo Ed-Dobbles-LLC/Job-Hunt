@@ -8,7 +8,7 @@ import { extractJDRequirementsTool } from "./tools/extractJDRequirementsTool";
 import { generateVerifiedPacketTool } from "./tools/generateVerifiedPacketTool";
 import { buildOutputTool } from "./tools/buildOutputTool";
 import { scoreJobsTool } from "./tools/scoreJobsTool";
-import { renderResumeDocx, renderCoverLetterDocx } from "./tools/docxRenderer";
+import { renderResumeDocx, renderCoverLetterDocx, convertDocxToPdf } from "./tools/docxRenderer";
 import {
   normalizeText,
   computeHash,
@@ -50,6 +50,14 @@ function updateGenStatus(jobId: number, update: Partial<PacketGenStatus>) {
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Build a download filename like "Ed Dobbles Resume - Acme Corp.docx" */
+function buildDownloadFilename(profileName: string, company: string, type: string, ext: string): string {
+  const safeName = profileName.replace(/[^\w\s.-]/g, "").trim() || "Resume";
+  const safeCompany = company.replace(/[^\w\s.&,-]/g, "").trim() || "Unknown";
+  const label = type === "cover" ? "Cover Letter" : "Resume";
+  return `${safeName} ${label} - ${safeCompany}.${ext}`;
 }
 
 /** Load experience inventory — checks DB first, then filesystem */
@@ -382,8 +390,9 @@ export function getDashboardRoutes() {
       <div class="sub">${escapeHtml(jobInfo.company)} - ${escapeHtml(jobInfo.title)}</div>
     </div>
     <div class="toolbar-actions">
-      <button class="toolbar-btn print" onclick="window.print()">Print / Save PDF</button>
+      <a class="toolbar-btn print" href="/api/dashboard/download/${jobId}/${type}/pdf">Download PDF</a>
       <a class="toolbar-btn" href="/api/dashboard/download/${jobId}/${type}">Download DOCX</a>
+      <button class="toolbar-btn" onclick="window.print()">Print</button>
       <button class="toolbar-btn" onclick="window.close()">Close</button>
     </div>
   </div>
@@ -420,6 +429,13 @@ export function getDashboardRoutes() {
           }
 
           const row = artifact.rows[0];
+
+          // Load profile name and company for friendly filenames
+          const jobRow = await query("SELECT company, title FROM jobs WHERE job_id = $1", [jobId]);
+          const jobInfo = jobRow.rows[0] || { company: "Unknown", title: "Unknown" };
+          const inventory = await loadInventoryProfile();
+          const profileName = inventory.profile?.name || "Resume";
+
           let filePath = "";
           let contentType = "application/octet-stream";
           let filename = "";
@@ -428,12 +444,12 @@ export function getDashboardRoutes() {
             case "resume":
               filePath = row.resume_docx_path;
               contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-              filename = `resume_${jobId}.docx`;
+              filename = buildDownloadFilename(profileName, jobInfo.company, "resume", "docx");
               break;
             case "cover":
               filePath = row.cover_docx_path;
               contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-              filename = `cover_letter_${jobId}.docx`;
+              filename = buildDownloadFilename(profileName, jobInfo.company, "cover", "docx");
               break;
             case "evidence":
               filePath = row.evidence_map_path;
@@ -481,6 +497,95 @@ export function getDashboardRoutes() {
           });
         } catch (err: any) {
           logger?.error(`❌ [dashboard] Download error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    /* ── PDF Download (DOCX → PDF on-the-fly via LibreOffice) ── */
+    {
+      path: "/api/dashboard/download/:jobId/:type/pdf",
+      method: "GET" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        const jobId = c.req.param("jobId");
+        const type = c.req.param("type");
+        logger?.info(`📥 [dashboard] PDF download request: job=${jobId}, type=${type}`);
+
+        if (type !== "resume" && type !== "cover") {
+          return c.json({ error: "PDF download only available for resume and cover letter" }, 400);
+        }
+
+        try {
+          const artifact = await query(
+            "SELECT * FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1",
+            [jobId]
+          );
+
+          if (artifact.rows.length === 0) {
+            return c.json({ error: "No artifacts found" }, 404);
+          }
+
+          const row = artifact.rows[0];
+
+          // Load profile name and company for filename
+          const jobRow = await query("SELECT company, title FROM jobs WHERE job_id = $1", [jobId]);
+          const jobInfo = jobRow.rows[0] || { company: "Unknown", title: "Unknown" };
+          const inventory = await loadInventoryProfile();
+          const profileName = inventory.profile?.name || "Resume";
+          const filename = buildDownloadFilename(profileName, jobInfo.company, type, "pdf");
+
+          // Get DOCX buffer from disk or DB
+          const filePath = type === "resume" ? row.resume_docx_path : row.cover_docx_path;
+          let docxBuffer: Buffer;
+
+          let resolvedPath = "";
+          if (filePath) {
+            resolvedPath = filePath.startsWith("/") ? filePath : workspacePath(filePath);
+            if (!fs.existsSync(resolvedPath) && filePath.startsWith("/")) {
+              const asRelative = workspacePath(filePath.replace(/^\/app\//, "").replace(/^\/home\/user\/Job-Hunt\//, ""));
+              if (fs.existsSync(asRelative)) resolvedPath = asRelative;
+            }
+          }
+
+          if (resolvedPath && fs.existsSync(resolvedPath)) {
+            docxBuffer = fs.readFileSync(resolvedPath);
+          } else {
+            const blobCol = type === "resume" ? "resume_docx" : "cover_docx";
+            const blobRow = await query(`SELECT ${blobCol} FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1`, [jobId]);
+            const blob = blobRow.rows[0]?.[blobCol];
+            if (!blob) {
+              return c.json({ error: `No ${type} data available. Try regenerating the packet.` }, 404);
+            }
+            docxBuffer = Buffer.isBuffer(blob) ? blob : Buffer.from(blob);
+          }
+
+          // Write DOCX to temp file, convert to PDF via LibreOffice
+          const os = await import("os");
+          const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "resume-pdf-"));
+          const tmpDocx = path.join(tmpDir, "doc.docx");
+          fs.writeFileSync(tmpDocx, docxBuffer);
+
+          try {
+            const { pdfPath } = await convertDocxToPdf(tmpDocx, tmpDir);
+            const pdfBuffer = fs.readFileSync(pdfPath);
+
+            // Clean up temp files
+            try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+
+            return new Response(new Uint8Array(pdfBuffer), {
+              headers: {
+                "Content-Type": "application/pdf",
+                "Content-Disposition": `attachment; filename="${filename}"`,
+              },
+            });
+          } catch (convertErr: any) {
+            // Clean up temp files on error
+            try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+            logger?.error(`❌ [dashboard] PDF conversion error: ${convertErr.message}`);
+            return c.json({ error: `PDF conversion failed: ${convertErr.message}. Try downloading the DOCX instead.` }, 500);
+          }
+        } catch (err: any) {
+          logger?.error(`❌ [dashboard] PDF download error: ${err.message}`);
           return c.json({ error: err.message }, 500);
         }
       },
