@@ -81,6 +81,7 @@ export const TailoredResumeSchema = z.object({
     .describe("The company being applied to"),
   executive_headline: z
     .string()
+    .optional()
     .describe(
       "Executive positioning headline displayed directly under the candidate's name. Should be a C-suite or senior executive title that matches the target role. E.g., 'Chief Data & Analytics Officer', 'VP/SVP, Data & Analytics', 'Enterprise Data Strategy Executive'. Must reflect the candidate's actual level from inventory.",
     ),
@@ -93,6 +94,7 @@ export const TailoredResumeSchema = z.object({
     .array(z.string())
     .min(8)
     .max(14)
+    .optional()
     .describe(
       "8-14 enterprise-level competency keywords for ATS and AI screening. Frame strategically, not tactically. Include terms like: Enterprise Data Strategy, Data Governance, Digital Transformation, AI/ML Strategy & Deployment, Revenue & Pricing Optimization, Forecasting & Demand Planning, Commercial Analytics, Organizational Transformation, P&L Influence, Board & C-Suite Advisory, Organizational Design, Change Management. Only include competencies supported by inventory evidence.",
     ),
@@ -104,12 +106,13 @@ export const TailoredResumeSchema = z.object({
   skills: z.object({
     enterprise_capabilities: z
       .array(z.string())
+      .optional()
       .describe("Strategic enterprise capabilities from inventory that match the JD. Frame at executive level: 'AI/ML Strategy & Deployment' not just 'Machine Learning'. Include: Revenue Optimization, Forecasting & Demand Planning, Commercial Analytics, Organizational Transformation, Board Advisory, etc."),
     tools_and_platforms: z
       .array(z.string())
       .optional()
       .describe("Technical tools as a secondary sub-list. Include platforms (Snowflake, AWS, Tableau) and languages (Python, R, SQL) only if relevant to the JD."),
-  }),
+  }).passthrough(),
   education: z.array(
     z.object({
       institution: z.string(),

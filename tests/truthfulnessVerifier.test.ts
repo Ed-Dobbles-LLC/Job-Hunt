@@ -349,7 +349,7 @@ describe("verifyPlaceholders", () => {
   it("passes on clean content with allowlist", () => {
     const resume = makeValidResume();
     const coverLetter = makeValidCoverLetter();
-    const result = verifyPlaceholders(resume, coverLetter, MOCK_ALLOWLIST);
+    const result = verifyPlaceholders(resume, coverLetter, MOCK_ALLOWLIST, MOCK_INVENTORY.profile.name);
     expect(result.violations.length).toBe(0);
   });
 

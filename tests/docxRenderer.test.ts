@@ -136,23 +136,24 @@ describe("renderResumeDocx", () => {
     const xml = await extractDocxText(
       await renderResumeDocx(makeSampleResume(), sampleProfile),
     );
-    expect(xml).toContain("Ed Martinez");
+    // Name is rendered uppercase in the DOCX header
+    expect(xml).toContain("ED MARTINEZ");
   });
 
-  it("contains PROFESSIONAL SUMMARY heading exactly once", async () => {
+  it("contains EXECUTIVE SUMMARY heading exactly once", async () => {
     const xml = await extractDocxText(
       await renderResumeDocx(makeSampleResume(), sampleProfile),
     );
-    const matches = xml.match(/PROFESSIONAL SUMMARY/g);
+    const matches = xml.match(/EXECUTIVE SUMMARY/g);
     expect(matches).not.toBeNull();
     expect(matches!.length).toBe(1);
   });
 
-  it("contains EXPERIENCE heading exactly once", async () => {
+  it("contains PROFESSIONAL EXPERIENCE heading exactly once", async () => {
     const xml = await extractDocxText(
       await renderResumeDocx(makeSampleResume(), sampleProfile),
     );
-    const matches = xml.match(/>EXPERIENCE</g);
+    const matches = xml.match(/PROFESSIONAL EXPERIENCE/g);
     expect(matches).not.toBeNull();
     expect(matches!.length).toBe(1);
   });
@@ -224,7 +225,8 @@ describe("renderResumeDocx", () => {
     expect(buffer).toBeInstanceOf(Buffer);
     const xml = await extractDocxText(buffer);
     expect(xml).not.toContain("[object Object]");
-    expect(xml).toContain("Jane Doe");
+    // Name is rendered uppercase in the DOCX header
+    expect(xml).toContain("JANE DOE");
     expect(xml).not.toContain("CERTIFICATIONS");
   });
 

@@ -292,6 +292,7 @@ export function verifyPlaceholders(
   resume: TailoredResume,
   coverLetter: TailoredCoverLetter,
   allowlist?: EntityAllowlist,
+  candidateName?: string,
 ): { violations: Violation[]; fixes: LineItemFix[]; checksRun: number } {
   const violations: Violation[] = [];
   const fixes: LineItemFix[] = [];
@@ -306,6 +307,10 @@ export function verifyPlaceholders(
         allowlistedValues.add(normalize(entry.value));
       }
     }
+  }
+  // The candidate's actual name should never be flagged as a placeholder
+  if (candidateName) {
+    allowlistedValues.add(normalize(candidateName));
   }
 
   function isAllowlisted(matchText: string, fullText: string): boolean {
@@ -941,7 +946,8 @@ export function runTruthfulnessVerification(
   metricsChecked = metricResult.checksRun;
   totalChecks += metricResult.checksRun;
 
-  const placeholderResult = verifyPlaceholders(resume, coverLetter, allowlist);
+  const candidateName = inventory?.profile?.name;
+  const placeholderResult = verifyPlaceholders(resume, coverLetter, allowlist, candidateName);
   allViolations.push(...placeholderResult.violations);
   allFixes.push(...placeholderResult.fixes);
   denylistScans = placeholderResult.checksRun;

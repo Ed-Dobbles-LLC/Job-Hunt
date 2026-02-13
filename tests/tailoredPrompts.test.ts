@@ -250,8 +250,8 @@ describe("TailoredResume Schema", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects experience entry with more than 6 bullets", () => {
-      const bullets = Array.from({ length: 7 }, (_, i) => ({
+    it("rejects experience entry with more than 8 bullets", () => {
+      const bullets = Array.from({ length: 9 }, (_, i) => ({
         text: `Bullet ${i}`,
         source_hash: `exp-001-b${i}`,
         evidence_quote: `Quote ${i}`,

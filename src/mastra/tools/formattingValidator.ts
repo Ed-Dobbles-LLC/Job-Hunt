@@ -48,11 +48,14 @@ const PLACEHOLDER_PATTERNS: { regex: RegExp; label: string }[] = [
   { regex: /\bTBD\b/g, label: "TBD placeholder" },
 ];
 
-const RESUME_REQUIRED_SECTIONS = [
-  "PROFESSIONAL SUMMARY",
-  "EXPERIENCE",
-  "SKILLS",
-  "EDUCATION",
+// Each entry is an array of acceptable variants for the section heading.
+// The DOCX renderer may use "Executive Summary" or "Professional Summary",
+// "Professional Experience" or "Experience", etc.
+const RESUME_REQUIRED_SECTIONS: { label: string; variants: string[] }[] = [
+  { label: "SUMMARY", variants: ["PROFESSIONAL SUMMARY", "EXECUTIVE SUMMARY"] },
+  { label: "EXPERIENCE", variants: ["EXPERIENCE", "PROFESSIONAL EXPERIENCE"] },
+  { label: "SKILLS", variants: ["SKILLS", "ENTERPRISE CAPABILITIES", "TOOLS & PLATFORMS", "CORE COMPETENCIES"] },
+  { label: "EDUCATION", variants: ["EDUCATION"] },
 ];
 
 async function extractDocxText(buffer: Buffer): Promise<string> {
@@ -283,13 +286,14 @@ export function checkResumeSections(xml: string): FormattingViolation[] {
   const allText = textRuns.join(" ").toUpperCase();
 
   for (const section of RESUME_REQUIRED_SECTIONS) {
-    if (!allText.includes(section)) {
+    const found = section.variants.some((v) => allText.includes(v));
+    if (!found) {
       violations.push({
         check: "MISSING_SECTION",
         severity: "critical",
-        message: `Required section "${section}" not found`,
+        message: `Required section "${section.label}" not found`,
         location: "document",
-        details: `The ${section} section is required in a resume. Ensure it is present with the correct heading.`,
+        details: `The ${section.label} section is required in a resume. Ensure it is present with the correct heading (accepted: ${section.variants.join(", ")}).`,
       });
     }
   }
