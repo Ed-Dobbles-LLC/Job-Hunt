@@ -203,7 +203,7 @@ async function executeEnrichJobs({ inputData, mastra }: { inputData: any; mastra
   );
 
   const needsEnrichment = jobsToEnrich.rows.filter(
-    (j: any) => !j.jd_raw_text || j.jd_raw_text.length < 200,
+    (j: any) => !j.jd_raw_text || j.jd_raw_text.length < 100,
   );
 
   logger?.info(
@@ -211,27 +211,62 @@ async function executeEnrichJobs({ inputData, mastra }: { inputData: any; mastra
   );
 
   if (needsEnrichment.length > 0) {
-    const batchSize = 3;
-    let totalEnriched = 0;
+    // Phase 1: Deterministic URL scraping (fast, free, no LLM)
+    const withUrls = needsEnrichment.filter(
+      (j: any) => j.posting_url && j.posting_url.startsWith("http"),
+    );
 
-    for (let i = 0; i < needsEnrichment.length; i += batchSize) {
-      const batch = needsEnrichment.slice(i, i + batchSize);
-      const jobSummaries = batch
-        .map(
-          (j: any) =>
-            `- Job ID ${j.job_id}: "${j.title}" at ${j.company} (${j.location})${j.posting_url ? ` — URL: ${j.posting_url}` : ""}`,
-        )
-        .join("\n");
-
+    let urlEnrichedCount = 0;
+    if (withUrls.length > 0) {
       logger?.info(
-        `🔍 [Step 1.5] Enriching batch ${Math.floor(i / batchSize) + 1}: ${batch.length} jobs`,
+        `🔗 [Step 1.5] Phase 1: URL scraping ${withUrls.length} jobs with posting URLs`,
+      );
+      try {
+        const { enrichJobsByUrl } = await import("../tools/urlScrapeEnricher");
+        const urlResult = await enrichJobsByUrl(withUrls, logger as any);
+        urlEnrichedCount = urlResult.enrichedCount;
+        logger?.info(
+          `🔗 [Step 1.5] URL scraping done: ${urlResult.enrichedCount} enriched, ${urlResult.failedCount} failed`,
+        );
+      } catch (err: any) {
+        logger?.error(`❌ [Step 1.5] URL scraping error: ${err.message}`);
+      }
+    }
+
+    // Phase 2: LLM web search for jobs still missing JD after URL scraping
+    const stillNeedEnrichment = await query(
+      `SELECT job_id, company, title, location, posting_url
+       FROM jobs WHERE job_id = ANY($1) AND (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)`,
+      [needsEnrichment.map((j: any) => j.job_id)],
+    );
+
+    let totalEnriched = urlEnrichedCount;
+
+    if (stillNeedEnrichment.rows.length > 0) {
+      logger?.info(
+        `🔍 [Step 1.5] Phase 2: LLM web search for ${stillNeedEnrichment.rows.length} remaining jobs`,
       );
 
-      const enrichResponse = await jobMatchAgent.generateLegacy(
-        [
-          {
-            role: "user",
-            content: `I need you to find full job descriptions for these ${batch.length} jobs. They were parsed from LinkedIn alerts and only have title, company, and location — no job description.
+      const batchSize = 3;
+      for (let i = 0; i < stillNeedEnrichment.rows.length; i += batchSize) {
+        const batch = stillNeedEnrichment.rows.slice(i, i + batchSize);
+        const jobSummaries = batch
+          .map(
+            (j: any) =>
+              `- Job ID ${j.job_id}: "${j.title}" at ${j.company} (${j.location})${j.posting_url ? ` — URL: ${j.posting_url}` : ""}`,
+          )
+          .join("\n");
+
+        logger?.info(
+          `🔍 [Step 1.5] Enriching batch ${Math.floor(i / batchSize) + 1}: ${batch.length} jobs`,
+        );
+
+        try {
+          const enrichResponse = await jobMatchAgent.generateLegacy(
+            [
+              {
+                role: "user",
+                content: `I need you to find full job descriptions for these ${batch.length} jobs. They were parsed from LinkedIn alerts and only have title, company, and location — no job description.
 
 YOUR PROCESS (follow this EXACTLY):
 1. For EACH job below, use the webSearch tool to search for: "[job title] [company name] job description responsibilities requirements"
@@ -248,20 +283,26 @@ CRITICAL INSTRUCTIONS:
 - Include specific requirements, responsibilities, tools/technologies mentioned
 - If you can't find the exact posting, search for the company + role type to understand what they look for
 - ONLY use webSearch and enrich-jobs tools in this step. Do NOT call fetch-emails, parse-jobs, score-jobs, generate-resume, generate-cover-letter, verify-truth, or build-output.`,
-          },
-        ],
-        { maxSteps: 10 },
-      );
+              },
+            ],
+            { maxSteps: 10 },
+          );
 
-      const allToolResults =
-        enrichResponse.steps?.flatMap((s: any) => s.toolResults || []) || [];
-      const allResults = allToolResults.map((r: any) => r.result || r);
-      const enrichResult = allResults.find((r: any) => r.enrichedJobIds);
-      totalEnriched += enrichResult?.enrichedCount || 0;
+          const allToolResults =
+            enrichResponse.steps?.flatMap((s: any) => s.toolResults || []) || [];
+          const allResults = allToolResults.map((r: any) => r.result || r);
+          const enrichResult = allResults.find((r: any) => r.enrichedJobIds);
+          totalEnriched += enrichResult?.enrichedCount || 0;
+        } catch (err: any) {
+          logger?.error(
+            `❌ [Step 1.5] Batch ${Math.floor(i / batchSize) + 1} failed: ${err.message}`,
+          );
+        }
+      }
     }
 
     logger?.info(
-      `✅ [Step 1.5] Web search enrichment complete: ${totalEnriched} enriched`,
+      `✅ [Step 1.5] Enrichment complete: ${totalEnriched} enriched (${urlEnrichedCount} via URL, ${totalEnriched - urlEnrichedCount} via web search)`,
     );
   }
 

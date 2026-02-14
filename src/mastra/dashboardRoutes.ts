@@ -1359,30 +1359,62 @@ ONLY use webSearch and enrich-jobs tools.`,
             return c.json({ success: true, message: "No jobs need enrichment", queued: 0 });
           }
 
-          logger?.info(`🔍 [enrich] Starting web search enrichment for ${jobsToEnrich.length} jobs`);
+          logger?.info(`🔍 [enrich] Starting enrichment for ${jobsToEnrich.length} jobs`);
 
           // Fire-and-forget: run enrichment in background
           (async () => {
-            const batchSize = 3;
             let totalEnriched = 0;
             let totalFailed = 0;
 
-            for (let i = 0; i < jobsToEnrich.length; i += batchSize) {
-              const batch = jobsToEnrich.slice(i, i + batchSize);
-              const jobSummaries = batch
-                .map((j: any) =>
-                  `- Job ID ${j.job_id}: "${j.title}" at ${j.company} (${j.location})${j.posting_url ? ` — URL: ${j.posting_url}` : ""}`,
-                )
-                .join("\n");
+            // Phase 1: Deterministic URL scraping (fast, free, no LLM)
+            const withUrls = jobsToEnrich.filter(
+              (j: any) => j.posting_url && j.posting_url.startsWith("http"),
+            );
 
-              logger?.info(`🔍 [enrich] Batch ${Math.floor(i / batchSize) + 1}: ${batch.length} jobs`);
-
+            if (withUrls.length > 0) {
+              logger?.info(`🔗 [enrich] Phase 1: URL scraping ${withUrls.length} jobs`);
               try {
-                const enrichResponse = await jobMatchAgent.generateLegacy(
-                  [
-                    {
-                      role: "user",
-                      content: `I need you to find full job descriptions for these ${batch.length} jobs. They were parsed from LinkedIn alerts and only have title, company, and location — no job description.
+                const { enrichJobsByUrl } = await import("./tools/urlScrapeEnricher");
+                const urlResult = await enrichJobsByUrl(withUrls, logger as any);
+                totalEnriched += urlResult.enrichedCount;
+                logger?.info(
+                  `🔗 [enrich] URL scraping: ${urlResult.enrichedCount} enriched, ${urlResult.failedCount} failed`,
+                );
+              } catch (err: any) {
+                logger?.error(`❌ [enrich] URL scraping error: ${err.message}`);
+              }
+            }
+
+            // Phase 2: LLM web search for remaining jobs
+            const stillNeedEnrichment = await query(
+              `SELECT job_id, company, title, location, posting_url
+               FROM jobs WHERE job_id = ANY($1)
+               AND (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)`,
+              [jobsToEnrich.map((j: any) => j.job_id)],
+            );
+
+            if (stillNeedEnrichment.rows.length > 0) {
+              logger?.info(
+                `🔍 [enrich] Phase 2: LLM web search for ${stillNeedEnrichment.rows.length} remaining jobs`,
+              );
+
+              const batchSize = 3;
+              for (let i = 0; i < stillNeedEnrichment.rows.length; i += batchSize) {
+                const batch = stillNeedEnrichment.rows.slice(i, i + batchSize);
+                const jobSummaries = batch
+                  .map((j: any) =>
+                    `- Job ID ${j.job_id}: "${j.title}" at ${j.company} (${j.location})${j.posting_url ? ` — URL: ${j.posting_url}` : ""}`,
+                  )
+                  .join("\n");
+
+                logger?.info(`🔍 [enrich] Batch ${Math.floor(i / batchSize) + 1}: ${batch.length} jobs`);
+
+                try {
+                  const enrichResponse = await jobMatchAgent.generateLegacy(
+                    [
+                      {
+                        role: "user",
+                        content: `I need you to find full job descriptions for these ${batch.length} jobs. They were parsed from LinkedIn alerts and only have title, company, and location — no job description.
 
 YOUR PROCESS (follow this EXACTLY):
 1. For EACH job below, use the webSearch tool to search for: "[job title] [company name] job description responsibilities requirements"
@@ -1399,20 +1431,21 @@ CRITICAL INSTRUCTIONS:
 - Include specific requirements, responsibilities, tools/technologies mentioned
 - If you can't find the exact posting, search for the company + role type to understand what they look for
 - ONLY use webSearch and enrich-jobs tools in this step.`,
-                    },
-                  ],
-                  { maxSteps: 10 },
-                );
+                      },
+                    ],
+                    { maxSteps: 10 },
+                  );
 
-                const allToolResults =
-                  enrichResponse.steps?.flatMap((s: any) => s.toolResults || []) || [];
-                const allResults = allToolResults.map((r: any) => r.result || r);
-                const enrichResult = allResults.find((r: any) => r.enrichedJobIds);
-                totalEnriched += enrichResult?.enrichedCount || 0;
-              } catch (err: any) {
-                totalFailed += batch.length;
-                logger?.error(`❌ [enrich] Batch failed: ${err.message}`);
+                  const allToolResults =
+                    enrichResponse.steps?.flatMap((s: any) => s.toolResults || []) || [];
+                  const allResults = allToolResults.map((r: any) => r.result || r);
+                  const enrichResult = allResults.find((r: any) => r.enrichedJobIds);
+                  totalEnriched += enrichResult?.enrichedCount || 0;
+                } catch (err: any) {
+                  totalFailed += batch.length;
+                  logger?.error(`❌ [enrich] Batch failed: ${err.message}`);
               }
+            }
             }
 
             logger?.info(`✅ [enrich] Done: ${totalEnriched} enriched, ${totalFailed} failed`);
@@ -1426,6 +1459,29 @@ CRITICAL INSTRUCTIONS:
           });
         } catch (err: any) {
           logger?.error(`❌ [enrich] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    /* ── URL-scrape enrichment (deterministic, no LLM) ────────── */
+    {
+      path: "/api/dashboard/enrich-urls",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+          const { enrichAllByUrl } = await import("./tools/urlScrapeEnricher");
+          const result = await enrichAllByUrl(logger as any);
+          return c.json({
+            success: true,
+            enrichedCount: result.enrichedCount,
+            failedCount: result.failedCount,
+            remainingCount: result.remainingCount,
+            message: `URL scraping complete: ${result.enrichedCount} enriched, ${result.remainingCount} still need JD.`,
+          });
+        } catch (err: any) {
+          logger?.error(`❌ [enrich-urls] Error: ${err.message}`);
           return c.json({ error: err.message }, 500);
         }
       },
