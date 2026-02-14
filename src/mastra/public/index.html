@@ -1866,7 +1866,7 @@
           const remaining = parseInt(countEl.textContent) || 0;
           document.getElementById('enrichProgressText').textContent =
             `Enriching jobs... ${remaining} still need JD text`;
-          if (remaining === 0 || pollCount > 40) {
+          if (remaining === 0 || pollCount > 120) {
             clearInterval(pollInterval);
             document.getElementById('enrichProgress').style.display = 'none';
             btn.disabled = false;

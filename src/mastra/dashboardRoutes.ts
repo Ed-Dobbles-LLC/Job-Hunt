@@ -1349,8 +1349,7 @@ ONLY use webSearch and enrich-jobs tools.`,
               `SELECT job_id, company, title, location, posting_url
                FROM jobs
                WHERE jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100
-               ORDER BY date_ingested DESC
-               LIMIT 30`,
+               ORDER BY date_ingested DESC`,
             );
             jobsToEnrich = result.rows;
           }
@@ -1366,6 +1365,7 @@ ONLY use webSearch and enrich-jobs tools.`,
             let totalEnriched = 0;
             let totalFailed = 0;
 
+            try {
             // Phase 1: Deterministic URL scraping (fast, free, no LLM)
             const withUrls = jobsToEnrich.filter(
               (j: any) => j.posting_url && j.posting_url.startsWith("http"),
@@ -1399,15 +1399,17 @@ ONLY use webSearch and enrich-jobs tools.`,
               );
 
               const batchSize = 3;
+              const totalBatches = Math.ceil(stillNeedEnrichment.rows.length / batchSize);
               for (let i = 0; i < stillNeedEnrichment.rows.length; i += batchSize) {
                 const batch = stillNeedEnrichment.rows.slice(i, i + batchSize);
+                const batchNum = Math.floor(i / batchSize) + 1;
                 const jobSummaries = batch
                   .map((j: any) =>
                     `- Job ID ${j.job_id}: "${j.title}" at ${j.company} (${j.location})${j.posting_url ? ` — URL: ${j.posting_url}` : ""}`,
                   )
                   .join("\n");
 
-                logger?.info(`🔍 [enrich] Batch ${Math.floor(i / batchSize) + 1}: ${batch.length} jobs`);
+                logger?.info(`🔍 [enrich] Batch ${batchNum}/${totalBatches}: ${batch.length} jobs`);
 
                 try {
                   const enrichResponse = await jobMatchAgent.generateLegacy(
@@ -1433,7 +1435,7 @@ CRITICAL INSTRUCTIONS:
 - ONLY use webSearch and enrich-jobs tools in this step.`,
                       },
                     ],
-                    { maxSteps: 10 },
+                    { maxSteps: 15 },
                   );
 
                   const allToolResults =
@@ -1443,12 +1445,20 @@ CRITICAL INSTRUCTIONS:
                   totalEnriched += enrichResult?.enrichedCount || 0;
                 } catch (err: any) {
                   totalFailed += batch.length;
-                  logger?.error(`❌ [enrich] Batch failed: ${err.message}`);
+                  logger?.error(`❌ [enrich] Batch ${batchNum}/${totalBatches} failed: ${err.message}`);
+                }
+
+                // Rate-limit delay between batches to avoid OpenAI throttling
+                if (i + batchSize < stillNeedEnrichment.rows.length) {
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                }
               }
-            }
             }
 
             logger?.info(`✅ [enrich] Done: ${totalEnriched} enriched, ${totalFailed} failed`);
+            } catch (outerErr: any) {
+              logger?.error(`❌ [enrich] Background enrichment crashed: ${outerErr.message}`);
+            }
           })();
 
           return c.json({
