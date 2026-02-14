@@ -1218,6 +1218,87 @@ export function getDashboardRoutes() {
         }
       },
     },
+    /* ── Quick Add Job (single job by URL or company+title) ── */
+    {
+      path: "/api/dashboard/quick-add",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+          const body = await c.req.json();
+          const { company, title, location, posting_url, jd_text } = body;
+
+          if (!company || !title) {
+            return c.json({ error: "Company and title are required" }, 400);
+          }
+
+          const jdRaw = (jd_text || "").trim();
+          const hashInput = jdRaw || `${company}|${title}|${location || ""}|${posting_url || ""}`;
+          const jdHash = computeHash(hashInput);
+          const simhash = computeSimhash(jdRaw);
+          const keywords = extractKeywords(jdRaw);
+          const level = classifyLevel(title);
+
+          // Check for duplicates
+          const existing = await query("SELECT job_id FROM jobs WHERE jd_hash = $1", [jdHash]);
+          if (existing.rows.length > 0) {
+            return c.json({
+              success: false,
+              error: "This job already exists in your list",
+              existingJobId: existing.rows[0].job_id,
+            }, 409);
+          }
+
+          const result = await query(
+            `INSERT INTO jobs (source, company, title, location, posting_url, jd_raw_text, jd_hash, simhash, keywords, level, status, source_message_id)
+             VALUES ('manual', $1, $2, $3, $4, $5, $6, $7, $8, $9, 'new', '')
+             RETURNING job_id`,
+            [company, title, location || "", posting_url || "", jdRaw, jdHash, simhash.toString(), JSON.stringify(keywords), level],
+          );
+
+          const jobId = result.rows[0].job_id;
+          logger?.info(`✅ [quick-add] Added job #${jobId}: ${company} — ${title}`);
+
+          // If JD text is thin, try web search enrichment in background
+          if (jdRaw.length < 100 && (company && title)) {
+            logger?.info(`🔍 [quick-add] Job #${jobId} needs enrichment, starting web search...`);
+            (async () => {
+              try {
+                const enrichResponse = await jobMatchAgent.generateLegacy(
+                  [{
+                    role: "user",
+                    content: `Find the full job description for this job posting:
+- Job ID: ${jobId}
+- Title: "${title}" at ${company}
+- Location: ${location || "unknown"}
+${posting_url ? `- URL: ${posting_url}` : ""}
+
+Use webSearch to find: "${title} ${company} job description responsibilities requirements"
+Then call the enrich-jobs tool with the results. jd_text must be at least 300 characters.
+ONLY use webSearch and enrich-jobs tools.`,
+                  }],
+                  { maxSteps: 6 },
+                );
+                logger?.info(`✅ [quick-add] Enrichment complete for job #${jobId}`);
+              } catch (err: any) {
+                logger?.warn(`⚠️ [quick-add] Enrichment failed for job #${jobId}: ${err.message}`);
+              }
+            })();
+          }
+
+          return c.json({
+            success: true,
+            job_id: jobId,
+            message: `Job added!${jdRaw.length < 100 ? " Web search enrichment running in background." : ""}`,
+            needsEnrichment: jdRaw.length < 100,
+          });
+        } catch (err: any) {
+          logger?.error(`❌ [quick-add] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
     /* ── Needs Enrichment: jobs with missing/thin JD text ───── */
     {
       path: "/api/dashboard/needs-enrichment",

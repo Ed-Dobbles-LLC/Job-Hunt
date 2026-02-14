@@ -907,6 +907,17 @@
       .modal { width: 95%; }
       .quick-launch { grid-template-columns: 1fr 1fr; }
     }
+
+    .checklist-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 10px 14px; background: var(--surface2); border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .checklist-item.done { border-color: var(--green); background: var(--green-soft); }
+    .check-icon { font-size: 18px; line-height: 1; margin-top: 2px; }
+
+    .form-group label { display: block; }
+    textarea { font-family: inherit; }
   </style>
 </head>
 <body>
@@ -961,8 +972,49 @@
       </div>
 
       <div class="container">
+        <!-- Getting Started Checklist (shown for new users) -->
+        <div id="onboardingChecklist" style="display:none;margin-bottom:20px;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <h3 style="font-size:16px;font-weight:700">Getting Started</h3>
+            <button onclick="dismissChecklist()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px">Dismiss</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="checklist-item" id="check-profile">
+              <span class="check-icon" id="check-profile-icon">&#x2B55;</span>
+              <div style="flex:1">
+                <a href="/profile" style="color:var(--text);font-weight:600;text-decoration:none;font-size:14px">Step 1: Upload your resume</a>
+                <div style="font-size:12px;color:var(--text-dim)">Build your experience profile so we can tailor applications</div>
+              </div>
+            </div>
+            <div class="checklist-item" id="check-jobs">
+              <span class="check-icon" id="check-jobs-icon">&#x2B55;</span>
+              <div style="flex:1">
+                <span style="color:var(--text);font-weight:600;font-size:14px;cursor:pointer" onclick="openQuickAddModal()">Step 2: Add your first job</span>
+                <div style="font-size:12px;color:var(--text-dim)">Paste a job URL, import a spreadsheet, or connect Gmail</div>
+              </div>
+            </div>
+            <div class="checklist-item" id="check-packet">
+              <span class="check-icon" id="check-packet-icon">&#x2B55;</span>
+              <div style="flex:1">
+                <span style="color:var(--text);font-weight:600;font-size:14px">Step 3: Generate your first packet</span>
+                <div style="font-size:12px;color:var(--text-dim)">Click "Generate Packet" on any job to create a tailored resume + cover letter</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Quick Launch Tiles -->
         <div class="quick-launch">
+          <div class="launch-tile" onclick="openQuickAddModal()">
+            <div class="tile-icon green">&#x2795;</div>
+            <div class="tile-label">Add a Job</div>
+            <div class="tile-desc">Paste a URL or enter company + title</div>
+          </div>
+          <div class="launch-tile" onclick="openImportModal()">
+            <div class="tile-icon blue">&#x1F4E5;</div>
+            <div class="tile-label">Import Jobs</div>
+            <div class="tile-desc">Upload Excel/CSV file with job listings</div>
+          </div>
           <a class="launch-tile" href="/profile">
             <div class="tile-icon coral">&#x1F464;</div>
             <div class="tile-label">Build Profile</div>
@@ -971,17 +1023,7 @@
           <div class="launch-tile" onclick="triggerWorkflow()">
             <div class="tile-icon navy">&#x26A1;</div>
             <div class="tile-label">Run Workflow</div>
-            <div class="tile-desc">Fetch, score, and generate application packets</div>
-          </div>
-          <a class="launch-tile" href="/api/settings">
-            <div class="tile-icon green">&#x2699;&#xFE0F;</div>
-            <div class="tile-label">Settings</div>
-            <div class="tile-desc">Configure API keys, sources & preferences</div>
-          </a>
-          <div class="launch-tile" onclick="openImportModal()">
-            <div class="tile-icon blue">&#x1F4E5;</div>
-            <div class="tile-label">Import Jobs</div>
-            <div class="tile-desc">Upload Excel/CSV file with job listings</div>
+            <div class="tile-desc">Fetch new jobs from Gmail & process them</div>
           </div>
         </div>
 
@@ -1094,7 +1136,11 @@
 
           <div class="empty-state" id="emptyJobs" style="display:none">
             <div class="icon">&#x1F4ED;</div>
-            <div id="emptyJobsMsg">No jobs found. Run the workflow to fetch and process job alerts.</div>
+            <div id="emptyJobsMsg">No jobs yet. Get started by adding your first job:</div>
+            <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;justify-content:center">
+              <button class="btn btn-primary" onclick="openQuickAddModal()" style="font-size:14px;padding:10px 20px">&#x2795; Add a Job</button>
+              <button class="btn" onclick="openImportModal()" style="font-size:14px;padding:10px 20px">&#x1F4E5; Import Spreadsheet</button>
+            </div>
           </div>
         </div>
 
@@ -1158,6 +1204,49 @@
             </table>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Add Job Modal -->
+  <div class="modal-overlay" id="quickAddOverlay" onclick="closeQuickAddModal(event)">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:560px">
+      <div class="modal-header">
+        <div>
+          <h2>Add a Job</h2>
+          <div class="sub">Paste a job posting URL or enter details manually. We'll search the web for the full description.</div>
+        </div>
+        <button class="close-btn" onclick="closeQuickAddModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom:14px">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Job Posting URL <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+          <input type="text" id="qaUrl" placeholder="https://www.linkedin.com/jobs/view/..." style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">LinkedIn, Indeed, or any job board URL</div>
+        </div>
+        <div style="display:flex;gap:12px">
+          <div class="form-group" style="flex:1">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Company <span style="color:var(--red)">*</span></label>
+            <input type="text" id="qaCompany" placeholder="Google" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+          </div>
+          <div class="form-group" style="flex:1">
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Job Title <span style="color:var(--red)">*</span></label>
+            <input type="text" id="qaTitle" placeholder="Senior Data Engineer" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:12px">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Location <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+          <input type="text" id="qaLocation" placeholder="San Francisco, CA / Remote" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+        </div>
+        <div class="form-group" style="margin-top:12px">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Job Description <span style="color:var(--text-muted);font-weight:400">(optional — we'll search for it if blank)</span></label>
+          <textarea id="qaJdText" placeholder="Paste the full job description here, or leave blank and we'll search the web..." rows="4" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;resize:vertical;font-family:inherit"></textarea>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" onclick="closeQuickAddModal()" style="padding:10px 20px">Cancel</button>
+          <button class="btn btn-primary" id="qaSubmitBtn" onclick="submitQuickAdd()" style="padding:10px 24px;font-size:14px">&#x2795; Add Job</button>
+        </div>
+        <div id="qaStatus" style="display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:13px"></div>
       </div>
     </div>
   </div>
@@ -2435,6 +2524,116 @@
     }
 
     // ── Import Modal ──────────────────────────────────────
+    // ── Quick Add Job Modal ──────────────────────────
+    function openQuickAddModal() {
+      document.getElementById('quickAddOverlay').classList.add('active');
+      document.getElementById('qaCompany').value = '';
+      document.getElementById('qaTitle').value = '';
+      document.getElementById('qaLocation').value = '';
+      document.getElementById('qaUrl').value = '';
+      document.getElementById('qaJdText').value = '';
+      document.getElementById('qaStatus').style.display = 'none';
+      document.getElementById('qaSubmitBtn').disabled = false;
+      document.getElementById('qaSubmitBtn').innerHTML = '&#x2795; Add Job';
+    }
+
+    function closeQuickAddModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('quickAddOverlay').classList.remove('active');
+    }
+
+    async function submitQuickAdd() {
+      const company = document.getElementById('qaCompany').value.trim();
+      const title = document.getElementById('qaTitle').value.trim();
+      const location = document.getElementById('qaLocation').value.trim();
+      const posting_url = document.getElementById('qaUrl').value.trim();
+      const jd_text = document.getElementById('qaJdText').value.trim();
+
+      if (!company || !title) {
+        const statusEl = document.getElementById('qaStatus');
+        statusEl.style.display = 'block';
+        statusEl.style.background = 'rgba(239,68,68,0.12)';
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = 'Company and Job Title are required.';
+        return;
+      }
+
+      const btn = document.getElementById('qaSubmitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Adding...';
+
+      try {
+        const data = await api('/quick-add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company, title, location, posting_url, jd_text }),
+        });
+
+        const statusEl = document.getElementById('qaStatus');
+        statusEl.style.display = 'block';
+        statusEl.style.background = 'var(--green-soft)';
+        statusEl.style.color = 'var(--green)';
+        statusEl.textContent = data.message || 'Job added!';
+
+        showToast(`Added: ${company} — ${title}`, 'success');
+
+        // Refresh jobs list after a short delay
+        setTimeout(() => {
+          closeQuickAddModal();
+          loadJobs();
+          loadDashboard();
+        }, 1500);
+      } catch (e) {
+        const statusEl = document.getElementById('qaStatus');
+        statusEl.style.display = 'block';
+        statusEl.style.background = 'rgba(239,68,68,0.12)';
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = e.message || 'Failed to add job';
+        btn.disabled = false;
+        btn.innerHTML = '&#x2795; Add Job';
+      }
+    }
+
+    // ── Onboarding Checklist ──────────────────────────
+    async function checkOnboarding() {
+      try {
+        const data = await api('');
+        const hasJobs = (data.stats?.totalJobs || 0) > 0;
+        const hasPackets = (data.stats?.packetsGenerated || 0) > 0;
+
+        // Check if profile exists
+        let hasProfile = false;
+        try {
+          const profileRes = await fetch('/api/profile/sessions');
+          const profileData = await profileRes.json();
+          hasProfile = profileData.sessions && profileData.sessions.some(s => s.status === 'finalized');
+        } catch {}
+
+        // Show checklist if any step is incomplete
+        const allDone = hasProfile && hasJobs && hasPackets;
+        const dismissed = localStorage.getItem('checklist_dismissed');
+
+        if (!allDone && !dismissed) {
+          document.getElementById('onboardingChecklist').style.display = 'block';
+          if (hasProfile) markCheckDone('profile');
+          if (hasJobs) markCheckDone('jobs');
+          if (hasPackets) markCheckDone('packet');
+        }
+      } catch {}
+    }
+
+    function markCheckDone(id) {
+      const item = document.getElementById('check-' + id);
+      if (item) item.classList.add('done');
+      const icon = document.getElementById('check-' + id + '-icon');
+      if (icon) icon.innerHTML = '&#x2705;';
+    }
+
+    function dismissChecklist() {
+      localStorage.setItem('checklist_dismissed', 'true');
+      document.getElementById('onboardingChecklist').style.display = 'none';
+    }
+
     function openImportModal() {
       document.getElementById('importOverlay').classList.add('active');
       // Reset state

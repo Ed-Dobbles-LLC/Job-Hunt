@@ -125,6 +125,18 @@ export const mastra = new Mastra({
     ],
     apiRoutes: [
       {
+        path: "/",
+        method: "GET" as const,
+        createHandler: async () => async (c: any) => {
+          try {
+            const ready = await isSetupComplete();
+            return c.redirect(ready ? "/dashboard" : "/setup");
+          } catch {
+            return c.redirect("/setup");
+          }
+        },
+      },
+      {
         path: "/api/health",
         method: "GET",
         createHandler: async () => async (c: any) => {
