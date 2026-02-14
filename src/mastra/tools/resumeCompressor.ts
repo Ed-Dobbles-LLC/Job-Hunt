@@ -35,6 +35,9 @@ export interface CompressionReport {
   bulletsReorderedByMandate: boolean;
   passivePhrasesRemoved: { location: string; before: string; after: string }[];
   densityCompressed: boolean;
+  orphanRolesDetected: number;
+  wallOfTextRolesTrimmed: number;
+  verbRepetitions: { verb: string; count: number }[];
 }
 
 // ── Filler phrases to strip from bullets ──
@@ -261,6 +264,9 @@ export function compressResume(resume: TailoredResume, mandate?: MandateProfile)
     bulletsReorderedByMandate: false,
     passivePhrasesRemoved: [],
     densityCompressed: false,
+    orphanRolesDetected: 0,
+    wallOfTextRolesTrimmed: 0,
+    verbRepetitions: [],
   };
 
   // Count original bullets
@@ -559,6 +565,51 @@ export function compressResume(resume: TailoredResume, mandate?: MandateProfile)
       }
     }
   }
+
+  // ── Phase 8: Orphan role detection ──
+  // Flag roles (except the last/oldest) that have only 1 bullet — looks unfinished
+  for (let ri = 0; ri < resume.experience.length - 1; ri++) {
+    if (resume.experience[ri].bullets.length < 2) {
+      report.orphanRolesDetected++;
+      report.redundanciesFound.push({
+        location: `experience[${ri}]`,
+        phrase: `Role has only ${resume.experience[ri].bullets.length} bullet(s) — may appear incomplete. Consider adding a second bullet or consolidating.`,
+      });
+    }
+  }
+
+  // ── Phase 9: Wall-of-text prevention ──
+  // If any single role has more than 5 bullets after all caps, force trim
+  for (let ri = 0; ri < resume.experience.length; ri++) {
+    if (resume.experience[ri].bullets.length > 5) {
+      const removed = resume.experience[ri].bullets.splice(5);
+      report.wallOfTextRolesTrimmed++;
+      for (let i = 0; i < removed.length; i++) {
+        report.removedBullets.push({
+          roleIndex: ri,
+          bulletIndex: 5 + i,
+          text: removed[i].text,
+          reason: "Wall-of-text prevention: exceeds 5 bullets per role",
+        });
+      }
+    }
+  }
+
+  // ── Phase 10: Verb repetition tracking ──
+  // Track opening verbs across all bullets to flag overuse
+  const verbCounts = new Map<string, number>();
+  for (const exp of resume.experience) {
+    for (const bullet of exp.bullets) {
+      const firstWord = bullet.text.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z]/g, "") || "";
+      if (firstWord.length > 2) {
+        verbCounts.set(firstWord, (verbCounts.get(firstWord) || 0) + 1);
+      }
+    }
+  }
+  report.verbRepetitions = [...verbCounts.entries()]
+    .filter(([, count]) => count > 2)
+    .map(([verb, count]) => ({ verb, count }))
+    .sort((a, b) => b.count - a.count);
 
   // Count final bullets
   report.finalBulletCount = resume.experience.reduce(

@@ -27,6 +27,7 @@ const MIN_ROLES_WITH_DIFFERENT_TOP2 = 0.6; // At least 60% of roles must have di
 // ── Global Phrase Suppression List ──────────────────────────────
 // These stock phrases are banned across ALL outputs to force syntactic variation.
 const GLOBAL_SUPPRESSED_PHRASES = [
+  // Generic identity claims
   "track record of",
   "proven ability to",
   "extensive experience in",
@@ -34,6 +35,13 @@ const GLOBAL_SUPPRESSED_PHRASES = [
   "results-oriented",
   "data-driven leader",
   "transforming organizations",
+  "forward-thinking leader",
+  "thought leader",
+  "seasoned executive",
+  "accomplished leader",
+  "dynamic leader",
+  "visionary leader",
+  // Corporate filler
   "cross-functional collaboration",
   "stakeholder management",
   "end-to-end",
@@ -41,15 +49,45 @@ const GLOBAL_SUPPRESSED_PHRASES = [
   "world-class",
   "cutting-edge",
   "state-of-the-art",
+  "next-generation",
+  "industry-leading",
+  "mission-critical",
+  // Vague value claims
   "leveraging data",
   "actionable insights",
   "data-informed decisions",
   "driving value",
   "unlocking value",
+  "creating value",
+  "adding value",
+  "delivering value",
   "fostering a culture of",
+  "building a culture of",
+  "championing a culture of",
+  // Overused action phrases
   "spearheaded the development",
   "instrumental in",
   "at the forefront of",
+  "played a pivotal role",
+  "played a critical role",
+  "played an integral role",
+  "served as a trusted advisor",
+  "served as a key partner",
+  // Resume-specific clichés
+  "transforming analytics into strategic growth engines",
+  "bridging technical capabilities with business strategy",
+  "positioned analytics as a revenue driver",
+  "distinctly technical for an executive at this level",
+  "career defined by",
+  "unique combination of",
+  "rare blend of",
+  "deep expertise in",
+  "strong background in",
+  "comprehensive understanding of",
+  "adept at navigating",
+  "passion for turning data into",
+  "translating complex data into",
+  "translating insights into action",
 ];
 
 // ── Resume Snapshot (what we store per resume) ──────────────────
@@ -667,6 +705,46 @@ Use DIFFERENT language patterns. Each resume must feel linguistically distinct.
 Return the CORRECTED TailoredResume JSON with meaningfully different framing.`;
 
   return prompt;
+}
+
+/**
+ * Load all suppressed phrases: global static list + dynamic phrases from prior resumes.
+ * Merges the static GLOBAL_SUPPRESSED_PHRASES with key_phrases extracted from
+ * the last N resume snapshots stored in the database.
+ *
+ * This ensures each new resume avoids both universal clichés AND phrases that
+ * have already appeared in recent tailored outputs.
+ */
+export async function loadMergedSuppressionList(
+  currentJobId: number,
+  limit: number = 5,
+): Promise<string[]> {
+  const merged = new Set(GLOBAL_SUPPRESSED_PHRASES.map(p => p.toLowerCase()));
+
+  try {
+    const snapshots = await loadRecentSnapshots(currentJobId, limit);
+    for (const snap of snapshots) {
+      for (const phrase of snap.key_phrases || []) {
+        merged.add(phrase.toLowerCase());
+      }
+    }
+  } catch {
+    // DB unavailable — return static list only
+  }
+
+  return [...merged];
+}
+
+/**
+ * Check a text block against the merged suppression list.
+ * Returns all suppressed phrases found in the text.
+ */
+export function findSuppressedPhrases(
+  text: string,
+  suppressionList: string[],
+): string[] {
+  const lower = text.toLowerCase();
+  return suppressionList.filter(phrase => lower.includes(phrase));
 }
 
 /**

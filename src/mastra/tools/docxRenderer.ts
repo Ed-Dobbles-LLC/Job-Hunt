@@ -15,19 +15,21 @@ import type { TailoredResume } from "./tailoredResumePrompt";
 import type { TailoredCoverLetter } from "./tailoredCoverLetterPrompt";
 
 const FONT = "Calibri";
-const NAME_SIZE = 32;       // Larger, bolder name for executive presence
-const HEADLINE_SIZE = 22;
+const NAME_SIZE = 40;       // 25% larger than previous (32→40) for elite executive presence
+const HEADLINE_SIZE = 21;   // Slightly smaller than before — lighter weight under name
 const CONTACT_SIZE = 18;
 const HEADING_SIZE = 22;
 const BODY_SIZE = 20;
 const SUB_HEADING_SIZE = 20;
 const COMPETENCY_SIZE = 19;
 const BULLET_INDENT = convertInchesToTwip(0.25);
-const SECTION_SPACING_BEFORE = 200;   // Generous space before sections for calm feel
+const SECTION_SPACING_BEFORE = 220;   // Generous space before sections for calm feel
 const SECTION_SPACING_AFTER = 80;     // Breathing room after section heading
 const BULLET_SPACING_AFTER = 50;      // Increased from 40 for more white space
 const PARAGRAPH_SPACING_AFTER = 100;  // Increased from 80 for summary paragraphs
-const ROLE_SPACING_BEFORE = 180;      // Increased from 120 for clear role separation
+const ROLE_SPACING_BEFORE = 200;      // Clear role separation (increased from 180)
+const NAME_SPACING_AFTER = 60;        // Increased breathing room below name
+const HEADER_SECTION_GAP = 160;       // Clear separation between header block and summary
 
 const PAGE_MARGIN_TOP = convertInchesToTwip(0.65);
 const PAGE_MARGIN_BOTTOM = convertInchesToTwip(0.6);
@@ -131,7 +133,7 @@ export async function renderResumeDocx(
   const children: Paragraph[] = [];
   const renderedSections = new Set<string>();
 
-  // ── Name (bold, larger for executive presence) ──
+  // ── Name (bold, 25% larger than body for elite executive presence) ──
   children.push(
     new Paragraph({
       children: [
@@ -140,14 +142,15 @@ export async function renderResumeDocx(
           bold: true,
           size: NAME_SIZE,
           font: FONT,
+          characterSpacing: 40, // Letter-spacing for executive gravitas
         }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 20 },
+      spacing: { after: NAME_SPACING_AFTER },
     }),
   );
 
-  // ── Executive Headline (one clean line below name) ──
+  // ── Executive Headline (lighter weight, directly under name) ──
   const headline = (resume as any).executive_headline;
   if (headline) {
     children.push(
@@ -157,11 +160,12 @@ export async function renderResumeDocx(
             text: safePrimitive(headline),
             size: HEADLINE_SIZE,
             font: FONT,
-            color: "333333",
+            color: "444444",  // Lighter than name — clear visual hierarchy
+            italics: false,
           }),
         ],
         alignment: AlignmentType.CENTER,
-        spacing: { after: 20 },
+        spacing: { after: 30 },
       }),
     );
   }
@@ -186,7 +190,7 @@ export async function renderResumeDocx(
           }),
         ],
         alignment: AlignmentType.CENTER,
-        spacing: { after: 80 },
+        spacing: { after: HEADER_SECTION_GAP },
       }),
     );
   }

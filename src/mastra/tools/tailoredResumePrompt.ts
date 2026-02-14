@@ -56,8 +56,7 @@ export const ResumeBulletSchema = z.object({
     .describe("Verbatim quote from the inventory bullet"),
   claim_ids: z
     .array(z.string())
-    .optional()
-    .describe("Claims Ledger IDs backing this bullet (e.g., ['cl-0-metric-1', 'cl-0-tool-2']). Links to the structured claims extracted from the experience inventory."),
+    .describe("MANDATORY. Claims Ledger IDs backing this bullet (e.g., ['claim-exp001-b2-metric-12M', 'claim-exp001-b2-tool-snowflake']). Every factual claim — metrics, tools, team sizes, budgets — MUST reference at least one claim ID from the Claims Ledger. No claim ID → bullet is rejected."),
 });
 export type ResumeBullet = z.infer<typeof ResumeBulletSchema>;
 
@@ -336,8 +335,10 @@ The resume should feel balanced and calm across both pages — no cramming.
    - Use standard action-verb bullets ("Architected…", "Launched…", "Established…", "Developed…", "Built…", "Designed…")
    - No orphan single-line bullets at page breaks
 
-6. **EVIDENCE POINTERS ARRAY**
-   Produce one evidence_pointers entry per resume bullet. The claim_text must be the exact bullet text you emitted. The source_hash is the inventory bullet ID. The evidence_quote is the verbatim inventory text. Confidence >= 0.7 for all pointers.
+6. **CLAIMS LEDGER TRACEABILITY (MANDATORY)**
+   Every bullet you emit MUST include a populated claim_ids array referencing the Claims Ledger IDs that back each factual claim in the bullet. If the bullet contains a metric, tool, team size, budget, or scope claim, the corresponding claim ID MUST be present. A bullet with an empty or missing claim_ids array will be REJECTED by the truth audit.
+
+   Additionally, produce one evidence_pointers entry per resume bullet. The claim_text must be the exact bullet text you emitted. The source_hash is the inventory bullet ID. The evidence_quote is the verbatim inventory text. Confidence >= 0.7 for all pointers.
 
 7. **DEFENSIBILITY**
    Every claim must withstand the interview question: "Walk me through how you calculated that."
@@ -421,5 +422,117 @@ ${JSON.stringify(allowlist, null, 2)}
 9. PAGE BALANCE: Header + Summary + Competencies + Most Recent Role = Page 1. Everything else = Page 2.
 10. For each JD requirement you CANNOT support, add a gap_note — do NOT fabricate content.
 11. Include ats_keywords_used listing JD keywords you intentionally wove in.
-12. Return ONLY the TailoredResume JSON.`;
+12. CLAIM_IDS ENFORCEMENT: For EVERY bullet, populate the claim_ids array with the Claims Ledger IDs that back each factual claim. Format: "claim-{source_id}-{type}-{normalized_value}". If you cannot find a claim ID for a metric, tool, or scope fact in a bullet, you MUST either (a) remove that fact from the bullet, or (b) rewrite the bullet conservatively using only supported claims. NEVER emit a bullet with unsupported facts and no claim_ids.
+13. VERB DIVERSITY: No opening action verb may appear more than twice across all bullets. If you find yourself reusing "Led", "Drove", or "Developed" more than twice, substitute: Architected, Launched, Established, Created, Built, Designed, Partnered, Deployed, Automated, Scaled, Transformed, Modernized, Restructured, Consolidated, Pioneered, Formalized.
+14. Return ONLY the TailoredResume JSON.`;
+}
+
+/**
+ * Build a constrained rewrite prompt for retry passes.
+ *
+ * Used when the initial generation fails quality checks (truthfulness, differentiation,
+ * or layout violations). Injects the prior attempt's violations as correction directives
+ * and lowers the temperature contract to force more conservative output.
+ *
+ * @param priorResume - The resume JSON from the failed attempt
+ * @param violations - Specific violations to correct
+ * @param suppressedPhrases - Phrases that must not appear in the rewrite
+ * @param divergencePrompt - Optional divergence correction addendum
+ */
+export function buildConstrainedRewritePrompt(
+  priorResume: Record<string, any>,
+  violations: {
+    unsourced_bullets: { role: string; text: string }[];
+    invalid_claim_ids: string[];
+    overlong_bullets: { text: string; wordCount: number }[];
+    banned_phrases_found: string[];
+    generic_opener_detected: boolean;
+    verb_repetitions: { verb: string; count: number }[];
+    first_sentence_not_anchored: boolean;
+  },
+  suppressedPhrases: string[],
+  divergencePrompt?: string,
+): string {
+  const sections: string[] = [];
+
+  sections.push(`## CONSTRAINED REWRITE — CORRECTION PASS
+
+You are rewriting a resume that FAILED quality checks. The prior attempt is below.
+Fix ONLY the violations listed. Do NOT introduce new facts, metrics, tools, or employers.
+Every correction must stay within the Claims Ledger and Entity Allowlist.
+
+### PRIOR ATTEMPT (fix violations, preserve what works)
+${JSON.stringify(priorResume, null, 2).substring(0, 3000)}...`);
+
+  sections.push(`### VIOLATIONS TO CORRECT`);
+
+  if (violations.unsourced_bullets.length > 0) {
+    sections.push(`
+**UNSOURCED BULLETS (MUST add claim_ids or DROP):**
+${violations.unsourced_bullets.map(b => `  - [${b.role}]: "${b.text.substring(0, 80)}..."`).join("\n")}
+For each: either add valid claim_ids from the Claims Ledger, or REMOVE the bullet entirely.`);
+  }
+
+  if (violations.invalid_claim_ids.length > 0) {
+    sections.push(`
+**INVALID CLAIM IDS (do not exist in ledger — REMOVE references):**
+${violations.invalid_claim_ids.map(id => `  - ${id}`).join("\n")}`);
+  }
+
+  if (violations.overlong_bullets.length > 0) {
+    sections.push(`
+**OVERLONG BULLETS (MUST compress to ≤22 words):**
+${violations.overlong_bullets.map(b => `  - (${b.wordCount} words): "${b.text.substring(0, 80)}..."`).join("\n")}
+Use Action → Context → Outcome format. Cut explanatory clauses. One metric per clause.`);
+  }
+
+  if (violations.banned_phrases_found.length > 0) {
+    sections.push(`
+**BANNED STOCK PHRASES (MUST be removed or rewritten):**
+${violations.banned_phrases_found.map(p => `  - "${p}"`).join("\n")}
+Replace each with original, mandate-anchored language.`);
+  }
+
+  if (violations.generic_opener_detected) {
+    sections.push(`
+**GENERIC SUMMARY OPENER DETECTED — REWRITE FIRST SENTENCE.**
+The summary must NOT open with "[Domain] leader who has...", "Executive with a track record...",
+or any "[Role] who/with" pattern. Anchor the first sentence to the job's PRIMARY MANDATE.`);
+  }
+
+  if (violations.first_sentence_not_anchored) {
+    sections.push(`
+**FIRST SENTENCE NOT MANDATE-ANCHORED.**
+The opening sentence must reflect the job's dominant mandate outcome, not a generic identity claim.`);
+  }
+
+  if (violations.verb_repetitions.length > 0) {
+    sections.push(`
+**VERB REPETITION (diversify opening verbs):**
+${violations.verb_repetitions.map(v => `  - "${v.verb}" used ${v.count} times — max 2 per verb`).join("\n")}
+Substitutes: Architected, Launched, Established, Created, Built, Designed, Partnered,
+Deployed, Automated, Scaled, Transformed, Modernized, Restructured, Pioneered, Formalized.`);
+  }
+
+  if (suppressedPhrases.length > 0) {
+    sections.push(`
+### SUPPRESSED PHRASES (DO NOT USE — already used in prior resumes)
+${suppressedPhrases.slice(0, 25).map(p => `  - "${p}"`).join("\n")}`);
+  }
+
+  if (divergencePrompt) {
+    sections.push(divergencePrompt);
+  }
+
+  sections.push(`
+### REWRITE RULES
+1. Fix ALL listed violations.
+2. Preserve correctly-formed bullets, competencies, and structure.
+3. Every bullet MUST have populated claim_ids array.
+4. Summary ≤ 5 lines. Competencies ≤ 12. Bullets: 4/3/3/2 cap.
+5. Max 22 words per bullet. Action → Context → Outcome.
+6. No opening verb used more than twice.
+7. Return ONLY the corrected TailoredResume JSON.`);
+
+  return sections.join("\n\n");
 }
