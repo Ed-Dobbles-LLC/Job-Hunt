@@ -63,7 +63,7 @@ export function getSettingsRoutes() {
     // Serve settings HTML page
     {
       path: "/api/settings",
-      method: "GET",
+      method: "GET" as const,
       createHandler: async () => async (c: any) => {
         const accept = c.req.header("accept") || "";
         if (accept.includes("text/html") || !accept.includes("application/json")) {
@@ -104,7 +104,7 @@ export function getSettingsRoutes() {
     // Get settings as JSON (explicit JSON endpoint)
     {
       path: "/api/settings/list",
-      method: "GET",
+      method: "GET" as const,
       createHandler: async () => async (c: any) => {
         await ensureSettingsTable();
         const dbResult = await query("SELECT key, value FROM app_settings");
@@ -135,7 +135,7 @@ export function getSettingsRoutes() {
     // Update settings
     {
       path: "/api/settings",
-      method: "POST",
+      method: "POST" as const,
       createHandler: async () => async (c: any) => {
         await ensureSettingsTable();
         const body = await c.req.json();

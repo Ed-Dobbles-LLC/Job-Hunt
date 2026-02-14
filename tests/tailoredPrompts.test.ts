@@ -174,6 +174,7 @@ describe("TailoredResume Schema", () => {
         text: "Drove $12M annual cost savings by architecting a unified data platform on Snowflake",
         source_hash: "exp-001-b2",
         evidence_quote: "Drove $12M annual cost savings by architecting a unified data platform on Snowflake",
+        claim_ids: ["claim-exp001-b2-metric-12M", "claim-exp001-b2-tool-snowflake"],
       };
       const result = ResumeBulletSchema.safeParse(bullet);
       expect(result.success).toBe(true);
@@ -207,6 +208,7 @@ describe("TailoredResume Schema", () => {
                 text: "Led a 45-person data organization spanning analytics engineering",
                 source_hash: "exp-001-b1",
                 evidence_quote: "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+                claim_ids: ["claim-exp001-b1-team-45"],
               },
             ],
           },

@@ -1,5 +1,5 @@
 import { Mastra } from "@mastra/core";
-import { MastraError } from "@mastra/core/error";
+
 import { PinoLogger } from "@mastra/loggers";
 import { LogLevel, MastraLogger } from "@mastra/core/logger";
 import pino from "pino";
@@ -156,7 +156,7 @@ export const mastra = new Mastra({
 
       {
         path: "/api/import-emails",
-        method: "POST",
+        method: "POST" as const,
         createHandler: async ({ mastra }) => async (c: any) => {
           const logger = mastra.getLogger();
           const apiKey = process.env.IMPORT_API_KEY;
@@ -212,7 +212,7 @@ export const mastra = new Mastra({
       },
       {
         path: "/api/import-emails",
-        method: "GET",
+        method: "GET" as const,
         createHandler: async ({ mastra }) => async (c: any) => {
           const apiKey = process.env.IMPORT_API_KEY;
           const authHeader = c.req.header("x-api-key") || c.req.header("authorization")?.replace("Bearer ", "");

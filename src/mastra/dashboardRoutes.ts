@@ -1547,7 +1547,7 @@ CRITICAL INSTRUCTIONS:
           const parsed: Array<{
             company: string; title: string; location: string; postingUrl: string;
             jdText: string; compensation: string; remoteHybrid: string; source: string;
-            jdHash: string; simhash: number; level: string; keywords: string[];
+            jdHash: string; simhash: string; level: string; keywords: string[];
           }> = [];
           let skippedCount = 0;
 
