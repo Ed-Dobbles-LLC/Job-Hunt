@@ -18,8 +18,8 @@ The codebase has two generation paths:
 - **Document Generation**: `docx` library (DOCX) + LibreOffice headless (PDF conversion)
 - **Email**: Gmail API via `googleapis` (OAuth2 refresh token flow)
 - **Resume Parsing**: `mammoth` (DOCX), `pdf-parse` (PDF)
-- **Enrichment**: Clay webhooks (optional), Apollo.io job search (optional), OpenAI web search tool
-- **Testing**: Vitest v4 (27 test files)
+- **Enrichment**: 2-phase (URL scraping → LLM web search fallback), Clay webhooks (optional), Apollo.io job search (optional)
+- **Testing**: Vitest v4 (26 test files)
 - **Deployment**: Railway (Dockerfile, `node:22-slim` + LibreOffice)
 - **Language**: TypeScript (strict mode, bundler module resolution)
 - **Formatting**: Prettier
@@ -53,7 +53,7 @@ Gmail / Import API / Apollo / Clay
 │  ┌────────┐  ┌────────────────────────────────────┐ │
 │  │ Tool   │  │ Resume Engine (7-stage pipeline)    │ │
 │  │ Layer  │  │ Claims→Mandate→Score→Rewrite→       │ │
-│  │(48 ts) │  │ Diverge→Layout→Truth                │ │
+│  │(49 ts) │  │ Diverge→Layout→Truth                │ │
 │  └────────┘  └────────────────────────────────────┘ │
 │           │                                          │
 │           ▼                                          │
@@ -79,7 +79,7 @@ src/mastra/
 │   └── index.ts                # Inngest serve config, cron registration, API route forwarding
 ├── storage/
 │   └── index.ts                # ResilientPostgresStore with retry logic for Railway startup
-├── tools/                      # 48 tool files (see Tool Layer section below)
+├── tools/                      # 49 tool files (see Tool Layer section below)
 ├── dashboardRoutes.ts          # Dashboard API (jobs list, detail, preview, download, trigger)
 ├── profileBuilderRoutes.ts     # Profile builder API (resume upload, interview, export)
 ├── jobSourceRoutes.ts          # Job source management API (Apollo, Clay)
@@ -127,7 +127,7 @@ spec/                           # Technical specifications
 .github/workflows/              # CI/CD (auto-merge for claude/* branches)
 ```
 
-## Tool Layer (48 files in `src/mastra/tools/`)
+## Tool Layer (49 files in `src/mastra/tools/`)
 
 ### Core Infrastructure
 | File | Purpose |
@@ -204,7 +204,8 @@ spec/                           # Technical specifications
 |------|---------|
 | `fetchEmailsTool.ts` | Gmail email fetch + fixture fallback + imported_emails processing |
 | `parseJobsTool.ts` | Job parsing + SimHash dedup + DB insert |
-| `enrichJobsTool.ts` | Web search enrichment for thin JDs |
+| `enrichJobsTool.ts` | LLM web search enrichment for thin JDs (Phase 2 fallback) |
+| `urlScrapeEnricher.ts` | Deterministic URL scraping enrichment (Phase 1 — fast, free, no LLM) |
 | `clayEnrichTool.ts` | Clay webhook integration |
 | `apolloJobSearchTool.ts` | Apollo.io job search integration |
 
@@ -234,7 +235,7 @@ The resume engine at `src/resume-engine/` is a deterministic-first pipeline that
 
 1. **Fetch**: Pull emails from Gmail label "Job Alerts" (or fixtures if `USE_FIXTURES=true`), process `imported_emails` table, track in `processed_gmail_ids` table to avoid re-processing
 2. **Parse**: Agent extracts individual job listings → `jobs` table (SimHash dedup on `jd_hash`, audit trail in `dedup_log`)
-3. **Enrich**: Web search fills in full JD text for thin listings; optionally sends to Clay; Apollo.io job search available
+3. **Enrich**: 2-phase enrichment for jobs missing JD text — Phase 1: deterministic URL scraping via `urlScrapeEnricher` (fast, free, no LLM); Phase 2: LLM web search via agent for remaining jobs (batches of 3, maxSteps 15, 2s inter-batch delay). Optionally sends to Clay; Apollo.io job search available
 4. **Score**: Each job scored against `experience_inventory.json` using deterministic `matchScorer` — weighted categories: must_have (35), tech_keywords (25), nice_to_have (15), leadership_scope (15), domain_context (10). Results → `scores` table
 5. **Shortlist**: Top 10 by score proceed to packet generation
 6. **Generate**: For each shortlisted job:
@@ -270,6 +271,8 @@ The resume engine at `src/resume-engine/` is a deterministic-first pipeline that
 - **Conditional Inngest**: Falls back to in-process cron scheduler if Inngest keys not configured. Enables local dev without Inngest.
 - **Settings persistence**: Dual source — database `app_settings` table (primary) with environment variable fallback.
 - **Claim ID linkage**: 4-strategy matching (direct ID, substring, reverse substring, source span overlap) links every resume bullet to its source claim.
+- **2-phase JD enrichment**: Phase 1 tries deterministic URL scraping (fast, free, 10s timeout per URL). Phase 2 uses LLM agent web search for remaining jobs (batches of 3, maxSteps 15, 2s inter-batch delay to avoid rate limiting). Runs as fire-and-forget background task with outer try/catch to prevent silent death.
+- **Background enrichment resilience**: The enrichment IIFE is wrapped in outer try/catch so individual batch failures don't kill the entire process. Frontend polls every 15s for up to 30 minutes.
 
 ## Database Schema
 
@@ -305,10 +308,21 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 - `POST /api/dashboard/jobs/:id/action` — Set job user_action (applied/deleted/null)
 - `GET /api/dashboard/preview/:jobId/:type` — Preview resume/cover/evidence/verifier
 - `GET /api/dashboard/download/:jobId/:type` — Download DOCX/PDF
+- `GET /api/dashboard/download/:jobId/:type/pdf` — Download as PDF (LibreOffice conversion)
 - `GET /api/dashboard/generate-packet/:jobId` — Async single-job packet generation
-- `GET /api/dashboard/generation-status` — Check in-memory generation status
+- `GET /api/dashboard/generate-packet/:jobId/status` — Check single-job generation status
 - `GET /api/dashboard/generation-log` — Last 100 generation log entries
-- `POST /api/dashboard/profile` — Save profile inventory (multipart upload)
+- `POST /api/dashboard/purge-stale-artifacts` — Remove artifacts for jobs with no JD
+- `POST /api/dashboard/purge-all-packets` — Delete all artifacts and reset scores
+- `POST /api/dashboard/rescore` — Re-score all jobs with JD text
+- `POST /api/dashboard/auto-generate-packets` — Batch packet generation (top-N by score)
+- `POST /api/dashboard/quick-add` — Quick-add a job by URL or manual entry
+- `GET /api/dashboard/needs-enrichment` — List jobs missing JD text
+- `POST /api/dashboard/enrich-jobs` — 2-phase enrichment (URL scrape → LLM web search)
+- `POST /api/dashboard/enrich-urls` — URL-only scrape enrichment (no LLM)
+- `PUT /api/dashboard/jobs/:id/jd` — Manually set JD text for a job
+- `GET /api/dashboard/dedup-log` — View deduplication audit trail
+- `POST /api/dashboard/import-excel` — Import jobs from Excel/CSV upload
 
 ### Profile Builder (`profileBuilderRoutes.ts`)
 - `GET /profile` — Serves profile builder HTML
@@ -380,6 +394,7 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 5. **Cover letter word count**: Schema enforces 250-350 words but the LLM sometimes drifts. The verifier catches this but correction doesn't always converge.
 6. **Duplicate `loadInventory()`**: Multiple files define their own `loadInventory()` function reading `experience_inventory.json`. Should be centralized.
 7. **Dual verification tools**: Both `verifyTruthTool.ts` and `verifyTruthfulnessTool.ts` exist with overlapping purpose. Should be consolidated.
+8. **Enrichment is fire-and-forget**: Background enrichment has no persistent progress tracking. If the server restarts mid-enrichment, partially processed batches are lost. A DB-based job queue would be more resilient.
 
 ## Conventions
 
@@ -404,7 +419,7 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 
 **Testing:**
 - Vitest v4 for unit tests (`tests/*.test.ts`)
-- 27 test files covering: scoring, truth verification, formatting validation, role classification, entity allowlist, claims ledger, mandate classification, resume engine E2E, DOCX rendering, digest email, contact discovery, LinkedIn messages, profile builder, tailored prompts
+- 26 test files covering: scoring, truth verification, formatting validation, role classification, entity allowlist, claims ledger, mandate classification, resume engine E2E, DOCX rendering, digest email, contact discovery, LinkedIn messages, profile builder, tailored prompts, URL scrape enrichment
 - Run: `npm test` (vitest run) or `npm run test:watch` (vitest watch mode)
 - Legacy runner: `npm run test:legacy` (tsx direct execution for specific tests)
 - Test timeout: 30s (configured in `vitest.config.ts`)
