@@ -15,8 +15,8 @@ import type { TailoredResume } from "./tailoredResumePrompt";
 import type { TailoredCoverLetter } from "./tailoredCoverLetterPrompt";
 
 const FONT = "Calibri";
-const NAME_SIZE = 40;       // 25% larger than previous (32→40) for elite executive presence
-const HEADLINE_SIZE = 21;   // Slightly smaller than before — lighter weight under name
+const NAME_SIZE = 44;       // 30%+ larger than body for commanding executive presence (was 40)
+const HEADLINE_SIZE = 20;   // Lighter weight under name — name:headline ratio ~2.2x (was 21)
 const CONTACT_SIZE = 18;
 const HEADING_SIZE = 22;
 const BODY_SIZE = 20;

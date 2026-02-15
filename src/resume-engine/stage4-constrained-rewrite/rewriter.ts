@@ -222,6 +222,74 @@ function detectResumeRepetition(
   return results;
 }
 
+// ── Cover Letter Enthusiasm & Structure Validation ───────────────
+
+const GENERIC_ENTHUSIASM_PATTERNS: RegExp[] = [
+  /\bi am (?:truly |deeply |very |genuinely )?excited\b/i,
+  /\bi am (?:truly |deeply )?passionate about\b/i,
+  /\bi am eager to\b/i,
+  /\bi am thrilled\b/i,
+  /\bthis role is (?:a |an )?(?:exciting|incredible|amazing|wonderful)\b/i,
+  /\bwhat (?:a |an )?(?:exciting|incredible|amazing) opportunity\b/i,
+  /\bi would (?:love|relish|welcome) the (?:chance|opportunity) to\b/i,
+  /\bi can't wait to\b/i,
+  /\bi am confident (?:that )?(?:i |my )\b/i,
+  /\bthank you (?:so much )?for (?:your time|considering|this opportunity|reviewing)\b/i,
+  /\bi (?:humbly |respectfully )?submit\b/i,
+  /\bi hope (?:to |you will )\b/i,
+  /\bplease (?:do not hesitate|feel free) to\b/i,
+];
+
+/**
+ * Detect generic enthusiasm and defensive language in cover letter.
+ * Returns matched phrases for correction.
+ */
+function detectGenericEnthusiasm(cl: TailoredCoverLetter): string[] {
+  const fullText = [
+    cl.opening_paragraph,
+    ...cl.body_paragraphs,
+    cl.closing_paragraph,
+  ].join(" ");
+
+  const matches: string[] = [];
+  for (const pattern of GENERIC_ENTHUSIASM_PATTERNS) {
+    const match = fullText.match(pattern);
+    if (match) matches.push(match[0]);
+  }
+  return matches;
+}
+
+/**
+ * Validate cover letter follows the 3-paragraph strategic structure:
+ * - Opening: mandate thesis (not recap)
+ * - Body: 1-2 high-impact examples
+ * - Closing: forward-looking value proposition
+ *
+ * Returns violations if structure is wrong.
+ */
+function validateCoverLetterStructure(cl: TailoredCoverLetter): string[] {
+  const violations: string[] = [];
+
+  // Body must be 1-2 paragraphs (not 3 — opening and closing are separate)
+  if (cl.body_paragraphs.length > 2) {
+    violations.push(`Body has ${cl.body_paragraphs.length} paragraphs — max 2 for focused impact`);
+  }
+
+  // Opening must NOT be a generic interest statement
+  const openingLower = cl.opening_paragraph.toLowerCase();
+  if (/^(i am writing|i am applying|i am interested|i would like to apply)/i.test(cl.opening_paragraph)) {
+    violations.push("Opening starts with generic interest — must lead with mandate alignment thesis");
+  }
+
+  // Closing must NOT be supplicant
+  const closingLower = cl.closing_paragraph.toLowerCase();
+  if (closingLower.includes("thank you for considering") || closingLower.includes("i hope to hear")) {
+    violations.push("Closing uses supplicant language — must state forward-looking value proposition");
+  }
+
+  return violations;
+}
+
 /**
  * Count actual words in cover letter body text.
  */
@@ -572,6 +640,40 @@ Pattern: instead of restating the achievement, explain the STRATEGIC CONTEXT —
         prompt: repCorrectionPrompt,
         temperature: 0.3,
         label: "coverLetter-repetition-correction",
+      });
+      coverLetter.word_count = countCoverLetterWords(coverLetter);
+    }
+
+    // ── Post-LLM Cover Letter Validation: Generic Enthusiasm Ban ──
+    const enthusiasmMatches = detectGenericEnthusiasm(coverLetter);
+    const structureViolations = validateCoverLetterStructure(coverLetter);
+
+    if (enthusiasmMatches.length > 0 || structureViolations.length > 0) {
+      const issues: string[] = [];
+      if (enthusiasmMatches.length > 0) {
+        issues.push(`GENERIC ENTHUSIASM detected: ${enthusiasmMatches.map(m => `"${m}"`).join(", ")}. Remove ALL generic enthusiasm. The tone must be strategic and confident, not eager or defensive.`);
+      }
+      for (const sv of structureViolations) {
+        issues.push(`STRUCTURE: ${sv}`);
+      }
+
+      const structureCorrectionPrompt = `${clUserPrompt}\n\n## TONE & STRUCTURE CORRECTION
+${issues.join("\n")}
+
+RULES:
+- Paragraph 1 (opening): Mandate alignment thesis. NOT "I am excited to apply." State what THIS role requires and your proven capability.
+- Paragraph 2 (body): 1-2 high-impact examples with metrics. No resume restatement.
+- Paragraph 3 (closing): Forward-looking value proposition. NOT "Thank you for considering." State what strategic conversation you want to have.
+- NO generic enthusiasm ("excited", "passionate", "thrilled")
+- NO defensive hedging ("I am confident that", "I hope to")
+- Tone: strategic peer, not eager applicant.`;
+
+      coverLetter = await safeGenerateObject({
+        schema: TailoredCoverLetterSchema,
+        system: clSystemPrompt,
+        prompt: structureCorrectionPrompt,
+        temperature: 0.2,
+        label: "coverLetter-structure-correction",
       });
       coverLetter.word_count = countCoverLetterWords(coverLetter);
     }

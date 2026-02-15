@@ -301,7 +301,13 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
 
         // Log tone violations as diagnostics
         if (stage6.data.tone_violations.length > 0) {
-          logger?.info(`⚠️ [Pipeline] ${stage6.data.tone_violations.length} bullet tone violation(s): ${stage6.data.tone_violations.map(v => v.issue).join(", ")}`);
+          logger?.info(`⚠️ [Pipeline] ${stage6.data.tone_violations.length} bullet tone violation(s): ${stage6.data.tone_violations.map((v: any) => v.issue).join(", ")}`);
+        }
+
+        // Log verb strength results
+        if (stage6.data.verb_strength) {
+          const vs = stage6.data.verb_strength;
+          logger?.info(`🔤 [Pipeline] Verb strength: ${vs.upgrades_applied} mandate upgrades, ${vs.diversity_fixes} diversity fixes, ${vs.generic_verbs_remaining} generic verbs remaining, ${vs.mandate_aligned_pct}% mandate-aligned`);
         }
       }
 

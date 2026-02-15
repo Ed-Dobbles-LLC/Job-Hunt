@@ -18,11 +18,13 @@ import { query } from "./db";
 import type { TailoredResume } from "./tailoredResumePrompt";
 import type { MandateProfile } from "./mandateClassifier";
 
-// ── Thresholds (tightened for elite-caliber differentiation) ────
-const SUMMARY_OVERLAP_THRESHOLD = 0.30;   // >30% overlap = too similar (tightened from 40%)
-const COMPETENCY_OVERLAP_THRESHOLD = 0.50; // >50% overlap = too similar (tightened from 60%)
-const BULLET_SIMILARITY_THRESHOLD = 0.40;  // >40% top-3 bullet similarity = too similar (tightened from 50%)
-const MIN_ROLES_WITH_DIFFERENT_TOP2 = 0.6; // At least 60% of roles must have different top-2 bullets (tightened from 50%)
+// ── Thresholds (tightened for elite-tier positioning) ────────────
+// >25% summary overlap → force structural rewrite (was 30%)
+// >35% → force completely new summary architecture pattern
+const SUMMARY_OVERLAP_THRESHOLD = 0.25;
+const COMPETENCY_OVERLAP_THRESHOLD = 0.40; // >40% competency overlap = too similar (was 50%)
+const BULLET_SIMILARITY_THRESHOLD = 0.35;  // >35% top-3 bullet similarity = too similar (was 40%)
+const MIN_ROLES_WITH_DIFFERENT_TOP2 = 0.7; // At least 70% of roles must have different top-2 bullets (was 60%)
 
 // ── Global Phrase Suppression List ──────────────────────────────
 // These stock phrases are banned across ALL outputs to force syntactic variation.

@@ -464,16 +464,20 @@ export function runTruthAudit(
     report.stats.warnings++;
   }
 
-  // Add summary opener violation if banned pattern detected
+  // Block if summary opens with a banned generic pattern
+  // The first sentence MUST be mandate-anchored — generic openers fail the executive presence test
   if (summaryOpenerAudit.has_banned_opener) {
     report.violations.push({
       type: "STYLE_RULE_BROKEN",
-      severity: "warning",
+      severity: "critical",
       location: "resume.professional_summary",
       found_value: summaryOpenerAudit.matched_pattern,
       explanation: `Summary opens with a banned generic pattern. The first sentence must be psychologically anchored to the job mandate, not a reusable template.`,
     });
-    report.stats.warnings++;
+    report.stats.critical_violations++;
+    blockReasons.push(
+      `Summary uses banned generic opener: "${summaryOpenerAudit.matched_pattern}" — must lead with mandate-specific thesis`,
+    );
   }
 
   return {

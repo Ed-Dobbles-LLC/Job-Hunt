@@ -102,6 +102,17 @@ export interface ExecutiveToneScore {
   career_depth_roles: number;        // Number of enterprise roles (min 3 for exec presence)
 }
 
+export interface VerbStrengthScore {
+  score: number;                       // 0-100
+  total_bullets: number;
+  generic_verb_count: number;          // "led", "built", "managed", "transformed" still in use
+  mandate_aligned_count: number;       // Bullets starting with mandate-specific verbs
+  mandate_aligned_pct: number;         // % of bullets mandate-aligned
+  diversity_score: number;             // 100 = all unique openers, 0 = all same verb
+  max_verb_repetitions: number;        // Highest count of any single opener verb
+  verb_map: Record<string, number>;    // verb → usage count
+}
+
 export interface OwnershipInflationReport {
   total_warnings: number;
   critical_count: number;
@@ -121,6 +132,7 @@ export interface QualityReport {
   page_compliance: PageComplianceStatus;
   phrase_repetition: PhraseRepetitionReport;
   layout_compliance: LayoutComplianceScore;
+  verb_strength: VerbStrengthScore;
   ownership_inflation: OwnershipInflationReport;
   blocking_issues: string[];         // Issues that must be fixed before output
   warnings: string[];                // Non-blocking quality issues
@@ -358,11 +370,11 @@ export function scoreDifferentiation(
   const worstBullet = Math.max(0, ...divergenceResult.bullet_similarity.map(o => o.similarity_pct));
   const suppressedCount = divergenceResult.suppressed_phrases.length;
 
-  // Score: inverse of worst overlaps, weighted
+  // Score: inverse of worst overlaps, weighted (tightened thresholds)
   // Summary 40%, Competency 25%, Bullet 25%, Phrase cleanliness 10%
-  const summaryScore = Math.max(0, 100 - worstSummary * (100 / 30));  // 0 at 30% overlap
-  const compScore = Math.max(0, 100 - worstComp * (100 / 50));        // 0 at 50% overlap
-  const bulletScore = Math.max(0, 100 - worstBullet * (100 / 40));     // 0 at 40% overlap
+  const summaryScore = Math.max(0, 100 - worstSummary * (100 / 25));  // 0 at 25% overlap
+  const compScore = Math.max(0, 100 - worstComp * (100 / 40));        // 0 at 40% overlap
+  const bulletScore = Math.max(0, 100 - worstBullet * (100 / 35));     // 0 at 35% overlap
   const phraseScore = Math.max(0, 100 - suppressedCount * 10);         // -10 per phrase
 
   const score = Math.round(
@@ -688,16 +700,89 @@ export function scoreExecutiveTone(resume: TailoredResume): ExecutiveToneScore {
   };
 }
 
+// ── Verb Strength Scorer ─────────────────────────────────────────
+
+const GENERIC_STRONG_VERBS_SET = new Set(["led", "built", "managed", "transformed", "drove", "created", "developed"]);
+
+export function scoreVerbStrength(
+  resume: TailoredResume,
+  mandate?: MandateProfile,
+): VerbStrengthScore {
+  const MANDATE_VERB_POOL: Record<string, Set<string>> = {
+    governance_standardization: new Set(["instituted", "codified", "standardized", "embedded", "enforced", "formalized", "governed"]),
+    bi_platform_modernization: new Set(["architected", "migrated", "replatformed", "engineered", "unified", "modernized", "scaled"]),
+    insight_delivery_automation: new Set(["operationalized", "automated", "democratized", "surfaced", "instrumented", "accelerated"]),
+    founder_adjacent_builder: new Set(["launched", "bootstrapped", "founded", "pioneered", "incubated", "originated"]),
+    revenue_ops_forecasting: new Set(["recaptured", "forecasted", "recovered", "monetized", "optimized", "repriced", "modeled"]),
+    operating_model_transformation: new Set(["redesigned", "restructured", "overhauled", "reengineered", "consolidated", "realigned", "repositioned"]),
+    product_gtm_analytics: new Set(["instrumented", "segmented", "personalized", "activated", "converted", "tracked"]),
+    growth_monetization: new Set(["converted", "experimented", "optimized", "monetized", "funneled", "tested", "iterated"]),
+    executive_storytelling: new Set(["influenced", "briefed", "positioned", "advised", "counseled", "steered", "shaped"]),
+    team_leadership_scale: new Set(["recruited", "mentored", "scaled", "organized", "elevated", "coached"]),
+  };
+
+  const mandateVerbSet = mandate ? MANDATE_VERB_POOL[mandate.primary_mandate] || new Set() : new Set();
+  const verbMap: Record<string, number> = {};
+  let genericCount = 0;
+  let mandateAligned = 0;
+  let totalBullets = 0;
+
+  for (const exp of resume.experience) {
+    for (const bullet of exp.bullets) {
+      totalBullets++;
+      const verb = bullet.text.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z]/g, "") || "";
+      verbMap[verb] = (verbMap[verb] || 0) + 1;
+      if (GENERIC_STRONG_VERBS_SET.has(verb)) genericCount++;
+      if (mandateVerbSet.has(verb)) mandateAligned++;
+    }
+  }
+
+  const uniqueVerbs = Object.keys(verbMap).length;
+  const maxRep = Math.max(0, ...Object.values(verbMap));
+  const diversityScore = totalBullets > 0
+    ? Math.round((uniqueVerbs / totalBullets) * 100)
+    : 0;
+  const mandateAlignedPct = totalBullets > 0
+    ? Math.round((mandateAligned / totalBullets) * 100)
+    : 0;
+
+  // Score: start at 100
+  // -5 per generic verb still present
+  // -10 per verb used 3+ times
+  // +10 if mandate-aligned > 30%
+  // +5 if diversity > 80%
+  let score = 100;
+  score -= genericCount * 5;
+  const overused = Object.values(verbMap).filter(c => c >= 3).length;
+  score -= overused * 10;
+  if (mandateAlignedPct >= 30) score += 10;
+  else if (mandateAlignedPct < 10) score -= 10;
+  if (diversityScore >= 80) score += 5;
+  else if (diversityScore < 50) score -= 10;
+
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    total_bullets: totalBullets,
+    generic_verb_count: genericCount,
+    mandate_aligned_count: mandateAligned,
+    mandate_aligned_pct: mandateAlignedPct,
+    diversity_score: diversityScore,
+    max_verb_repetitions: maxRep,
+    verb_map: verbMap,
+  };
+}
+
 // ── Composite Scorer ─────────────────────────────────────────────
 
 /**
  * Compute the full quality report for a generated resume.
  *
- * Weights (truthfulness-first, executive-tone elevated):
- *   Truthfulness:      30%  (non-negotiable — factual accuracy is the hard gate)
+ * Weights (8 dimensions):
+ *   Truthfulness:      25%  (non-negotiable — factual accuracy is the hard gate)
+ *   Verb Strength:     10%  (mandate-aligned verb authority + diversity)
  *   Executive Tone:    15%  (decisive, board-level, no hedging/supplicant)
  *   Mandate Alignment: 15%  (does the resume serve THIS job?)
- *   Readability:       15%  (compression + formatting cleanliness)
+ *   Readability:       10%  (compression + formatting cleanliness)
  *   Differentiation:   10%  (distinct from prior outputs)
  *   Layout Compliance: 10%  (structural rules)
  *   Phrase Cleanliness:  5% (inverse of repetition)
@@ -717,6 +802,7 @@ export function computeQualityReport(
   const differentiation = scoreDifferentiation(options.divergenceResult);
   const readability = scoreReadability(resume);
   const executiveTone = scoreExecutiveTone(resume);
+  const verbStrength = scoreVerbStrength(resume, options.mandate);
   const pageCompliance = scorePageCompliance(resume, options.pageCount);
   const phraseRepetition = scorePhraseRepetition(resume);
   const layoutCompliance = scoreLayoutCompliance(resume);
@@ -734,12 +820,13 @@ export function computeQualityReport(
   // Phrase cleanliness score (inverse of repetition)
   const phraseCleanScore = Math.max(0, 100 - phraseRepetition.count * 8);
 
-  // Weighted composite (30/15/15/15/10/10/5)
+  // Weighted composite (25/10/15/15/10/10/10/5)
   const overall = Math.round(
-    truthfulness.score * 0.30 +
+    truthfulness.score * 0.25 +
+    verbStrength.score * 0.10 +
     executiveTone.score * 0.15 +
     mandateAlignment.score * 0.15 +
-    readability.score * 0.15 +
+    readability.score * 0.10 +
     differentiation.score * 0.10 +
     layoutCompliance.score * 0.10 +
     phraseCleanScore * 0.05,
@@ -769,11 +856,11 @@ export function computeQualityReport(
   if (truthfulness.score < 100) {
     blocking.push(`Truthfulness score is ${truthfulness.score}% — must be 100% (all bullets need valid claim_ids)`);
   }
-  if (differentiation.worst_summary_overlap > 50) {
-    blocking.push(`Summary overlap ${differentiation.worst_summary_overlap}% with prior resume — must be < 30% (force rewrite)`);
+  if (differentiation.worst_summary_overlap > 35) {
+    blocking.push(`Summary overlap ${differentiation.worst_summary_overlap}% with prior resume — must be < 25% (force new structure)`);
   }
-  if (differentiation.worst_bullet_similarity > 60) {
-    blocking.push(`Top-bullet similarity ${differentiation.worst_bullet_similarity}% with prior resume — must be < 40% (force rewrite)`);
+  if (differentiation.worst_bullet_similarity > 50) {
+    blocking.push(`Top-bullet similarity ${differentiation.worst_bullet_similarity}% with prior resume — must be < 35% (force rewrite)`);
   }
 
   // Warnings
@@ -800,8 +887,8 @@ export function computeQualityReport(
   if (!layoutCompliance.scope_lines_present) {
     warnings.push("Not all roles have scope lines — add enterprise context");
   }
-  if (differentiation.worst_summary_overlap > 25) {
-    warnings.push(`Summary ${differentiation.worst_summary_overlap}% overlap with prior resume`);
+  if (differentiation.worst_summary_overlap > 20) {
+    warnings.push(`Summary ${differentiation.worst_summary_overlap}% overlap with prior resume — approaching 25% threshold`);
   }
   // Executive tone warnings
   if (executiveTone.passive_voice_count > 0) {
@@ -818,6 +905,16 @@ export function computeQualityReport(
   }
   if (executiveTone.decisive_action_pct < 60) {
     warnings.push(`Only ${executiveTone.decisive_action_pct}% of bullets start with strong action verbs — aim for 80%+`);
+  }
+  // Verb strength warnings
+  if (verbStrength.generic_verb_count > 3) {
+    warnings.push(`${verbStrength.generic_verb_count} generic verbs ("led", "built", "managed") — upgrade to mandate-aligned alternatives`);
+  }
+  if (verbStrength.max_verb_repetitions > 2) {
+    warnings.push(`Opener verb used ${verbStrength.max_verb_repetitions} times — diversify (max 2x per verb)`);
+  }
+  if (verbStrength.mandate_aligned_pct < 20) {
+    warnings.push(`Only ${verbStrength.mandate_aligned_pct}% of bullets use mandate-aligned verbs — aim for 30%+`);
   }
   if (executiveTone.career_depth_roles < 3) {
     warnings.push(`Only ${executiveTone.career_depth_roles} role(s) shown — minimum 3 for executive career depth`);
@@ -845,6 +942,7 @@ export function computeQualityReport(
     page_compliance: pageCompliance,
     phrase_repetition: phraseRepetition,
     layout_compliance: layoutCompliance,
+    verb_strength: verbStrength,
     ownership_inflation: ownershipInflation,
     blocking_issues: blocking,
     warnings,

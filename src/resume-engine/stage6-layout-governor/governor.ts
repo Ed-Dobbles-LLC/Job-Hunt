@@ -58,6 +58,29 @@ const SOFT_VERB_REPLACEMENTS: Record<string, string> = {
   facilitated: "Orchestrated",
 };
 
+// ── Generic-Strong Verb Upgrades (Verb Strength Pass) ───────────
+//
+// "Led", "built", "managed", "transformed" are accurate but overused.
+// When the mandate signals a specific archetype, swap to mandate-aligned
+// verbs that convey domain-specific authority.
+
+const GENERIC_STRONG_VERBS = ["led", "built", "managed", "transformed", "drove", "created", "developed"];
+
+/** Mandate-aligned verb alternatives. Each mandate maps to a pool of verbs
+ * that convey the right KIND of authority for that archetype. */
+const MANDATE_VERB_POOL: Record<string, string[]> = {
+  governance_standardization: ["Instituted", "Codified", "Standardized", "Embedded", "Enforced", "Formalized", "Governed"],
+  bi_platform_modernization: ["Architected", "Migrated", "Replatformed", "Engineered", "Unified", "Modernized", "Scaled"],
+  insight_delivery_automation: ["Operationalized", "Automated", "Democratized", "Surfaced", "Instrumented", "Embedded", "Accelerated"],
+  founder_adjacent_builder: ["Stood up", "Launched", "Bootstrapped", "Founded", "Pioneered", "Incubated", "Originated"],
+  revenue_ops_forecasting: ["Recaptured", "Forecasted", "Recovered", "Monetized", "Optimized", "Repriced", "Modeled"],
+  operating_model_transformation: ["Redesigned", "Restructured", "Overhauled", "Reengineered", "Consolidated", "Realigned", "Repositioned"],
+  product_gtm_analytics: ["Instrumented", "Segmented", "Personalized", "Activated", "Converted", "Optimized", "Tracked"],
+  growth_monetization: ["Converted", "Experimented", "Optimized", "Monetized", "Funneled", "Tested", "Iterated"],
+  executive_storytelling: ["Influenced", "Briefed", "Positioned", "Advised", "Counseled", "Steered", "Shaped"],
+  team_leadership_scale: ["Recruited", "Mentored", "Scaled", "Organized", "Elevated", "Coached", "Developed"],
+};
+
 /** Safe managerial phrasing that sounds impressive but says nothing. */
 const SAFE_MANAGERIAL_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /^(?:oversaw|managed|responsible for)\s+(?:the\s+)?(?:day-to-day|daily|ongoing|routine)\b/i, label: "routine oversight" },
@@ -294,13 +317,27 @@ function refineBulletTone(resume: TailoredResume): ToneViolation[] {
         }
       }
 
-      // Check stacked clauses (3+ commas indicate over-complexity)
+      // Check stacked clauses (3+ commas indicate over-complexity) — AUTO-FIX
       const commaCount = (bullet.text.match(/,/g) || []).length;
       if (commaCount >= 3) {
+        // Auto-fix: simplify by truncating at the 2nd comma boundary
+        const parts = bullet.text.split(/,\s*/);
+        if (parts.length >= 3) {
+          // Keep the first 2 clauses + a clean ending from the 3rd
+          const simplified = parts.slice(0, 2).join(", ");
+          const remainder = parts.slice(2).join(", ").trim();
+          // Take only the first phrase from remainder (up to next natural break)
+          const endPhrase = remainder.split(/[;—]/)[0]?.trim() || "";
+          bullet.text = endPhrase ? `${simplified} — ${endPhrase}` : simplified;
+          // Ensure clean ending
+          if (bullet.text.length > 0 && !bullet.text.match(/[.!?]$/)) {
+            bullet.text = bullet.text.replace(/[,;:\s]+$/, "");
+          }
+        }
         violations.push({
           location: loc,
-          issue: `stacked_clauses: ${commaCount} commas`,
-          original: bullet.text.substring(0, 60),
+          issue: `stacked_clauses: ${commaCount} commas → auto-simplified`,
+          original: text.substring(0, 60),
         });
       }
 
@@ -321,13 +358,160 @@ function refineBulletTone(resume: TailoredResume): ToneViolation[] {
   return violations;
 }
 
+// ── Verb Strength Pass ──────────────────────────────────────────
+
+export interface VerbStrengthResult {
+  upgrades_applied: number;
+  diversity_fixes: number;
+  verb_map: Record<string, number>;     // verb → usage count after pass
+  generic_verbs_remaining: number;      // "led", "built", etc. still present
+  mandate_aligned_pct: number;          // % of bullets starting with mandate verbs
+}
+
+/**
+ * Verb Strength Pass:
+ * 1. Replace generic-strong verbs (led, built, managed, transformed) with
+ *    mandate-aligned alternatives when the mandate provides a better option.
+ * 2. Enforce verb diversity: no opener verb used more than twice across the
+ *    entire resume. If duplicated, substitute from mandate pool or general pool.
+ *
+ * Does NOT touch soft verbs (handled by refineBulletTone) or ownership
+ * inflation (handled by Stage 7).
+ */
+function verbStrengthPass(resume: TailoredResume, mandate: MandateProfile): VerbStrengthResult {
+  const mandatePool = MANDATE_VERB_POOL[mandate.primary_mandate] || [];
+  let upgradesApplied = 0;
+  let diversityFixes = 0;
+
+  // Step 1: Collect all opener verbs and their positions
+  const verbPositions: { roleIdx: number; bulletIdx: number; verb: string }[] = [];
+  for (let ri = 0; ri < resume.experience.length; ri++) {
+    for (let bi = 0; bi < resume.experience[ri].bullets.length; bi++) {
+      const text = resume.experience[ri].bullets[bi].text;
+      const firstWord = text.trim().split(/\s+/)[0]?.replace(/[^a-zA-Z]/g, "") || "";
+      verbPositions.push({ roleIdx: ri, bulletIdx: bi, verb: firstWord.toLowerCase() });
+    }
+  }
+
+  // Step 2: Replace generic-strong verbs with mandate-aligned alternatives
+  // Only upgrade if mandate pool has unused alternatives
+  const usedMandateVerbs = new Set<string>();
+  for (const vp of verbPositions) {
+    if (GENERIC_STRONG_VERBS.includes(vp.verb) && mandatePool.length > 0) {
+      // Find a mandate verb that hasn't been used yet
+      const available = mandatePool.filter(v => !usedMandateVerbs.has(v.toLowerCase()));
+      if (available.length > 0) {
+        const replacement = available[0];
+        usedMandateVerbs.add(replacement.toLowerCase());
+        const bullet = resume.experience[vp.roleIdx].bullets[vp.bulletIdx];
+        const rest = bullet.text.substring(bullet.text.indexOf(vp.verb) + vp.verb.length);
+        // Only capitalize if the replacement isn't already multi-word
+        bullet.text = replacement + rest;
+        vp.verb = replacement.toLowerCase().split(/\s+/)[0]; // Update tracker
+        upgradesApplied++;
+      }
+    }
+  }
+
+  // Step 3: Enforce verb diversity — no verb used more than 2x
+  const verbCounts = new Map<string, number>();
+  for (const vp of verbPositions) {
+    verbCounts.set(vp.verb, (verbCounts.get(vp.verb) || 0) + 1);
+  }
+
+  // General-purpose diverse verb pool for substitution
+  const generalPool = [
+    "Spearheaded", "Directed", "Executed", "Implemented", "Negotiated",
+    "Secured", "Deployed", "Integrated", "Replaced", "Eliminated",
+    "Generated", "Accelerated", "Expanded", "Introduced", "Formalized",
+  ];
+  const usedDiversity = new Set<string>(verbPositions.map(vp => vp.verb));
+
+  for (const vp of verbPositions) {
+    const count = verbCounts.get(vp.verb) || 0;
+    if (count > 2) {
+      // Find a substitute from mandate pool first, then general pool
+      const allOptions = [...mandatePool, ...generalPool];
+      const available = allOptions.filter(v => !usedDiversity.has(v.toLowerCase()));
+      if (available.length > 0) {
+        const replacement = available[0];
+        usedDiversity.add(replacement.toLowerCase());
+        const bullet = resume.experience[vp.roleIdx].bullets[vp.bulletIdx];
+        const rest = bullet.text.substring(bullet.text.indexOf(vp.verb) + vp.verb.length);
+        bullet.text = replacement + rest;
+        verbCounts.set(vp.verb, count - 1); // Decrement old count
+        diversityFixes++;
+      }
+    }
+  }
+
+  // Step 4: Compute final verb map and metrics
+  const finalVerbMap: Record<string, number> = {};
+  let mandateAlignedCount = 0;
+  const mandateVerbSet = new Set(mandatePool.map(v => v.toLowerCase().split(/\s+/)[0]));
+
+  for (const exp of resume.experience) {
+    for (const bullet of exp.bullets) {
+      const verb = bullet.text.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z]/g, "") || "";
+      finalVerbMap[verb] = (finalVerbMap[verb] || 0) + 1;
+      if (mandateVerbSet.has(verb)) mandateAlignedCount++;
+    }
+  }
+
+  const totalBullets = resume.experience.reduce((s, e) => s + e.bullets.length, 0);
+  const genericRemaining = Object.entries(finalVerbMap)
+    .filter(([v]) => GENERIC_STRONG_VERBS.includes(v))
+    .reduce((s, [, c]) => s + c, 0);
+
+  return {
+    upgrades_applied: upgradesApplied,
+    diversity_fixes: diversityFixes,
+    verb_map: finalVerbMap,
+    generic_verbs_remaining: genericRemaining,
+    mandate_aligned_pct: totalBullets > 0 ? Math.round((mandateAlignedCount / totalBullets) * 100) : 0,
+  };
+}
+
 // ── Competency Cap Enforcement ──────────────────────────────────
 
-function enforceCompetencyCap(resume: TailoredResume): boolean {
-  const comps = (resume as any).core_competencies;
+/** Mandate keyword relevance for competency sorting. */
+const MANDATE_COMP_KEYWORDS: Record<string, string[]> = {
+  governance_standardization: ["governance", "compliance", "audit", "control", "framework", "quality", "risk", "standard"],
+  bi_platform_modernization: ["platform", "cloud", "architecture", "pipeline", "infrastructure", "migration", "warehouse", "lake"],
+  insight_delivery_automation: ["reporting", "dashboard", "self-service", "analytics", "insight", "automation", "visualization"],
+  founder_adjacent_builder: ["startup", "zero-to-one", "product", "mvp", "agile", "lean", "build"],
+  revenue_ops_forecasting: ["revenue", "forecast", "pricing", "financial", "p&l", "margin", "demand"],
+  operating_model_transformation: ["operating model", "transformation", "change management", "process", "optimization", "redesign"],
+  product_gtm_analytics: ["product", "go-to-market", "user", "adoption", "engagement", "feature", "journey"],
+  growth_monetization: ["growth", "experiment", "a/b", "conversion", "funnel", "monetization", "testing"],
+  executive_storytelling: ["storytelling", "board", "executive", "strategy", "advisory", "influence", "communication"],
+  team_leadership_scale: ["leadership", "team", "talent", "organizational", "hiring", "mentoring", "scaling"],
+};
+
+/**
+ * Enforce competency cap at 10 items (curated, not dumped).
+ * When over the cap, sort competencies by mandate relevance before trimming.
+ * This ensures the most mandate-aligned competencies survive the cut.
+ */
+function enforceCompetencyCap(resume: TailoredResume, mandate?: MandateProfile): boolean {
+  const COMPETENCY_CAP = 10; // Curated: 8-10 items for visual clarity
+  const comps: string[] = (resume as any).core_competencies;
   if (!Array.isArray(comps)) return false;
-  if (comps.length > 12) {
-    (resume as any).core_competencies = comps.slice(0, 12);
+
+  if (comps.length > COMPETENCY_CAP) {
+    // Sort by mandate relevance before slicing
+    if (mandate) {
+      const keywords = MANDATE_COMP_KEYWORDS[mandate.primary_mandate] || [];
+      const scored = comps.map(c => {
+        const lower = c.toLowerCase();
+        const mandateScore = keywords.filter(kw => lower.includes(kw)).length;
+        return { comp: c, score: mandateScore };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      (resume as any).core_competencies = scored.slice(0, COMPETENCY_CAP).map(s => s.comp);
+    } else {
+      (resume as any).core_competencies = comps.slice(0, COMPETENCY_CAP);
+    }
     return true;
   }
   return false;
@@ -504,9 +688,9 @@ function estimatePages(resume: TailoredResume): PageEstimate {
       }
     }
 
-    // Suggest trimming competencies
-    if (comps.length > 10) {
-      suggestions.push(`Trim competencies from ${comps.length} to 10 — saves ~${Math.ceil((comps.length - 10) * 0.3)} lines`);
+    // Suggest trimming competencies (cap is 10 for curated visual clarity)
+    if (comps.length > 8) {
+      suggestions.push(`Trim competencies from ${comps.length} to 8 — saves ~${Math.ceil((comps.length - 8) * 0.3)} lines`);
     }
 
     // Suggest trimming summary
@@ -580,11 +764,11 @@ function compressToPageBudget(resume: TailoredResume): { compressed: boolean; bl
     estimate = estimatePages(resume);
   }
 
-  // Step 3: Trim competencies to 10
+  // Step 3: Trim competencies to 8 (aggressive — curated over dumped)
   const comps = (resume as any).core_competencies;
-  if (estimate.exceeds_2_pages && Array.isArray(comps) && comps.length > 10) {
-    (resume as any).core_competencies = comps.slice(0, 10);
-    actions.push(`Trimmed competencies from ${comps.length} to 10`);
+  if (estimate.exceeds_2_pages && Array.isArray(comps) && comps.length > 8) {
+    (resume as any).core_competencies = comps.slice(0, 8);
+    actions.push(`Trimmed competencies from ${comps.length} to 8`);
     estimate = estimatePages(resume);
   }
 
@@ -708,6 +892,7 @@ export interface GovernorResult {
   word_limit_truncations: string[];
   filler_removals: string[];
   tone_violations: ToneViolation[];
+  verb_strength: VerbStrengthResult;
   competency_capped: boolean;
   scope_line_fixes: string[];
   summary_trimmed: boolean;
@@ -756,8 +941,11 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
   // 6. Bullet tone refinement pass
   const toneViolations = refineBulletTone(resume);
 
-  // 7. Competency cap (10-12)
-  const competencyCapped = enforceCompetencyCap(resume);
+  // 6b. Verb Strength Pass (mandate-aligned upgrades + diversity enforcement)
+  const verbStrength = verbStrengthPass(resume, mandate);
+
+  // 7. Competency cap (8-10, mandate-sorted)
+  const competencyCapped = enforceCompetencyCap(resume, mandate);
 
   // 8. Scope line enforcement (1 line max, ~120 chars)
   const scopeLineFixes = enforceScopeLines(resume);
@@ -787,6 +975,7 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
     word_limit_truncations: wordLimitTruncations,
     filler_removals: fillerRemovals,
     tone_violations: toneViolations,
+    verb_strength: verbStrength,
     competency_capped: competencyCapped,
     scope_line_fixes: scopeLineFixes,
     summary_trimmed: summaryTrimmed,
