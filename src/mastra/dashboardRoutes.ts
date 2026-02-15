@@ -40,8 +40,10 @@ interface PacketGenStatus {
   result?: any;
   error?: string;
   hint?: string;
+  abort?: AbortController;
 }
 const packetGenStatus = new Map<number, PacketGenStatus>();
+const GENERATION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max per generation
 
 function updateGenStatus(jobId: number, update: Partial<PacketGenStatus>) {
   const existing = packetGenStatus.get(jobId);
@@ -700,15 +702,33 @@ export function getDashboardRoutes() {
             }, 202);
           }
 
-          // Initialize status tracker — return 202 immediately
+          // Initialize status tracker with abort controller — return 202 immediately
+          const genAbort = new AbortController();
           packetGenStatus.set(jobId, {
             job_id: jobId,
             status: "queued",
             phase: "init",
             started_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
+            abort: genAbort,
           });
           logGen({ jobId, company: job.company, title: job.title, status: "running", message: "Starting generation...", phase: "init" });
+
+          // Outer timeout: kill generation after 10 minutes
+          const genTimeout = setTimeout(() => {
+            const status = packetGenStatus.get(jobId);
+            if (status && status.status !== "done" && status.status !== "error") {
+              logger?.error(`⏰ [generate-packet] TIMEOUT after ${GENERATION_TIMEOUT_MS / 1000}s for job_id=${jobId} (stuck at ${status.phase})`);
+              logGen({ jobId, company: job.company, title: job.title, status: "error", message: `Generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s at phase: ${status.phase}`, phase: status.phase });
+              updateGenStatus(jobId, {
+                status: "error",
+                phase: status.phase,
+                error: `Generation timed out after ${Math.round(GENERATION_TIMEOUT_MS / 60000)} minutes. The LLM may be slow or unresponsive. Try again.`,
+                hint: "If this keeps happening, check OpenAI status at status.openai.com.",
+              });
+              genAbort.abort();
+            }
+          }, GENERATION_TIMEOUT_MS);
 
           // Fire-and-forget: run the heavy pipeline in the background
           (async () => {
@@ -743,6 +763,13 @@ export function getDashboardRoutes() {
                   });
                   return;
                 }
+              }
+
+              // Check for abort before expensive Phase 2
+              if (genAbort.signal.aborted) {
+                logger?.warn(`🛑 [generate-packet] Aborted before Phase 2 for job_id=${jobId}`);
+                clearTimeout(genTimeout);
+                return;
               }
 
               // Phase 2: Generate verified packet (resume + cover letter + truth verification)
@@ -794,6 +821,13 @@ export function getDashboardRoutes() {
                 confidence: p.confidence,
               }));
               const combinedEvidence = [...resumePointers, ...clPointers];
+
+              // Check for abort before Phase 4
+              if (genAbort.signal.aborted) {
+                logger?.warn(`🛑 [generate-packet] Aborted before Phase 4 for job_id=${jobId}`);
+                clearTimeout(genTimeout);
+                return;
+              }
 
               // Phase 4: Render DOCX and save to DB (primary) + filesystem (best-effort)
               updateGenStatus(jobId, { status: "rendering", phase: "render-docx" });
@@ -885,6 +919,7 @@ export function getDashboardRoutes() {
               logGen({ jobId, company: job.company, title: job.title, status: "success", message: `${resumeExp.length} roles, truth: ${truthPass ? "PASS" : "REVIEW"}, saved to DB`, phase: "done" });
 
               // Mark as done with full result
+              clearTimeout(genTimeout);
               updateGenStatus(jobId, {
                 status: "done",
                 phase: "done",
@@ -906,6 +941,7 @@ export function getDashboardRoutes() {
                 },
               });
             } catch (err: any) {
+              clearTimeout(genTimeout);
               const errMsg = err?.message || String(err);
               logger?.error(`❌ [generate-packet] Unhandled error: ${errMsg}`);
               logGen({ jobId, company: job.company || "?", title: job.title || "?", status: "error", message: errMsg, phase: "unknown" });
@@ -975,13 +1011,50 @@ export function getDashboardRoutes() {
         }
 
         // Still in progress
+        const elapsedNum = parseFloat(elapsed);
+        const timeoutS = GENERATION_TIMEOUT_MS / 1000;
         return c.json({
           job_id: jobId,
           status: status.status,
           phase: status.phase,
           elapsed_s: elapsed,
+          timeout_s: timeoutS,
+          remaining_s: Math.max(0, timeoutS - elapsedNum).toFixed(0),
           message: `Generation in progress (${status.phase})...`,
         }, 202);
+      },
+    },
+    /* ── Cancel packet generation ─────────────────────────── */
+    {
+      path: "/api/dashboard/generate-packet/:jobId/cancel",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        const jobId = parseInt(c.req.param("jobId"));
+        const status = packetGenStatus.get(jobId);
+
+        if (!status) {
+          return c.json({ job_id: jobId, cancelled: false, message: "No generation in progress for this job" }, 404);
+        }
+
+        if (status.status === "done" || status.status === "error") {
+          return c.json({ job_id: jobId, cancelled: false, message: `Generation already ${status.status}` });
+        }
+
+        logger?.warn(`🛑 [generate-packet] Cancelling generation for job_id=${jobId} at phase: ${status.phase}`);
+        logGen({ jobId, company: "?", title: "?", status: "error", message: `Cancelled by user at phase: ${status.phase}`, phase: status.phase });
+
+        // Signal abort and update status
+        if (status.abort) {
+          status.abort.abort();
+        }
+        updateGenStatus(jobId, {
+          status: "error",
+          error: "Generation cancelled by user.",
+          hint: "You can retry by clicking Generate again.",
+        });
+
+        return c.json({ job_id: jobId, cancelled: true, phase: status.phase, message: "Generation cancelled." });
       },
     },
     /* ── Generation log (in-memory) ───────────────────────── */
