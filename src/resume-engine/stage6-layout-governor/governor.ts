@@ -47,6 +47,28 @@ const SOFT_VERBS = [
   "participated", "aided", "facilitated",
 ];
 
+/** Mapping of weak opener verbs to stronger executive-level replacements. */
+const SOFT_VERB_REPLACEMENTS: Record<string, string> = {
+  supported: "Strengthened",
+  helped: "Drove",
+  contributed: "Delivered",
+  assisted: "Partnered on",
+  participated: "Engaged in",
+  aided: "Enabled",
+  facilitated: "Orchestrated",
+};
+
+/** Safe managerial phrasing that sounds impressive but says nothing. */
+const SAFE_MANAGERIAL_PATTERNS: { pattern: RegExp; label: string }[] = [
+  { pattern: /^(?:oversaw|managed|responsible for)\s+(?:the\s+)?(?:day-to-day|daily|ongoing|routine)\b/i, label: "routine oversight" },
+  { pattern: /^(?:managed|oversaw)\s+(?:a\s+)?team\s+(?:of\s+)?\w+\s+(?:to\s+)?(?:deliver|ensure|maintain|support)\b/i, label: "generic team management" },
+  { pattern: /^ensured\s+(?:the\s+)?(?:quality|timely|smooth|successful)\b/i, label: "ensured quality" },
+  { pattern: /^responsible\s+for\s+(?:managing|overseeing|ensuring|maintaining)\b/i, label: "responsible for" },
+  { pattern: /^(?:served|acted|functioned)\s+as\s+(?:a\s+)?(?:key|primary|main|go-to)\b/i, label: "served as" },
+  { pattern: /^(?:played|had)\s+(?:a\s+)?(?:key|critical|vital|important)\s+role\s+in\b/i, label: "played a key role" },
+  { pattern: /^(?:worked\s+(?:closely|collaboratively|cross-functionally))\s+with\b/i, label: "worked closely with" },
+];
+
 const PASSIVE_STARTERS = [
   /^was\s+/i,
   /^were\s+/i,
@@ -220,11 +242,14 @@ interface ToneViolation {
 }
 
 /**
- * Bullet Tone Refinement Pass:
- * - Detect soft verbs (supported, helped, contributed, etc.)
+ * Bullet Authority Pass:
+ * - Detect AND auto-fix soft verb openers (supported → Strengthened, helped → Drove)
  * - Detect passive voice starters
  * - Detect stacked clauses (3+ commas = over-complex)
+ * - Detect safe managerial phrasing ("managed day-to-day", "played a key role")
  * - Each bullet should read like a board-level performance summary
+ *
+ * Auto-fix behavior: soft verbs are replaced in-place with executive alternatives.
  */
 function refineBulletTone(resume: TailoredResume): ToneViolation[] {
   const violations: ToneViolation[] = [];
@@ -235,36 +260,60 @@ function refineBulletTone(resume: TailoredResume): ToneViolation[] {
       const text = bullet.text;
       const loc = `experience[${i}].bullets[${j}]`;
 
-      // Check soft verbs at start of bullet
-      const firstWord = text.split(/\s+/)[0]?.toLowerCase() || "";
+      // Check soft verbs at start of bullet — AUTO-FIX
+      const firstWord = text.split(/\s+/)[0]?.toLowerCase().replace(/[^a-z]/g, "") || "";
       if (SOFT_VERBS.includes(firstWord)) {
-        violations.push({
-          location: loc,
-          issue: `soft_verb_opener: "${firstWord}"`,
-          original: text.substring(0, 60),
-        });
+        const replacement = SOFT_VERB_REPLACEMENTS[firstWord];
+        if (replacement) {
+          // Auto-fix: replace the weak opener verb with a stronger alternative
+          const rest = text.substring(text.indexOf(firstWord) + firstWord.length);
+          bullet.text = replacement + rest;
+          violations.push({
+            location: loc,
+            issue: `soft_verb_opener: "${firstWord}" → auto-fixed to "${replacement}"`,
+            original: text.substring(0, 60),
+          });
+        } else {
+          violations.push({
+            location: loc,
+            issue: `soft_verb_opener: "${firstWord}"`,
+            original: text.substring(0, 60),
+          });
+        }
       }
 
       // Check passive voice starters
       for (const pattern of PASSIVE_STARTERS) {
-        if (pattern.test(text)) {
+        if (pattern.test(bullet.text)) {
           violations.push({
             location: loc,
             issue: "passive_voice_opener",
-            original: text.substring(0, 60),
+            original: bullet.text.substring(0, 60),
           });
           break;
         }
       }
 
       // Check stacked clauses (3+ commas indicate over-complexity)
-      const commaCount = (text.match(/,/g) || []).length;
+      const commaCount = (bullet.text.match(/,/g) || []).length;
       if (commaCount >= 3) {
         violations.push({
           location: loc,
           issue: `stacked_clauses: ${commaCount} commas`,
-          original: text.substring(0, 60),
+          original: bullet.text.substring(0, 60),
         });
+      }
+
+      // Check safe managerial phrasing — sounds impressive but says nothing
+      for (const mp of SAFE_MANAGERIAL_PATTERNS) {
+        if (mp.pattern.test(bullet.text)) {
+          violations.push({
+            location: loc,
+            issue: `safe_managerial_phrasing: ${mp.label}`,
+            original: bullet.text.substring(0, 60),
+          });
+          break; // One flag per bullet is enough
+        }
       }
     }
   }

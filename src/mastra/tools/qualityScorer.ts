@@ -102,6 +102,14 @@ export interface ExecutiveToneScore {
   career_depth_roles: number;        // Number of enterprise roles (min 3 for exec presence)
 }
 
+export interface OwnershipInflationReport {
+  total_warnings: number;
+  critical_count: number;
+  warning_count: number;
+  patterns_triggered: string[];       // e.g. ["contributor -> owner", "enterprise-scope: drove board decision"]
+  auto_rewrites_applied: number;
+}
+
 export interface QualityReport {
   overall_score: number;             // Weighted composite 0-100
   grade: "A" | "B" | "C" | "D" | "F";
@@ -113,6 +121,7 @@ export interface QualityReport {
   page_compliance: PageComplianceStatus;
   phrase_repetition: PhraseRepetitionReport;
   layout_compliance: LayoutComplianceScore;
+  ownership_inflation: OwnershipInflationReport;
   blocking_issues: string[];         // Issues that must be fixed before output
   warnings: string[];                // Non-blocking quality issues
   timestamp: string;
@@ -700,6 +709,7 @@ export function computeQualityReport(
     mandate?: MandateProfile;
     divergenceResult?: DivergenceResult;
     pageCount?: number;
+    ownershipWarnings?: { severity: "warning" | "critical"; pattern: string }[];
   } = {},
 ): QualityReport {
   const truthfulness = scoreTruthfulness(resume, options.ledger);
@@ -710,6 +720,16 @@ export function computeQualityReport(
   const pageCompliance = scorePageCompliance(resume, options.pageCount);
   const phraseRepetition = scorePhraseRepetition(resume);
   const layoutCompliance = scoreLayoutCompliance(resume);
+
+  // Build ownership inflation report
+  const ow = options.ownershipWarnings || [];
+  const ownershipInflation: OwnershipInflationReport = {
+    total_warnings: ow.length,
+    critical_count: ow.filter(w => w.severity === "critical").length,
+    warning_count: ow.filter(w => w.severity === "warning").length,
+    patterns_triggered: [...new Set(ow.map(w => w.pattern))],
+    auto_rewrites_applied: ow.filter(w => w.severity === "critical").length,
+  };
 
   // Phrase cleanliness score (inverse of repetition)
   const phraseCleanScore = Math.max(0, 100 - phraseRepetition.count * 8);
@@ -802,6 +822,17 @@ export function computeQualityReport(
   if (executiveTone.career_depth_roles < 3) {
     warnings.push(`Only ${executiveTone.career_depth_roles} role(s) shown — minimum 3 for executive career depth`);
   }
+  // Ownership inflation warnings
+  if (ownershipInflation.critical_count > 0) {
+    blocking.push(
+      `${ownershipInflation.critical_count} critical ownership inflation(s) detected and auto-rewritten: ${ownershipInflation.patterns_triggered.join(", ")}`,
+    );
+  }
+  if (ownershipInflation.warning_count > 0) {
+    warnings.push(
+      `${ownershipInflation.warning_count} ownership inflation warning(s): ${ownershipInflation.patterns_triggered.filter(p => !p.includes("enterprise-scope")).join(", ") || "(minor escalation patterns)"}`,
+    );
+  }
 
   return {
     overall_score: Math.max(0, Math.min(100, overall)),
@@ -814,6 +845,7 @@ export function computeQualityReport(
     page_compliance: pageCompliance,
     phrase_repetition: phraseRepetition,
     layout_compliance: layoutCompliance,
+    ownership_inflation: ownershipInflation,
     blocking_issues: blocking,
     warnings,
     timestamp: new Date().toISOString(),

@@ -110,6 +110,7 @@ async function safeGenerateObject<T extends z.ZodTypeAny>(opts: {
 // ── Generic Opener Detection ─────────────────────────────────────
 
 const GENERIC_OPENER_PATTERNS: RegExp[] = [
+  // Generic role-first patterns
   /^[A-Za-z\s&/,-]+ leader who has\b/i,
   /^[A-Za-z\s&/,-]+ executive who has\b/i,
   /^[A-Za-z\s&/,-]+ leader with\b/i,
@@ -128,6 +129,16 @@ const GENERIC_OPENER_PATTERNS: RegExp[] = [
   /^[A-Za-z\s&/,-]+ professional with\b/i,
   /^analytics executive transforming\b/i,
   /^data (?:&|and) analytics (?:leader|executive) (?:who|with|transforming)\b/i,
+  // Descriptive/passive openers (not thesis-driven)
+  /^career\s+marked\s+by\b/i,
+  /^career\s+defined\s+by\b/i,
+  /^track\s+record\s+of\b/i,
+  /^known\s+for\b/i,
+  /^the\s+board'?s?\s+decision\s+was\s+driven\s+by\b/i,
+  /^with\s+(?:over|more than|\d+)\s+years?\b/i,
+  /^proven\s+ability\s+to\b/i,
+  /^extensive\s+experience\s+in\b/i,
+  /^dedicated\s+(?:\w+\s+)?(?:leader|executive|professional)/i,
 ];
 
 /**
@@ -160,6 +171,55 @@ function validateAtsKeywords(resume: TailoredResume): string[] {
   ].join(" ").toLowerCase();
 
   return resume.ats_keywords_used.filter(kw => !resumeText.includes(kw.toLowerCase()));
+}
+
+/**
+ * Detect if cover letter closely paraphrases resume bullet text.
+ * Uses 4-gram overlap detection: if a 4-word sequence from a cover letter
+ * paragraph matches a 4-word sequence from any resume bullet, flag it.
+ */
+function detectResumeRepetition(
+  resume: TailoredResume,
+  coverLetter: TailoredCoverLetter,
+): { cl_phrase: string; resume_bullet: string }[] {
+  const results: { cl_phrase: string; resume_bullet: string }[] = [];
+
+  // Build set of 4-grams from all resume bullets
+  const resumeNGrams = new Map<string, string>(); // 4-gram → source bullet text
+  for (const exp of resume.experience) {
+    for (const bullet of exp.bullets) {
+      const words = bullet.text.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      for (let i = 0; i <= words.length - 4; i++) {
+        const gram = words.slice(i, i + 4).join(" ");
+        if (!resumeNGrams.has(gram)) {
+          resumeNGrams.set(gram, bullet.text);
+        }
+      }
+    }
+  }
+
+  // Check cover letter body paragraphs for matches
+  const clTexts = [
+    coverLetter.opening_paragraph,
+    ...coverLetter.body_paragraphs,
+  ];
+
+  for (const clText of clTexts) {
+    const words = clText.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    for (let i = 0; i <= words.length - 4; i++) {
+      const gram = words.slice(i, i + 4).join(" ");
+      const sourceBullet = resumeNGrams.get(gram);
+      if (sourceBullet) {
+        results.push({
+          cl_phrase: gram,
+          resume_bullet: sourceBullet.substring(0, 80),
+        });
+        break; // One match per paragraph is enough to flag
+      }
+    }
+  }
+
+  return results;
 }
 
 /**
@@ -486,6 +546,32 @@ ${actualWordCount < 250 ? "Add more specific detail to body paragraphs — conne
         prompt: wcCorrectionPrompt,
         temperature: 0.2,
         label: "coverLetter-wordcount-correction",
+      });
+      coverLetter.word_count = countCoverLetterWords(coverLetter);
+    }
+
+    // ── Post-LLM Cover Letter Validation: Resume Repetition Ban ──
+    const resumeRepetitions = detectResumeRepetition(resume, coverLetter);
+    if (resumeRepetitions.length > 0) {
+      const repList = resumeRepetitions
+        .map((r, i) => `  ${i + 1}. CL phrase: "${r.cl_phrase}" ← resume bullet: "${r.resume_bullet}"`)
+        .join("\n");
+
+      const repCorrectionPrompt = `${clUserPrompt}\n\n## RESUME REPETITION CORRECTION
+The cover letter copies or closely paraphrases ${resumeRepetitions.length} resume bullet(s). The cover letter must provide NARRATIVE context, not parrot resume text.
+
+REPEATED PHRASES DETECTED:
+${repList}
+
+Rewrite the body_paragraphs to use DIFFERENT angles on the same achievements. The cover letter should AMPLIFY resume signals, not repeat them verbatim.
+Pattern: instead of restating the achievement, explain the STRATEGIC CONTEXT — why you did it, what you learned, how it serves this company.`;
+
+      coverLetter = await safeGenerateObject({
+        schema: TailoredCoverLetterSchema,
+        system: clSystemPrompt,
+        prompt: repCorrectionPrompt,
+        temperature: 0.3,
+        label: "coverLetter-repetition-correction",
       });
       coverLetter.word_count = countCoverLetterWords(coverLetter);
     }

@@ -140,12 +140,31 @@ export function buildCoverLetterSystemPrompt(): string {
    - "I am confident that..." → Delete. Let facts speak.
    - "I bring a unique combination of..." → Delete. This is resume cliché territory.
 
-8. **STRUCTURE**
+8. **STRUCTURE — EXACTLY 3 PARAGRAPHS (opening + body + closing)**
+   The cover letter is structured as EXACTLY three content blocks. Do NOT pad with extra paragraphs.
+
    - **salutation**: Formal greeting (prefer "Dear Hiring Manager," if no name known)
-   - **opening_paragraph** (1-2 sentences): State the role. Immediately signal your strongest alignment with the job's PRIMARY mandate. Do NOT waste the opener on generic interest. Example: "The VP, Data & Analytics role at [Company] aligns precisely with my work building enterprise analytics operating models — most recently at [Employer], where [top metric]."
-   - **body_paragraphs** (1-3 paragraphs): Each paragraph should make ONE value claim, then CONNECT it to the company's specific need. Structure: [Achievement at Prior Company] → [How this addresses Company's challenge/goal]. Weave company context naturally — don't bolt it on as an afterthought.
-   - **closing_paragraph** (1-2 sentences): Forward-looking, confident. State what you want to discuss, not what you hope to hear.
+
+   - **opening_paragraph** = MANDATE THESIS (2-3 sentences):
+     State the role. In the FIRST sentence, declare your mandate thesis — the specific capability you bring that matches the job's primary need. Do NOT waste the opener on generic interest or filler.
+     Pattern: "[Role] at [Company] calls for [mandate X]. At [Most Recent Employer], I [your top achievement that proves mandate X]."
+     Example: "The VP, Data & Analytics role at [Company] calls for someone who can build an enterprise analytics operating model from the ground up. At [Employer], I stood up the analytics function from zero, scaling to 45 analysts across 6 business units."
+
+   - **body_paragraphs** = 1-2 EVIDENCE PARAGRAPHS (array with 1-2 entries):
+     Each paragraph makes ONE value claim backed by a specific metric, then CONNECTS it to the company's need.
+     Pattern: [What you did] → [Scale/impact metric] → [Why this matters for THIS company].
+     Do NOT repeat resume bullets verbatim. Use different phrasing — the cover letter AMPLIFIES signals, it does not parrot them.
+     Do NOT list achievements bullet-style. Write in flowing narrative.
+
+   - **closing_paragraph** = STRATEGIC POSITIONING (1-2 sentences):
+     Forward-looking, confident. State what you bring to the table and what you want to discuss.
+     Do NOT use: "Thank you for considering", "I look forward to the opportunity", "I am excited to apply".
+     Do use: "I'd welcome a conversation about [specific strategic topic relevant to the role]."
+
    - **sign_off**: Formal close with candidate name
+
+   **RESUME REPETITION BAN:**
+   The cover letter must NOT copy or closely paraphrase resume bullet text. If the resume says "Architected a $12M analytics platform serving 6 business units," the cover letter might say "Building the analytics platform taught me that enterprise-scale data requires..." — same achievement, different angle. The cover letter provides the NARRATIVE that resume bullets cannot.
 
    **PERSONALIZATION STRATEGY:**
    When company_context IS available:

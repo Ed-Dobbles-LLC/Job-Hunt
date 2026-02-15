@@ -438,6 +438,7 @@ export interface FinalPolishOptions {
   mandate?: MandateProfile;
   jobId?: number;
   pageCount?: number;
+  ownershipWarnings?: { severity: "warning" | "critical"; pattern: string }[];
 }
 
 /**
@@ -486,6 +487,7 @@ export async function applyFinalPolish(
     mandate: options.mandate,
     divergenceResult,
     pageCount: options.pageCount,
+    ownershipWarnings: options.ownershipWarnings,
   });
 
   // Store snapshot for future divergence checks
