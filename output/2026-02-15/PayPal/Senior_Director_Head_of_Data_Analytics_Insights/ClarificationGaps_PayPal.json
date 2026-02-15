@@ -1,0 +1,39 @@
+{
+  "clarification_gaps": [
+    {
+      "id": "gap-001",
+      "jd_requirement": "Lead the modernization of our BI platform from legacy tools to Looker on GCP",
+      "inventory_status": "PARTIAL MATCH",
+      "detail": "Inventory confirms Looker and GCP (BigQuery) as verified tools, and Google Cloud Professional Data Engineer cert. However, no specific bullet describes a Looker-on-GCP migration project. The Snowflake migration (exp-001-b2) and Hadoop-to-AWS migration (exp-002-b3) demonstrate platform modernization capability. Resume frames this as transferable experience.",
+      "question_for_candidate": "Have you led or contributed to a Looker deployment or GCP-native BI migration? If so, we should add a specific bullet."
+    },
+    {
+      "id": "gap-002",
+      "jd_requirement": "Automate insight delivery through Slack integrations",
+      "inventory_status": "NO MATCH",
+      "detail": "No inventory bullet references Slack-based insight delivery or chat-based analytics automation. The self-service BI platform (exp-003-b4) shows automated reporting but not Slack-specific delivery. Omitted from resume rather than fabricated.",
+      "question_for_candidate": "Have you implemented Slack-based reporting, bot-driven alerts, or similar automated insight delivery channels?"
+    },
+    {
+      "id": "gap-003",
+      "jd_requirement": "Drive revenue analytics and forecasting for the global payments business",
+      "inventory_status": "PARTIAL MATCH",
+      "detail": "Inventory has demand forecasting ($6.5M, exp-003-b3), customer segmentation ($18M, exp-003-b2), and churn prediction ($22M, exp-004-b3) — all revenue-adjacent. However, none are in a payments/fintech context specifically. Resume presents these as transferable evidence.",
+      "question_for_candidate": "Do you have specific payments industry or transaction analytics experience beyond what's in the inventory? Any work with payment volume forecasting, merchant analytics, or checkout conversion?"
+    },
+    {
+      "id": "gap-004",
+      "jd_requirement": "15+ years of progressive analytics leadership experience",
+      "inventory_status": "MATCH — BUT TIGHT",
+      "detail": "Career spans August 2010 to present (~15.5 years). The first ~2 years (2010-2012) were at Senior Data Analyst level before promotion to Analytics Manager. 'Leadership experience' is borderline for the IC analyst period. Total post-MBA career aligns but is at the floor of the requirement.",
+      "question_for_candidate": "Were you in any leadership or client-facing advisory capacity during the Senior Data Analyst period (2010-2012) that could strengthen the 'progressive leadership' narrative?"
+    },
+    {
+      "id": "gap-005",
+      "jd_requirement": "Experience managing teams of 20+ in a matrixed environment",
+      "inventory_status": "STRONG MATCH",
+      "detail": "45-person org across 3 BUs (exp-001) and 28-person team (exp-002) both exceed 20+. The '3 business units' language implies matrixed structure, but 'matrixed' is not explicitly stated in the inventory.",
+      "question_for_candidate": "Was the 45-person org at Acme Financial Group a matrixed structure (dotted-line reports, shared resources across BUs)? If so, we should make this explicit."
+    }
+  ]
+}

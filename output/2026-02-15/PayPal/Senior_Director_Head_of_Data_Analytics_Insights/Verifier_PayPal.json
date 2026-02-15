@@ -1,0 +1,81 @@
+{
+  "job_id": "paypal-sr-director-head-data-analytics",
+  "candidate": "Ed Martinez",
+  "verification_date": "2026-02-15",
+  "overallPass": true,
+  "truthfulness_audit": {
+    "passed": true,
+    "total_claims_audited": 20,
+    "resume_claims": 13,
+    "cover_letter_claims": 7,
+    "new_metrics_introduced": 0,
+    "new_tools_introduced": 0,
+    "new_employers_introduced": 0,
+    "scope_expansions": 0,
+    "fabrications_detected": 0,
+    "conservative_inferences": [
+      {
+        "document": "resume",
+        "text": "establishing operating cadence and cross-functional alignment",
+        "classification": "Transferable capability phrasing — describes the nature of leading a 45-person org across 3 BUs, not a new factual claim",
+        "verdict": "ACCEPTABLE"
+      },
+      {
+        "document": "resume",
+        "text": "eliminating reporting fragmentation",
+        "classification": "Implied consequence of consolidating 7 legacy warehouses into one platform — not a new metric",
+        "verdict": "ACCEPTABLE"
+      },
+      {
+        "document": "cover_letter",
+        "text": "no unified metric definitions",
+        "classification": "Reasonable pre-state inference from needing to establish governance framework with 200+ rules. The inventory confirms the governance work was net-new.",
+        "verdict": "ACCEPTABLE"
+      }
+    ]
+  },
+  "metric_audit": {
+    "passed": true,
+    "metrics_verified": [
+      {"metric": "45-person team", "source": "exp-001-b1", "match": "exact"},
+      {"metric": "3 business units", "source": "exp-001-b1", "match": "exact"},
+      {"metric": "$12M annual cost savings", "source": "exp-001-b2", "match": "exact"},
+      {"metric": "7 legacy data warehouses", "source": "exp-001-b2", "match": "exact"},
+      {"metric": "200+ data quality rules", "source": "exp-001-b4", "match": "exact"},
+      {"metric": "62% to 94% data trust score", "source": "exp-001-b4", "match": "exact"},
+      {"metric": "$8M investment", "source": "exp-001-b6", "match": "exact"},
+      {"metric": "28-person team", "source": "exp-002-b1", "match": "exact"},
+      {"metric": "40% TCO reduction", "source": "exp-002-b3", "match": "exact"},
+      {"metric": "5 product teams", "source": "exp-002-b4", "match": "exact"},
+      {"metric": "3x experiment velocity", "source": "exp-002-b4", "match": "exact"},
+      {"metric": "15-person team", "source": "exp-003-b1", "match": "exact"},
+      {"metric": "$18M incremental revenue", "source": "exp-003-b2", "match": "exact"},
+      {"metric": "$6.5M cost reduction", "source": "exp-003-b3", "match": "exact"},
+      {"metric": "500+ users", "source": "exp-003-b4", "match": "exact"},
+      {"metric": "65% ad-hoc reduction", "source": "exp-003-b4", "match": "exact"},
+      {"metric": "12% churn reduction", "source": "exp-004-b3", "match": "exact"},
+      {"metric": "$22M retained revenue", "source": "exp-004-b3", "match": "exact"}
+    ],
+    "unverified_metrics": []
+  },
+  "platform_audit": {
+    "passed": true,
+    "platforms_referenced": ["Snowflake", "dbt", "Airflow", "Tableau", "Looker", "Power BI", "Python", "SQL", "R", "AWS", "Redshift", "EMR", "SageMaker", "GCP", "BigQuery", "Spark", "Kubernetes", "Hadoop"],
+    "all_in_inventory": true,
+    "platforms_not_in_inventory": []
+  },
+  "scope_audit": {
+    "passed": true,
+    "notes": "No scope expansion beyond documented experience. All team sizes, budget figures, and organizational descriptions match inventory exactly."
+  },
+  "omissions_from_inventory": {
+    "resume": [
+      "exp-001-b3: ML ops pipeline / 2B+ daily events / fraud detection — omitted (mandate fit: low for this role; better for ML-heavy JDs)",
+      "exp-001-b5: Executive dashboard suite adopted by C-suite — partially covered in summary paragraph, not as standalone bullet",
+      "exp-002-b2: Patient readmission prediction model / $31M savings — omitted (healthcare-specific, less relevant to payments/commerce)",
+      "exp-002-b5: Partnered with CMO / 15% care quality improvement — omitted (healthcare-specific)"
+    ],
+    "rationale": "Omissions prioritize mandate alignment (operating model transformation, BI modernization, revenue analytics) over breadth. Healthcare ML and fraud-detection bullets would dilute the mandate signal for this particular role."
+  },
+  "confirmation": "Verified: No new factual claims introduced. All metrics, platforms, team sizes, and scope statements trace to experience_inventory.json."
+}

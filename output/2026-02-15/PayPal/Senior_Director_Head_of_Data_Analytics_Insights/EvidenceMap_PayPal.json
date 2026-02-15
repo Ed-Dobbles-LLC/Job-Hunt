@@ -1,0 +1,162 @@
+[
+  {
+    "document": "resume",
+    "claim_text": "Led 45-person data organization across analytics engineering, data science, and BI spanning 3 business units",
+    "evidence_source_key": "exp-001-b1",
+    "evidence_quote": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+    "confidence": 1.0,
+    "mutation": "Added 'establishing operating cadence and cross-functional alignment' — transferable capability phrasing, not a new factual claim"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Architected unified Snowflake platform consolidating 7 legacy warehouses, driving $12M in annual cost savings",
+    "evidence_source_key": "exp-001-b2",
+    "evidence_quote": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
+    "confidence": 1.0,
+    "mutation": "Added 'eliminating reporting fragmentation' — implied consequence of consolidation, not a new metric"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Established enterprise data governance framework with 200+ data quality rules, improving data trust score from 62% to 94%",
+    "evidence_source_key": "exp-001-b4",
+    "evidence_quote": "Established data governance framework with 200+ data quality rules, improving data trust score from 62% to 94%",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Presented data strategy roadmap to board of directors, securing $8M multi-year investment in data infrastructure modernization",
+    "evidence_source_key": "exp-001-b6",
+    "evidence_quote": "Presented data strategy roadmap to board of directors, securing $8M multi-year investment in data infrastructure modernization",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Managed 28-person team of data scientists, analysts, and engineers delivering predictive analytics across population health management",
+    "evidence_source_key": "exp-002-b1",
+    "evidence_quote": "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "evidence_source_key": "exp-002-b3",
+    "evidence_quote": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Designed A/B testing framework adopted across 5 product teams, increasing experiment velocity by 3x",
+    "evidence_source_key": "exp-002-b4",
+    "evidence_quote": "Designed and implemented A/B testing framework adopted across 5 product teams, increasing experiment velocity by 3x",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Built 15-person analytics team from scratch, establishing the company's first centralized analytics function",
+    "evidence_source_key": "exp-003-b1",
+    "evidence_quote": "Built and led a 15-person analytics team from scratch, establishing the company's first centralized analytics function",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Created customer segmentation model driving $18M incremental revenue through personalized marketing campaigns",
+    "evidence_source_key": "exp-003-b2",
+    "evidence_quote": "Created customer segmentation model driving $18M incremental revenue through personalized marketing campaigns",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Implemented demand forecasting system reducing inventory carrying costs by $6.5M annually",
+    "evidence_source_key": "exp-003-b3",
+    "evidence_quote": "Implemented demand forecasting system reducing inventory carrying costs by $6.5M annually using time-series models",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Built self-service BI platform serving 500+ business users with automated reporting, reducing ad-hoc request volume by 65%",
+    "evidence_source_key": "exp-003-b4",
+    "evidence_quote": "Built self-service BI platform serving 500+ business users with automated reporting, reducing ad-hoc request volume by 65%",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "resume",
+    "claim_text": "Promoted to Analytics Manager within 2 years based on delivery of high-impact client projects across Fortune 500 financial services, retail, and CPG clients",
+    "evidence_source_key": "exp-004-b1 + exp-004-b2",
+    "evidence_quote": "Promoted from Senior Data Analyst to Analytics Manager within 2 years based on delivery of high-impact client projects / Led analytics engagements for Fortune 500 clients across financial services, retail, and CPG industries",
+    "confidence": 1.0,
+    "mutation": "Combined two bullets into one for density. No new facts introduced."
+  },
+  {
+    "document": "resume",
+    "claim_text": "Developed churn prediction model for telecom client reducing annual churn by 12%, representing $22M in retained revenue",
+    "evidence_source_key": "exp-004-b3",
+    "evidence_quote": "Developed churn prediction model for telecom client reducing annual churn by 12%, representing $22M in retained revenue",
+    "confidence": 1.0,
+    "mutation": "None — direct transcription"
+  },
+  {
+    "document": "cover_letter",
+    "claim_text": "I led a 45-person analytics organization across three business units",
+    "evidence_source_key": "exp-001-b1",
+    "evidence_quote": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+    "confidence": 1.0,
+    "mutation": "None"
+  },
+  {
+    "document": "cover_letter",
+    "claim_text": "seven legacy data warehouses, no unified metric definitions",
+    "evidence_source_key": "exp-001-b2 + exp-001-b4",
+    "evidence_quote": "consolidating 7 legacy data warehouses / Established data governance framework with 200+ data quality rules",
+    "confidence": 1.0,
+    "mutation": "'no unified metric definitions' is a reasonable pre-state inference from needing to establish governance framework with 200+ rules. Conservative framing."
+  },
+  {
+    "document": "cover_letter",
+    "claim_text": "governance framework with 200+ data quality rules that moved our data trust score from 62% to 94%",
+    "evidence_source_key": "exp-001-b4",
+    "evidence_quote": "Established data governance framework with 200+ data quality rules, improving data trust score from 62% to 94%",
+    "confidence": 1.0,
+    "mutation": "None"
+  },
+  {
+    "document": "cover_letter",
+    "claim_text": "securing an $8M multi-year investment",
+    "evidence_source_key": "exp-001-b6",
+    "evidence_quote": "Presented data strategy roadmap to board of directors, securing $8M multi-year investment in data infrastructure modernization",
+    "confidence": 1.0,
+    "mutation": "None"
+  },
+  {
+    "document": "cover_letter",
+    "claim_text": "demand forecasting system that reduced inventory carrying costs by $6.5M annually",
+    "evidence_source_key": "exp-003-b3",
+    "evidence_quote": "Implemented demand forecasting system reducing inventory carrying costs by $6.5M annually using time-series models",
+    "confidence": 1.0,
+    "mutation": "None"
+  },
+  {
+    "document": "cover_letter",
+    "claim_text": "customer segmentation model that drove $18M in incremental revenue",
+    "evidence_source_key": "exp-003-b2",
+    "evidence_quote": "Created customer segmentation model driving $18M incremental revenue through personalized marketing campaigns",
+    "confidence": 1.0,
+    "mutation": "None"
+  },
+  {
+    "document": "cover_letter",
+    "claim_text": "migrated our entire analytics infrastructure from on-prem Hadoop to AWS, cutting total cost of ownership by 40%",
+    "evidence_source_key": "exp-002-b3",
+    "evidence_quote": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+    "confidence": 1.0,
+    "mutation": "None"
+  }
+]

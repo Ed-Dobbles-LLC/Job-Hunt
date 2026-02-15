@@ -1,0 +1,32 @@
+Dear Hiring Team,
+
+The Senior Director, Head of Data Analytics & Insights role at PayPal asks for
+someone to transform how the enterprise consumes data — modernize the BI stack,
+establish governance standards, and build an analytics organization that embeds
+insight into every business decision. That is the operating model I have spent
+the last decade building.
+
+At Acme Financial Group, I led a 45-person analytics organization across three
+business units and faced a similar inflection point: seven legacy data
+warehouses, no unified metric definitions, and a C-suite that wanted answers
+faster than the infrastructure could deliver. I consolidated those warehouses
+onto Snowflake, established a governance framework with 200+ data quality rules
+that moved our data trust score from 62% to 94%, and presented the
+modernization roadmap to the board — securing an $8M multi-year investment to
+complete the transformation. The result was not just a better platform but a
+fundamentally different operating cadence for how executives consumed analytics.
+
+PayPal's requirement for revenue analytics depth and forecasting rigor also maps
+directly to my experience. At Global Retail Corp, I built the demand forecasting
+system that reduced inventory carrying costs by $6.5M annually and created the
+customer segmentation model that drove $18M in incremental revenue. At
+HealthTech Solutions, I migrated our entire analytics infrastructure from
+on-prem Hadoop to AWS, cutting total cost of ownership by 40% — a migration
+similar in complexity to moving from legacy tools to Looker on GCP.
+
+I would welcome a conversation about how this operating model transformation
+experience — platform modernization, governance standardization, and
+revenue-connected analytics — applies to PayPal's analytics agenda.
+
+Best regards,
+Ed Martinez

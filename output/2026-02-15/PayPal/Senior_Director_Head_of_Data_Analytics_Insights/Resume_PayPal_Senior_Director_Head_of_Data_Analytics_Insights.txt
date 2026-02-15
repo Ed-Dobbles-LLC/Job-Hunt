@@ -1,0 +1,115 @@
+ED MARTINEZ
+VP of Data & Analytics
+Chicago, IL | (555) 123-4567 | ed.martinez@example.com | linkedin.com/in/edmartinez
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+Enterprise data leader who has built and transformed analytics organizations
+across financial services, healthcare, and retail — from standing up first
+centralized functions to scaling 45-person teams spanning analytics engineering,
+data science, and business intelligence.
+
+Track record of BI platform modernization, data governance at enterprise scale,
+and revenue analytics that connects to boardroom decision-making. Secured $8M
+board-approved infrastructure investment, drove $12M in platform cost savings,
+and established governance frameworks spanning 200+ data quality rules across
+3 business units.
+
+================================================================================
+CORE COMPETENCIES
+================================================================================
+
+Enterprise Analytics Transformation | BI Platform Modernization | Data Governance
+& Metric Standardization | Revenue Analytics & Forecasting | Executive &
+Board-Level Communication | Cloud Data Architecture (Snowflake, AWS, GCP) |
+Self-Service Analytics & Insight Delivery | Team Building & Organizational Design
+
+================================================================================
+PROFESSIONAL EXPERIENCE
+================================================================================
+
+ACME FINANCIAL GROUP — Chicago, IL (Hybrid)
+VP of Data & Analytics | March 2021 – Present
+
+  * Led 45-person data organization across analytics engineering, data science,
+    and BI spanning 3 business units — establishing operating cadence and
+    cross-functional alignment [exp-001-b1]
+
+  * Architected unified Snowflake platform consolidating 7 legacy warehouses,
+    driving $12M in annual cost savings and eliminating reporting fragmentation
+    [exp-001-b2]
+
+  * Established enterprise data governance framework with 200+ data quality rules,
+    improving data trust score from 62% to 94% [exp-001-b4]
+
+  * Presented data strategy roadmap to board of directors, securing $8M multi-year
+    investment in data infrastructure modernization [exp-001-b6]
+
+
+HEALTHTECH SOLUTIONS INC. — Chicago, IL
+Senior Director, Data Science & Analytics | June 2018 – February 2021
+
+  * Managed 28-person team of data scientists, analysts, and engineers delivering
+    predictive analytics across population health management [exp-002-b1]
+
+  * Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR,
+    SageMaker), reducing total cost of ownership by 40% [exp-002-b3]
+
+  * Designed A/B testing framework adopted across 5 product teams, increasing
+    experiment velocity by 3x [exp-002-b4]
+
+--------------------------------------------------------------------------------
+PAGE 2
+--------------------------------------------------------------------------------
+
+GLOBAL RETAIL CORP — Dallas, TX
+Director of Analytics | January 2015 – May 2018
+
+  * Built 15-person analytics team from scratch, establishing the company's first
+    centralized analytics function [exp-003-b1]
+
+  * Created customer segmentation model driving $18M incremental revenue through
+    personalized marketing campaigns [exp-003-b2]
+
+  * Implemented demand forecasting system reducing inventory carrying costs by
+    $6.5M annually using time-series models [exp-003-b3]
+
+  * Built self-service BI platform serving 500+ business users with automated
+    reporting, reducing ad-hoc request volume by 65% [exp-003-b4]
+
+
+DATAFIRST CONSULTING — Chicago, IL
+Senior Data Analyst → Analytics Manager | August 2010 – December 2014
+
+  * Promoted to Analytics Manager within 2 years based on delivery of high-impact
+    client projects across Fortune 500 financial services, retail, and CPG clients
+    [exp-004-b1, exp-004-b2]
+
+  * Developed churn prediction model for telecom client reducing annual churn by
+    12%, representing $22M in retained revenue [exp-004-b3]
+
+================================================================================
+EDUCATION
+================================================================================
+
+MBA — University of Chicago
+Concentrations: Econometrics & Statistics, Strategic Management (2010)
+
+BS, Computer Science — University of Illinois at Urbana-Champaign
+Minor: Mathematics (2006)
+
+================================================================================
+CERTIFICATIONS
+================================================================================
+
+Google Cloud Professional Data Engineer (2021)
+AWS Certified Solutions Architect (2020)
+
+================================================================================
+TOOLS & PLATFORMS
+================================================================================
+
+Snowflake | dbt | Airflow | Tableau | Looker | Power BI | Python | SQL | R |
+AWS (Redshift, EMR, SageMaker) | GCP (BigQuery) | Spark | Kubernetes

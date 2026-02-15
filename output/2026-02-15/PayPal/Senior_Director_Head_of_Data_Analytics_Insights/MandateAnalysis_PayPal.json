@@ -1,0 +1,78 @@
+{
+  "job_title": "Senior Director, Head of Data Analytics & Insights",
+  "company": "PayPal",
+  "mandate_themes": [
+    {
+      "theme": "Enterprise analytics operating model transformation",
+      "score": 5,
+      "jd_signals": [
+        "Transform how PayPal uses data for decision making",
+        "Build and scale a world-class analytics organization",
+        "Partner with product teams to embed analytics into core product features"
+      ],
+      "inventory_alignment": "Led 45-person org across 3 BUs (exp-001-b1); Built 15-person analytics function from scratch (exp-003-b1); Designed A/B testing framework across 5 product teams (exp-002-b4)"
+    },
+    {
+      "theme": "BI platform modernization & governance",
+      "score": 5,
+      "jd_signals": [
+        "Lead the modernization of our BI platform from legacy tools to Looker on GCP",
+        "Establish enterprise data governance standards and single source of truth",
+        "Automate insight delivery through Slack integrations and self-service dashboards"
+      ],
+      "inventory_alignment": "Architected unified Snowflake platform consolidating 7 legacy warehouses (exp-001-b2); Established governance framework with 200+ data quality rules (exp-001-b4); Built self-service BI platform serving 500+ users (exp-003-b4); Migrated from on-prem Hadoop to AWS (exp-002-b3)"
+    },
+    {
+      "theme": "Revenue analytics & forecasting",
+      "score": 4,
+      "jd_signals": [
+        "Drive revenue analytics and forecasting for the global payments business",
+        "Deep expertise in revenue analytics, forecasting, and commercial analytics"
+      ],
+      "inventory_alignment": "Created segmentation model driving $18M incremental revenue (exp-003-b2); Implemented demand forecasting reducing costs $6.5M (exp-003-b3); Developed churn model saving $22M (exp-004-b3)"
+    },
+    {
+      "theme": "Executive influence & board reporting",
+      "score": 4,
+      "jd_signals": [
+        "Partner with C-suite executives and business unit leaders",
+        "Present insights and strategic recommendations to the Board and C-suite",
+        "Strong executive communication and board presentation skills"
+      ],
+      "inventory_alignment": "Presented data strategy roadmap to board, securing $8M investment (exp-001-b6); Built executive dashboard suite for C-suite and board (exp-001-b5); Partnered with Chief Medical Officer on clinical analytics (exp-002-b5)"
+    },
+    {
+      "theme": "AI-enabled insight delivery",
+      "score": 3,
+      "jd_signals": [
+        "Automate insight delivery through Slack integrations and self-service dashboards"
+      ],
+      "inventory_alignment": "Built self-service BI platform reducing ad-hoc requests 65% (exp-003-b4); Launched ML ops pipeline processing 2B+ daily events (exp-001-b3)"
+    },
+    {
+      "theme": "Team building at scale (25+ in matrixed environment)",
+      "score": 5,
+      "jd_signals": [
+        "Lead a global team of 25+ analysts and data scientists",
+        "Build and scale a world-class analytics organization of 25+ people across multiple pods",
+        "Experience managing teams of 20+ in a matrixed environment"
+      ],
+      "inventory_alignment": "Led 45-person org across 3 BUs (exp-001-b1); Managed 28-person team (exp-002-b1); Built 15-person team from scratch (exp-003-b1)"
+    },
+    {
+      "theme": "Cloud data platform expertise (GCP/Snowflake)",
+      "score": 4,
+      "jd_signals": [
+        "Experience with cloud data platforms (GCP, Snowflake, or similar)",
+        "Looker on GCP"
+      ],
+      "inventory_alignment": "Snowflake platform architect (exp-001-b2); AWS migration (exp-002-b3); GCP (BigQuery) and Looker in verified tools; Google Cloud Professional Data Engineer cert"
+    }
+  ],
+  "top_3_mandates": [
+    "Enterprise analytics operating model transformation",
+    "BI platform modernization & governance",
+    "Revenue analytics & forecasting"
+  ],
+  "mandate_summary": "PayPal seeks a transformation leader who will rebuild how the enterprise consumes data: modernize the BI stack (Looker/GCP), establish governance standards, scale the analytics org, and drive revenue analytics for the payments business. Board-level executive influence and cloud platform depth are table stakes."
+}
