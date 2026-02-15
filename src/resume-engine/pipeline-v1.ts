@@ -19,7 +19,7 @@
  * After 3 failures: return best attempt + violation report.
  */
 
-import { query } from "../mastra/tools/db";
+import { query, queryWithTimeout } from "../mastra/tools/db";
 import { buildEntityAllowlist } from "../mastra/tools/entityAllowlist";
 import { extractClaimsLedger } from "../mastra/tools/claimsLedger";
 import { workspacePath } from "../mastra/tools/paths";
@@ -482,11 +482,12 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
   let priorSums: string[] = [];
   let priorComps: string[][] = [];
   try {
-    const histResult = await query(
+    const histResult = await queryWithTimeout(
       `SELECT summary_text, competencies FROM resume_history
        WHERE job_id != $1
        ORDER BY created_at DESC LIMIT 3`,
       [input.job_id],
+      10000, // 10s timeout — resume history is non-critical
     );
     priorSums = histResult.rows.map((r: any) => r.summary_text).filter(Boolean);
     priorComps = histResult.rows.map((r: any) => {
@@ -573,11 +574,12 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
   // Fetch prior summaries for differentiation check
   let priorSummaries: string[] = [];
   try {
-    const histResult = await query(
+    const histResult = await queryWithTimeout(
       `SELECT summary_text FROM resume_history
        WHERE job_id != $1
        ORDER BY created_at DESC LIMIT 3`,
       [input.job_id],
+      10000, // 10s timeout — resume history is non-critical
     );
     priorSummaries = histResult.rows
       .map((r: any) => r.summary_text)

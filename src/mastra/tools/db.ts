@@ -2,6 +2,8 @@ import pg from "pg";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
+  statement_timeout: 30000, // 30s global safety net — no single query should exceed this
+  query_timeout: 30000,
 });
 
 export async function initDatabase(): Promise<void> {
@@ -218,6 +220,22 @@ export async function initDatabase(): Promise<void> {
 export async function query(text: string, params?: any[]): Promise<any> {
   const client = await pool.connect();
   try {
+    const result = await client.query(text, params);
+    return result;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Execute a query with an explicit timeout (in milliseconds).
+ * Uses SET LOCAL statement_timeout so the timeout only applies to this query
+ * within this client's transaction scope, then resets.
+ */
+export async function queryWithTimeout(text: string, params: any[] | undefined, timeoutMs: number): Promise<any> {
+  const client = await pool.connect();
+  try {
+    await client.query(`SET LOCAL statement_timeout = '${timeoutMs}'`);
     const result = await client.query(text, params);
     return result;
   } finally {

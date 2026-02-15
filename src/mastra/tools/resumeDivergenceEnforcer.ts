@@ -14,7 +14,7 @@
  * resume snapshots (summary, competencies, top bullets) for comparison.
  */
 
-import { query } from "./db";
+import { query, queryWithTimeout } from "./db";
 import type { TailoredResume } from "./tailoredResumePrompt";
 import type { MandateProfile } from "./mandateClassifier";
 
@@ -294,7 +294,7 @@ export async function storeResumeSnapshot(
   const keyPhrases = extractKeyPhrases(resume);
 
   try {
-    await query(
+    await queryWithTimeout(
       `INSERT INTO resume_history (job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
@@ -307,6 +307,7 @@ export async function storeResumeSnapshot(
         archetypePrimary,
         JSON.stringify(keyPhrases),
       ],
+      10000, // 10s timeout — snapshot storage is non-critical
     );
   } catch {
     // Non-fatal — divergence enforcement degrades gracefully without history
@@ -328,10 +329,11 @@ export async function loadRecentSnapshots(
 ): Promise<ResumeSnapshot[]> {
   try {
     let result;
+    const DB_TIMEOUT_MS = 10000; // 10s timeout — resume history is non-critical
 
     if (mandateCluster) {
       // Mandate-scoped: prioritize same-mandate snapshots
-      result = await query(
+      result = await queryWithTimeout(
         `(SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
           FROM resume_history
           WHERE job_id != $1 AND archetype_primary = $3
@@ -345,15 +347,17 @@ export async function loadRecentSnapshots(
           LIMIT $2)
          LIMIT $2`,
         [currentJobId, limit, mandateCluster],
+        DB_TIMEOUT_MS,
       );
     } else {
-      result = await query(
+      result = await queryWithTimeout(
         `SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
          FROM resume_history
          WHERE job_id != $1
          ORDER BY created_at DESC
          LIMIT $2`,
         [currentJobId, limit],
+        DB_TIMEOUT_MS,
       );
     }
 
