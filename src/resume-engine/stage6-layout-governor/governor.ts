@@ -52,7 +52,7 @@ const SOFT_VERB_REPLACEMENTS: Record<string, string> = {
   supported: "Strengthened",
   helped: "Drove",
   contributed: "Delivered",
-  assisted: "Partnered on",
+  assisted: "Partnered",
   participated: "Engaged in",
   aided: "Enabled",
   facilitated: "Orchestrated",
@@ -72,7 +72,7 @@ const MANDATE_VERB_POOL: Record<string, string[]> = {
   governance_standardization: ["Instituted", "Codified", "Standardized", "Embedded", "Enforced", "Formalized", "Governed"],
   bi_platform_modernization: ["Architected", "Migrated", "Replatformed", "Engineered", "Unified", "Modernized", "Scaled"],
   insight_delivery_automation: ["Operationalized", "Automated", "Democratized", "Surfaced", "Instrumented", "Embedded", "Accelerated"],
-  founder_adjacent_builder: ["Stood up", "Launched", "Bootstrapped", "Founded", "Pioneered", "Incubated", "Originated"],
+  founder_adjacent_builder: ["Established", "Launched", "Bootstrapped", "Founded", "Pioneered", "Incubated", "Originated"],
   revenue_ops_forecasting: ["Recaptured", "Forecasted", "Recovered", "Monetized", "Optimized", "Repriced", "Modeled"],
   operating_model_transformation: ["Redesigned", "Restructured", "Overhauled", "Reengineered", "Consolidated", "Realigned", "Repositioned"],
   product_gtm_analytics: ["Instrumented", "Segmented", "Personalized", "Activated", "Converted", "Optimized", "Tracked"],
@@ -91,6 +91,80 @@ const SAFE_MANAGERIAL_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /^(?:played|had)\s+(?:a\s+)?(?:key|critical|vital|important)\s+role\s+in\b/i, label: "played a key role" },
   { pattern: /^(?:worked\s+(?:closely|collaboratively|cross-functionally))\s+with\b/i, label: "worked closely with" },
 ];
+
+// ── Hype Word Suppression ───────────────────────────────────────
+//
+// Words that inflate tone beyond what facts support. Deterministically
+// replaced with precise executive alternatives. No heuristic suffixing.
+
+export const HYPE_WORDS: { pattern: RegExp; replacement: string; label: string }[] = [
+  { pattern: /\bpowerhouse\b/gi, replacement: "high-performing", label: "powerhouse" },
+  { pattern: /\bmarket-dominating\b/gi, replacement: "market-leading", label: "market-dominating" },
+  { pattern: /\bgame-changing\b/gi, replacement: "significant", label: "game-changing" },
+  { pattern: /\bgame changer\b/gi, replacement: "significant improvement", label: "game changer" },
+  { pattern: /\bcatalyzed\b/gi, replacement: "initiated", label: "catalyzed" },
+  { pattern: /\bcatalyze\b/gi, replacement: "initiate", label: "catalyze" },
+  { pattern: /\bcatalyst\b/gi, replacement: "driver", label: "catalyst" },
+  { pattern: /\bgroundbreaking\b/gi, replacement: "first-of-its-kind", label: "groundbreaking" },
+  { pattern: /\brevolutionized\b/gi, replacement: "redesigned", label: "revolutionized" },
+  { pattern: /\brevolutionize\b/gi, replacement: "redesign", label: "revolutionize" },
+  { pattern: /\bworld-class\b/gi, replacement: "enterprise-grade", label: "world-class" },
+  { pattern: /\bbest-in-class\b/gi, replacement: "competitive", label: "best-in-class" },
+  { pattern: /\bcutting-edge\b/gi, replacement: "modern", label: "cutting-edge" },
+  { pattern: /\bstate-of-the-art\b/gi, replacement: "advanced", label: "state-of-the-art" },
+  { pattern: /\bskyrocketed\b/gi, replacement: "increased significantly", label: "skyrocketed" },
+  { pattern: /\bunprecedented\b/gi, replacement: "notable", label: "unprecedented" },
+  { pattern: /\btransformative\b/gi, replacement: "impactful", label: "transformative" },
+  { pattern: /\bexponential(?:ly)?\b/gi, replacement: "substantial", label: "exponential" },
+  { pattern: /\bmassive\b/gi, replacement: "large-scale", label: "massive" },
+  { pattern: /\bseismic\b/gi, replacement: "significant", label: "seismic" },
+  { pattern: /\bdisruptive\b/gi, replacement: "innovative", label: "disruptive" },
+  { pattern: /\bblew past\b/gi, replacement: "exceeded", label: "blew past" },
+  { pattern: /\brunaway success\b/gi, replacement: "strong result", label: "runaway success" },
+  { pattern: /\btrailblazing\b/gi, replacement: "leading", label: "trailblazing" },
+  { pattern: /\bparadigm[- ]shift\b/gi, replacement: "strategic change", label: "paradigm shift" },
+];
+
+export interface HypeWordResult {
+  total_found: number;
+  replacements: { location: string; word: string; replacement: string }[];
+}
+
+function hypeWordSuppression(resume: TailoredResume): HypeWordResult {
+  const replacements: { location: string; word: string; replacement: string }[] = [];
+
+  function scanAndReplace(text: string, location: string): string {
+    let result = text;
+    for (const hw of HYPE_WORDS) {
+      hw.pattern.lastIndex = 0;
+      const match = result.match(hw.pattern);
+      if (match) {
+        result = result.replace(hw.pattern, hw.replacement);
+        replacements.push({ location, word: match[0], replacement: hw.replacement });
+      }
+    }
+    return result;
+  }
+
+  // Scan summary
+  resume.professional_summary = scanAndReplace(resume.professional_summary, "summary");
+
+  // Scan bullets and scope lines
+  for (let i = 0; i < resume.experience.length; i++) {
+    for (let j = 0; j < resume.experience[i].bullets.length; j++) {
+      resume.experience[i].bullets[j].text = scanAndReplace(
+        resume.experience[i].bullets[j].text,
+        `experience[${i}].bullets[${j}]`,
+      );
+    }
+    const exp = resume.experience[i] as any;
+    if (exp.scope_line) {
+      exp.scope_line = scanAndReplace(exp.scope_line, `experience[${i}].scope_line`);
+    }
+  }
+
+  return { total_found: replacements.length, replacements };
+}
 
 const PASSIVE_STARTERS = [
   /^was\s+/i,
@@ -288,9 +362,8 @@ function refineBulletTone(resume: TailoredResume): ToneViolation[] {
       if (SOFT_VERBS.includes(firstWord)) {
         const replacement = SOFT_VERB_REPLACEMENTS[firstWord];
         if (replacement) {
-          // Auto-fix: replace the weak opener verb with a stronger alternative
-          const rest = text.substring(text.indexOf(firstWord) + firstWord.length);
-          bullet.text = replacement + rest;
+          // Safe auto-fix: replace only the leading word (no indexOf heuristic)
+          bullet.text = text.replace(/^\S+/, replacement);
           violations.push({
             location: loc,
             issue: `soft_verb_opener: "${firstWord}" → auto-fixed to "${replacement}"`,
@@ -404,9 +477,8 @@ function verbStrengthPass(resume: TailoredResume, mandate: MandateProfile): Verb
         const replacement = available[0];
         usedMandateVerbs.add(replacement.toLowerCase());
         const bullet = resume.experience[vp.roleIdx].bullets[vp.bulletIdx];
-        const rest = bullet.text.substring(bullet.text.indexOf(vp.verb) + vp.verb.length);
-        // Only capitalize if the replacement isn't already multi-word
-        bullet.text = replacement + rest;
+        // Safe: replace only the leading word, no indexOf/substring heuristic
+        bullet.text = bullet.text.replace(/^\S+/, replacement);
         vp.verb = replacement.toLowerCase().split(/\s+/)[0]; // Update tracker
         upgradesApplied++;
       }
@@ -437,8 +509,8 @@ function verbStrengthPass(resume: TailoredResume, mandate: MandateProfile): Verb
         const replacement = available[0];
         usedDiversity.add(replacement.toLowerCase());
         const bullet = resume.experience[vp.roleIdx].bullets[vp.bulletIdx];
-        const rest = bullet.text.substring(bullet.text.indexOf(vp.verb) + vp.verb.length);
-        bullet.text = replacement + rest;
+        // Safe: replace only the leading word, no indexOf/substring heuristic
+        bullet.text = bullet.text.replace(/^\S+/, replacement);
         verbCounts.set(vp.verb, count - 1); // Decrement old count
         diversityFixes++;
       }
@@ -893,6 +965,7 @@ export interface GovernorResult {
   filler_removals: string[];
   tone_violations: ToneViolation[];
   verb_strength: VerbStrengthResult;
+  hype_word_suppression: HypeWordResult;
   competency_capped: boolean;
   scope_line_fixes: string[];
   summary_trimmed: boolean;
@@ -944,6 +1017,9 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
   // 6b. Verb Strength Pass (mandate-aligned upgrades + diversity enforcement)
   const verbStrength = verbStrengthPass(resume, mandate);
 
+  // 6c. Hype Word Suppression (deterministic removal of inflated language)
+  const hypeWordResult = hypeWordSuppression(resume);
+
   // 7. Competency cap (8-10, mandate-sorted)
   const competencyCapped = enforceCompetencyCap(resume, mandate);
 
@@ -976,6 +1052,7 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
     filler_removals: fillerRemovals,
     tone_violations: toneViolations,
     verb_strength: verbStrength,
+    hype_word_suppression: hypeWordResult,
     competency_capped: competencyCapped,
     scope_line_fixes: scopeLineFixes,
     summary_trimmed: summaryTrimmed,

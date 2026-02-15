@@ -35,6 +35,7 @@ import { governLayout } from "./stage6-layout-governor/governor";
 import { runTruthAudit, detectOwnershipInflation } from "./stage7-truth-audit/auditor";
 import { renderPlaintext } from "./output/plaintext-renderer";
 import { buildClarificationQuestions } from "./output/clarification-builder";
+import { runQAGate, type QAGateResult } from "./qa-gate";
 
 import type {
   PipelineResult,
@@ -309,6 +310,17 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
           const vs = stage6.data.verb_strength;
           logger?.info(`🔤 [Pipeline] Verb strength: ${vs.upgrades_applied} mandate upgrades, ${vs.diversity_fixes} diversity fixes, ${vs.generic_verbs_remaining} generic verbs remaining, ${vs.mandate_aligned_pct}% mandate-aligned`);
         }
+
+        // Log hype word suppression results
+        if (stage6.data.hype_word_suppression?.total_found > 0) {
+          const hw = stage6.data.hype_word_suppression;
+          logger?.info(`🚫 [Pipeline] Hype word suppression: ${hw.total_found} word(s) replaced: ${hw.replacements.map((r: any) => `"${r.word}"→"${r.replacement}"`).join(", ")}`);
+        }
+
+        // Log hard-block and metric verification from stage 7 (preview)
+        if (stage6.data.hype_word_suppression?.total_found === 0) {
+          logger?.info(`✅ [Pipeline] No hype words detected`);
+        }
       }
 
       // ── STAGE 7: Truth Audit ───────────────────────────────────────
@@ -331,6 +343,17 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
         // Log summary opener audit
         if (stage7.data.summaryOpenerAudit.has_banned_opener) {
           logger?.warn(`⚠️ [Pipeline] Summary uses banned generic opener: "${stage7.data.summaryOpenerAudit.matched_pattern}"`);
+        }
+
+        // Log hard-block claim results
+        if (stage7.data.hardBlockResult?.violations.length > 0) {
+          logger?.warn(`🚫 [Pipeline] Hard-block claims without ledger support: ${stage7.data.hardBlockResult.violations.map((v: any) => v.pattern_label).join(", ")}`);
+        }
+
+        // Log metric verification results
+        const unsupportedMetrics = stage7.data.metricVerifications?.filter((m: any) => !m.has_support) || [];
+        if (unsupportedMetrics.length > 0) {
+          logger?.warn(`🚫 [Pipeline] Fabricated metrics: ${unsupportedMetrics.map((m: any) => m.metric).join(", ")}`);
         }
 
         // Log blocked state from truth audit
@@ -392,6 +415,22 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
   const finalCoverLetter = currentReport?.pass ? currentCoverLetter! : bestCoverLetter || currentCoverLetter!;
   const finalReport = currentReport?.pass ? currentReport : bestReport || currentReport!;
   const passed = finalReport?.pass ?? false;
+
+  // ── QA Gate (final quality check before rendering) ──────────────
+
+  let qaResult: QAGateResult | null = null;
+  try {
+    qaResult = runQAGate(finalResume, finalCoverLetter);
+    if (qaResult.blocking_issues.length > 0) {
+      logger?.warn(`🚫 [Pipeline] QA Gate blocking issues: ${qaResult.blocking_issues.join("; ")}`);
+    }
+    if (qaResult.warnings.length > 0) {
+      logger?.info(`⚠️ [Pipeline] QA Gate warnings: ${qaResult.warnings.join("; ")}`);
+    }
+    logger?.info(`🔎 [Pipeline] QA Gate: ${qaResult.passed ? "PASS ✅" : "FAIL ❌"} (${qaResult.duration_ms}ms)`);
+  } catch (err: any) {
+    logger?.warn(`⚠️ [Pipeline] QA Gate failed: ${err.message}`);
+  }
 
   // ── Plaintext ATS render ───────────────────────────────────────
 
@@ -485,6 +524,18 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     );
   }
 
+  // Check for QA Gate issues
+  if (qaResult && !qaResult.passed) {
+    humanReviewNotes.push(
+      `[QA GATE] Pre-PDF quality check failed: ${qaResult.blocking_issues.join("; ")}`,
+    );
+  }
+  if (qaResult?.warnings.length) {
+    for (const w of qaResult.warnings) {
+      humanReviewNotes.push(`[QA WARNING] ${w}`);
+    }
+  }
+
   // ── Summary ────────────────────────────────────────────────────
 
   logger?.info(`\n${"═".repeat(60)}`);
@@ -495,6 +546,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
   logger?.info(`📊 [Pipeline] Clarification questions: ${clarificationQuestions.length}`);
   logger?.info(`📊 [Pipeline] Ownership warnings: ${ownershipWarnings.length}`);
   logger?.info(`📊 [Pipeline] Plaintext rendered: ${!!plaintextResume}`);
+  logger?.info(`📊 [Pipeline] QA Gate: ${qaResult?.passed ? "PASS" : qaResult ? "FAIL" : "SKIPPED"}`);
   logger?.info(`${"═".repeat(60)}\n`);
 
   return {

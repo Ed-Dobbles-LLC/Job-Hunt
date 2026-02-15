@@ -677,6 +677,34 @@ RULES:
       });
       coverLetter.word_count = countCoverLetterWords(coverLetter);
     }
+
+    // ── Post-LLM Cover Letter: Hype Word Suppression (deterministic) ──
+    const COVER_LETTER_HYPE: { pattern: RegExp; replacement: string }[] = [
+      { pattern: /\bcatalyzed\b/gi, replacement: "initiated" },
+      { pattern: /\bcatalyze\b/gi, replacement: "initiate" },
+      { pattern: /\bcatalyst\b/gi, replacement: "driver" },
+      { pattern: /\bpowerhouse\b/gi, replacement: "high-performing" },
+      { pattern: /\bmarket-dominating\b/gi, replacement: "market-leading" },
+      { pattern: /\bgame-changing\b/gi, replacement: "significant" },
+      { pattern: /\bgame changer\b/gi, replacement: "significant improvement" },
+      { pattern: /\bgroundbreaking\b/gi, replacement: "first-of-its-kind" },
+      { pattern: /\brevolutionized\b/gi, replacement: "redesigned" },
+      { pattern: /\bworld-class\b/gi, replacement: "enterprise-grade" },
+      { pattern: /\bbest-in-class\b/gi, replacement: "competitive" },
+      { pattern: /\bcutting-edge\b/gi, replacement: "modern" },
+      { pattern: /\bstate-of-the-art\b/gi, replacement: "advanced" },
+      { pattern: /\btransformative\b/gi, replacement: "impactful" },
+      { pattern: /\bunprecedented\b/gi, replacement: "notable" },
+      { pattern: /\bskyrocketed\b/gi, replacement: "increased significantly" },
+      { pattern: /\bseismic\b/gi, replacement: "significant" },
+      { pattern: /\bdisruptive\b/gi, replacement: "innovative" },
+      { pattern: /\bdrove\s+(?:the\s+)?board\s+to\b/gi, replacement: "presented to the board" },
+    ];
+    for (const hw of COVER_LETTER_HYPE) {
+      coverLetter.opening_paragraph = coverLetter.opening_paragraph.replace(hw.pattern, hw.replacement);
+      coverLetter.body_paragraphs = coverLetter.body_paragraphs.map(p => p.replace(hw.pattern, hw.replacement));
+      coverLetter.closing_paragraph = coverLetter.closing_paragraph.replace(hw.pattern, hw.replacement);
+    }
   }
 
   // Run compression pass (mandate-aware)

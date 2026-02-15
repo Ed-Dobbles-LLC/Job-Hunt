@@ -182,6 +182,11 @@ const BANNED_PHRASES = [
   "positioned analytics as a revenue driver",
   "distinctly technical for an executive at this level",
   "career defined by",
+  // Hype words — inflated language that undermines credibility
+  "powerhouse", "market-dominating", "game-changing", "game changer",
+  "catalyzed", "groundbreaking", "revolutionized", "skyrocketed",
+  "unprecedented", "transformative", "seismic", "disruptive",
+  "paradigm shift", "trailblazing", "runaway success", "blew past",
 ];
 
 // ── Mandate keyword maps (for alignment scoring) ──
@@ -225,9 +230,27 @@ function bulletMatchesMandate(text: string, mandate: string): boolean {
   return hits >= 1;
 }
 
+// Expanded action verb set — no heuristic suffix appending.
+// Every valid form is listed explicitly to prevent corruption.
+const ACTION_VERB_SET = new Set([
+  ...ACTION_VERBS,
+  // Additional past-tense and mandate-aligned forms
+  "partnered", "instituted", "codified", "standardized", "embedded",
+  "enforced", "formalized", "governed", "replatformed", "engineered",
+  "unified", "operationalized", "surfaced", "instrumented", "bootstrapped",
+  "incubated", "originated", "recaptured", "forecasted", "monetized",
+  "repriced", "modeled", "redesigned", "reengineered", "realigned",
+  "repositioned", "segmented", "personalized", "activated", "converted",
+  "experimented", "funneled", "iterated", "influenced", "briefed",
+  "positioned", "advised", "counseled", "steered", "shaped",
+  "recruited", "mentored", "organized", "elevated", "coached",
+  "tested", "tracked", "established", "executed", "orchestrated",
+  "overhauled", "recovered", "expanded", "strengthened",
+]);
+
 function startsWithActionVerb(text: string): boolean {
   const firstWord = text.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z]/g, "") || "";
-  return ACTION_VERBS.some(v => firstWord === v || firstWord === v + "d" || firstWord === v + "ed");
+  return ACTION_VERB_SET.has(firstWord);
 }
 
 function hasFiller(text: string): boolean {

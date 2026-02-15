@@ -128,6 +128,203 @@ const ENTERPRISE_SCOPE_VERBS: { pattern: RegExp; label: string; rewrite: string 
   { pattern: /\bsaved\s+(?:the\s+)?company\s+\$\d+/i, label: "saved the company $X", rewrite: "contributed to savings of" },
 ];
 
+// ── Hard-Block Claim Patterns ────────────────────────────────────
+//
+// Claims that REQUIRE explicit claim_id verification. If a resume
+// bullet matches one of these AND has no valid claim_id backing it
+// in the ledger, the bullet is BLOCKED (critical violation).
+//
+// These are high-authority claims that must trace to inventory facts.
+// Unlike inflation patterns (which compare draft vs source), these
+// check whether the claim exists AT ALL.
+
+const HARD_BLOCK_CLAIM_PATTERNS: { pattern: RegExp; label: string }[] = [
+  // Board-level authority claims
+  { pattern: /\b(?:led|drove|directed)\s+(?:the\s+)?board\s+(?:to\s+)?(?:decid|approv|vot|adopt)/i, label: "board decision" },
+  { pattern: /\bdrove\s+(?:the\s+)?board\s+to\b/i, label: "drove board to" },
+  { pattern: /\b(?:presented to|briefed)\s+(?:the\s+)?board\s+(?:on|about|regarding)\b/i, label: "board presentation" },
+  // Investment/funding claims
+  { pattern: /\bcatalyz(?:ed|ing)\s+(?:\$?\d|investment|funding|capital)\b/i, label: "catalyzed investment" },
+  { pattern: /\bsecur(?:ed|ing)\s+\$\d[\d,.]*\s*[MBT]/i, label: "secured $XM+ funding" },
+  { pattern: /\brais(?:ed|ing)\s+\$\d[\d,.]*\s*[MBT]/i, label: "raised $XM+ funding" },
+  { pattern: /\bincreas(?:ed|ing)\s+investment\s+by\b/i, label: "increased investment" },
+  // Strategic pivot claims
+  { pattern: /\bcaus(?:ed|ing)\s+(?:a\s+)?strategic\s+pivot\b/i, label: "caused strategic pivot" },
+  { pattern: /\binitiat(?:ed|ing)\s+(?:a\s+)?(?:company|org|enterprise)[- ]wide\s+(?:pivot|shift|transformation)\b/i, label: "company-wide pivot" },
+  // Revenue claims with specific dollar amounts ≥$1M
+  { pattern: /\bgenerat(?:ed|ing)\s+\$\d[\d,.]*\s*[MBT]/i, label: "generated $XM+ revenue" },
+  { pattern: /\brecover(?:ed|ing)\s+\$\d[\d,.]*\s*[MBT]/i, label: "recovered $XM+" },
+  { pattern: /\bsav(?:ed|ing)\s+\$\d[\d,.]*\s*[MBT]/i, label: "saved $XM+" },
+  // Large scope claims
+  { pattern: /\b(?:team|org|division)\s+of\s+\d{3,}\b/i, label: "large team claim (100+)" },
+  { pattern: /\b\$\d+[BT]\s+(?:revenue|budget|portfolio|p&l)\b/i, label: "billion-dollar scope" },
+];
+
+// ── Metric Extraction & Verification ─────────────────────────────
+//
+// Extracts all quantitative metrics from resume bullets and verifies
+// each one against the inventory. Any new metric not in inventory
+// is a critical violation — no fabricated numbers allowed.
+
+const METRIC_EXTRACTION_PATTERNS: RegExp[] = [
+  /\$\d[\d,.]*\s*[KMBTkmbt]?\b/g,                                  // Dollar amounts
+  /\d+\.?\d*%/g,                                                    // Percentages
+  /\d+[xX]\s+(?:improvement|increase|growth|reduction|faster|more)/g, // Multipliers
+  /\d{2,}[\s-]?(?:person|member|report|employee|engineer|analyst)/gi,  // Team sizes
+];
+
+function normalizedMetricMatch(metric: string, inventoryText: string): boolean {
+  // Normalize: remove commas, spaces, and compare
+  const normalized = metric.replace(/[,\s]/g, "").toLowerCase();
+  const invNormalized = inventoryText.replace(/[,\s]/g, "").toLowerCase();
+  if (invNormalized.includes(normalized)) return true;
+
+  // Also check for common format variations:
+  // "$50M" should match "$50 million" or "$50m"
+  const numMatch = metric.match(/\$?([\d,.]+)\s*([KMBTkmbt])/);
+  if (numMatch) {
+    const num = numMatch[1];
+    const suffix = numMatch[2].toUpperCase();
+    const suffixWords: Record<string, string[]> = {
+      K: ["k", "thousand"],
+      M: ["m", "million", "mm"],
+      B: ["b", "billion"],
+      T: ["t", "trillion"],
+    };
+    const words = suffixWords[suffix] || [];
+    for (const w of words) {
+      if (invNormalized.includes(`${num.replace(/,/g, "")}${w}`) ||
+          invNormalized.includes(`${num.replace(/,/g, "")} ${w}`)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+interface MetricVerification {
+  location: string;
+  metric: string;
+  has_support: boolean;
+}
+
+function verifyMetricsAgainstLedger(
+  resume: TailoredResume,
+  inventoryBullets: InventoryBullet[],
+): MetricVerification[] {
+  const allInventoryText = inventoryBullets.map(b => b.text).join(" ");
+  const results: MetricVerification[] = [];
+
+  for (let i = 0; i < resume.experience.length; i++) {
+    for (let j = 0; j < resume.experience[i].bullets.length; j++) {
+      const text = resume.experience[i].bullets[j].text;
+
+      for (const basePattern of METRIC_EXTRACTION_PATTERNS) {
+        // Create new regex to avoid lastIndex issues
+        const pattern = new RegExp(basePattern.source, basePattern.flags);
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+          const metric = match[0];
+          const hasSupport = allInventoryText.includes(metric) ||
+            normalizedMetricMatch(metric, allInventoryText);
+
+          results.push({
+            location: `resume.experience[${i}].bullets[${j}]`,
+            metric,
+            has_support: hasSupport,
+          });
+        }
+      }
+    }
+  }
+
+  // Also check summary for metrics
+  const summaryText = resume.professional_summary;
+  for (const basePattern of METRIC_EXTRACTION_PATTERNS) {
+    const pattern = new RegExp(basePattern.source, basePattern.flags);
+    let match;
+    while ((match = pattern.exec(summaryText)) !== null) {
+      const metric = match[0];
+      const hasSupport = allInventoryText.includes(metric) ||
+        normalizedMetricMatch(metric, allInventoryText);
+
+      results.push({
+        location: "resume.professional_summary",
+        metric,
+        has_support: hasSupport,
+      });
+    }
+  }
+
+  return results;
+}
+
+// ── Hard-Block Claim Verification ────────────────────────────────
+//
+// For each bullet matching a hard-block pattern, verify it has valid
+// claim_ids that exist in the ledger. If not → critical violation.
+
+interface HardBlockResult {
+  violations: { location: string; claim: string; pattern_label: string }[];
+  total_checked: number;
+}
+
+function verifyHardBlockClaims(
+  resume: TailoredResume,
+  inventoryBullets: InventoryBullet[],
+): HardBlockResult {
+  const violations: { location: string; claim: string; pattern_label: string }[] = [];
+  let totalChecked = 0;
+  const allInventoryText = inventoryBullets.map(b => b.text).join(" ").toLowerCase();
+
+  for (let i = 0; i < resume.experience.length; i++) {
+    for (let j = 0; j < resume.experience[i].bullets.length; j++) {
+      const bullet = resume.experience[i].bullets[j];
+
+      for (const hbp of HARD_BLOCK_CLAIM_PATTERNS) {
+        const match = bullet.text.match(hbp.pattern);
+        if (!match) continue;
+
+        totalChecked++;
+
+        // Check 1: Does the bullet have claim_ids?
+        const hasClaimIds = Array.isArray((bullet as any).claim_ids) &&
+          (bullet as any).claim_ids.length > 0;
+
+        // Check 2: Does the inventory support this specific claim?
+        const inventorySupports = hbp.pattern.test(allInventoryText);
+
+        if (!hasClaimIds || !inventorySupports) {
+          violations.push({
+            location: `resume.experience[${i}].bullets[${j}]`,
+            claim: match[0],
+            pattern_label: hbp.label,
+          });
+        }
+      }
+    }
+  }
+
+  // Also check summary for hard-block claims
+  for (const hbp of HARD_BLOCK_CLAIM_PATTERNS) {
+    const match = resume.professional_summary.match(hbp.pattern);
+    if (match) {
+      totalChecked++;
+      const inventorySupports = hbp.pattern.test(allInventoryText);
+      if (!inventorySupports) {
+        violations.push({
+          location: "resume.professional_summary",
+          claim: match[0],
+          pattern_label: hbp.label,
+        });
+      }
+    }
+  }
+
+  return { violations, total_checked: totalChecked };
+}
+
 // ── Inventory Bullet Extraction ──────────────────────────────────
 
 interface InventoryBullet {
@@ -385,6 +582,8 @@ export interface TruthAuditResult {
   ownershipWarnings: OwnershipInflationWarning[];
   claimAudit: ClaimAuditResult;
   summaryOpenerAudit: SummaryOpenerAudit;
+  hardBlockResult: HardBlockResult;
+  metricVerifications: MetricVerification[];
   blocked: boolean;
   block_reasons: string[];
 }
@@ -417,6 +616,13 @@ export function runTruthAudit(
 
   // Audit summary opener for banned generic patterns
   const summaryOpenerAudit = auditSummaryOpener(resume);
+
+  // Verify hard-block claims (board decisions, investment, strategic pivots)
+  const inventoryBullets = extractInventoryBullets(inventory);
+  const hardBlockResult = verifyHardBlockClaims(resume, inventoryBullets);
+
+  // Verify all metrics against ledger (no fabricated numbers)
+  const metricVerifications = verifyMetricsAgainstLedger(resume, inventoryBullets);
 
   // Determine if output should be BLOCKED
   const blockReasons: string[] = [];
@@ -464,6 +670,42 @@ export function runTruthAudit(
     report.stats.warnings++;
   }
 
+  // Block if hard-block claims have no ledger support
+  if (hardBlockResult.violations.length > 0) {
+    for (const v of hardBlockResult.violations) {
+      report.violations.push({
+        type: "UNSUPPORTED_METRIC",
+        severity: "critical",
+        location: v.location,
+        found_value: v.claim,
+        explanation: `Hard-block claim "${v.pattern_label}" requires explicit inventory support. No matching claim found in ledger.`,
+      });
+      report.stats.critical_violations++;
+    }
+    const labels = [...new Set(hardBlockResult.violations.map(v => v.pattern_label))].join(", ");
+    blockReasons.push(
+      `${hardBlockResult.violations.length} hard-block claim(s) without ledger support: ${labels}`,
+    );
+  }
+
+  // Block if fabricated metrics detected (numbers not in inventory)
+  const unsupportedNewMetrics = metricVerifications.filter(m => !m.has_support);
+  if (unsupportedNewMetrics.length > 0) {
+    for (const m of unsupportedNewMetrics) {
+      report.violations.push({
+        type: "UNSUPPORTED_METRIC",
+        severity: "critical",
+        location: m.location,
+        found_value: m.metric,
+        explanation: `Metric "${m.metric}" not found in inventory. All quantitative claims must trace to source facts.`,
+      });
+      report.stats.critical_violations++;
+    }
+    blockReasons.push(
+      `${unsupportedNewMetrics.length} fabricated metric(s) not in inventory: ${unsupportedNewMetrics.map(m => m.metric).slice(0, 5).join(", ")}`,
+    );
+  }
+
   // Block if summary opens with a banned generic pattern
   // The first sentence MUST be mandate-anchored — generic openers fail the executive presence test
   if (summaryOpenerAudit.has_banned_opener) {
@@ -485,6 +727,8 @@ export function runTruthAudit(
     ownershipWarnings,
     claimAudit,
     summaryOpenerAudit,
+    hardBlockResult,
+    metricVerifications,
     blocked: blockReasons.length > 0,
     block_reasons: blockReasons,
   };
