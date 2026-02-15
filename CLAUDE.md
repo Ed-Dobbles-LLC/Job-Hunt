@@ -6,7 +6,7 @@ Automated job application pipeline that fetches job alerts from Gmail/imported e
 
 The codebase has two generation paths:
 1. **Agent-driven pipeline** — The `jobMatchAgent` orchestrates 19 tools via LLM tool-calling through the Inngest workflow.
-2. **Resume Engine pipeline** — A 7-stage deterministic-first pipeline (`src/resume-engine/`) that separates LLM calls (stages 2, 4) from deterministic processing (stages 1, 3, 5, 6, 7) for reproducibility.
+2. **Resume Engine pipeline** — An 8-stage + post-processing deterministic-first pipeline (`src/resume-engine/`) that separates LLM calls (stages 2, 4, 8) from deterministic processing (stages 1, 3, 5, 6, 7, post-processing) for reproducibility. Two architecture versions available via `PIPELINE_ARCH` feature flag (v1 legacy, v2 consolidated).
 
 ## Tech Stack
 
@@ -90,9 +90,17 @@ src/mastra/
     ├── profile.html            # Profile builder UI
     └── settings.html           # Settings UI
 
-src/resume-engine/              # 7-stage deterministic-first resume pipeline
+src/resume-engine/              # 8-stage + post-processing deterministic-first resume pipeline
 ├── types.ts                    # TypeScript interfaces + Zod schemas (Claim, ClaimsLedger, MandateProfile, etc.)
-├── pipeline.ts                 # Orchestrator (runs stages 1-7 sequentially, max 3 attempts)
+├── pipeline.ts                 # Feature-flag router: dispatches to v1, v2, or dry-run based on PIPELINE_ARCH
+├── pipeline-v1.ts              # v1 (legacy) orchestrator — original 7-stage pipeline preserved
+├── pipeline-v2.ts              # v2 (consolidated) orchestrator — budget enforcement, detection-only QA, transaction safety
+├── pipeline-dry-run.ts         # Dry-run mode: validates contracts, budget, immutability using fixtures (no LLM/DB)
+├── pipeline-budget.ts          # Budget enforcer: LLM call caps, cost ceiling, repair loop limits, timeout
+├── pipeline-transaction.ts     # Transaction safety: atomic BEGIN/COMMIT/ROLLBACK for DB writes
+├── stage-contracts.ts          # Stage Contract Matrix: allowed/forbidden mutations, failure modes, retry policies
+├── post-processing-controller.ts # Consolidated detection-only QA (replaces QA Gate + Refinement Layer in v2)
+├── repair-controller.ts        # Safe deterministic patches + budget-counted LLM repair
 ├── auto-generate.ts            # Entry point for batch packet generation (minScore/topN filtering)
 ├── stage1-claims-ledger/
 │   └── extractor.ts            # Deterministic: parse resume → Claims with unique IDs (cl-{role}-{type}-{seq})
@@ -103,11 +111,15 @@ src/resume-engine/              # 7-stage deterministic-first resume pipeline
 ├── stage4-constrained-rewrite/
 │   └── rewriter.ts             # LLM: generate resume + cover letter (structured output, claim_ids required)
 ├── stage5-differentiation/
-│   └── gate.ts                 # Deterministic: compare vs last 3 resumes in resume_history table
+│   └── gate.ts                 # Deterministic: mandate-scoped compare vs last 3 resumes in resume_history
 ├── stage6-layout-governor/
 │   └── governor.ts             # Deterministic: enforce bullet caps, word limits, filler removal
 ├── stage7-truth-audit/
 │   └── auditor.ts              # Deterministic: verify all claims, detect ownership inflation
+├── stage8-recruiter-review/
+│   └── reviewer.ts             # LLM: structured recruiter feedback (detection-only, no rewrite loops in v2)
+├── qa/
+│   └── verbIntegrityGuard.ts   # Verb integrity check (detection-only by default in v2)
 └── output/
     ├── plaintext-renderer.ts   # ATS-safe plaintext resume rendering
     └── clarification-builder.ts # Build gap-closure questions for human review
@@ -209,25 +221,69 @@ spec/                           # Technical specifications
 | `clayEnrichTool.ts` | Clay webhook integration |
 | `apolloJobSearchTool.ts` | Apollo.io job search integration |
 
-## Resume Engine (7-Stage Pipeline)
+## Resume Engine (8-Stage + Post-Processing Pipeline)
 
-The resume engine at `src/resume-engine/` is a deterministic-first pipeline that cleanly separates LLM and non-LLM stages:
+The resume engine at `src/resume-engine/` is a deterministic-first pipeline with two architecture versions controlled by `PIPELINE_ARCH` env var.
 
-| Stage | Name | Type | Purpose |
-|-------|------|------|---------|
-| 1 | Claims Ledger | **Deterministic** | Parse inventory → Claims with unique IDs (`cl-{role}-{type}-{seq}`). Recognizes ~150 tools, 19 capability domains. |
-| 2 | Mandate Classifier | **LLM** | Classify JD → MandateProfile with archetypes, seniority level, tone guidance. |
-| 3 | Bullet Scoring | **Deterministic** | Score bullets by `(mandate_alignment × 2) + impact + recency`. Revenue gravity penalty for mismatched emphasis. Optional embedding scoring. |
-| 4 | Constrained Rewrite | **LLM** | Generate resume + cover letter via `generateObject`. Each bullet requires `claim_ids[]`. Correction loop on retry (temp 0.2). |
-| 5 | Differentiation Gate | **Deterministic** | Compare against last 3 resumes in `resume_history` table. Summary overlap < 30%, competency overlap < 50%, top-bullet similarity < 40%. |
-| 6 | Layout Governor | **Deterministic** | Enforce bullet caps per seniority, 22-word limit, strip 16 filler phrases, detect soft verbs, ensure reverse chronological order. |
-| 7 | Truth Audit | **Deterministic** | Verify all claims against ledger + allowlist. Detect ownership inflation (3 escalation patterns). Block if critical violations exceed threshold. |
+### Pipeline Architecture Selection
 
-**Retry architecture**: Stages 4→5→6→7 repeat up to 3 times. On stage 7 failure, stage 4 receives previous resume + violation report for correction. Best-of-N selection if all attempts fail.
+| `PIPELINE_ARCH` | Implementation | Default |
+|-----------------|----------------|---------|
+| `v1` | Legacy pipeline (`pipeline-v1.ts`) — original 7-stage + Stage 8 repair loops | **Yes** |
+| `v2` | Consolidated pipeline (`pipeline-v2.ts`) — budget enforcement, detection-only QA, no Stage 8 repair loops, transaction safety | No |
 
-**Entry points**:
-- `pipeline.ts:runPipeline()` — Single job, returns `PipelineResult` with attempt history
+Set `PIPELINE_ARCH=v2` to enable the consolidated pipeline. The `dry_run: true` input flag validates contracts without LLM calls.
+
+### Stage Contract Matrix
+
+Each stage declares what it may and may not mutate, enforced by `stage-contracts.ts`:
+
+| Stage | Name | Type | Allowed Mutations | Failure Mode |
+|-------|------|------|-------------------|--------------|
+| 1 | Claims Ledger | **Deterministic** | `claims_ledger` | abort |
+| 2 | Mandate Classifier | **LLM** | `mandate_profile` | abort |
+| 3 | Bullet Scoring | **Deterministic** | `bullet_plan` | abort |
+| 4 | Constrained Rewrite | **LLM** | `resume.full`, `cover_letter.full` | retry (max 3) |
+| 5 | Differentiation Gate | **Deterministic** | `none` (detection-only) | degrade |
+| 6 | Layout Governor | **Deterministic** | `resume.experience.bullets`, `resume.experience.order`, `resume.professional_summary`, `resume.core_competencies` | degrade |
+| 7 | Truth Audit | **Deterministic** | `none` (detection-only) | degrade |
+| 8 | Recruiter Review | **LLM** | `none` (feedback-only) | degrade |
+| PP | Post-Processing | **Deterministic** | `none` (detection-only) | skip |
+
+### Budget Enforcement (v2 only)
+
+Configured via `pipeline-budget.ts`, overridable per-run:
+
+| Limit | Default | Env Override |
+|-------|---------|--------------|
+| Max LLM calls | 12 | `PIPELINE_MAX_LLM_CALLS` |
+| Max repair loops | 3 | `PIPELINE_MAX_REPAIR_LOOPS` |
+| Max tokens | 500,000 | `PIPELINE_MAX_TOKENS` |
+| Max cost (USD) | $2.00 | `PIPELINE_MAX_COST_USD` |
+| Timeout | 600s | `PIPELINE_TIMEOUT_MS` |
+
+Budget exceeded → `BudgetExceededError` with structured violation, graceful degradation to best-of-N.
+
+### v2 Key Differences from v1
+
+- **Detection-only QA passes**: Verb integrity, hype suppression, corruption detection produce flags but never mutate resume text.
+- **No Stage 8 repair loops**: Recruiter Review runs once, produces structured feedback for human review only.
+- **Consolidated Post-Processing**: 10 detection-only sub-passes replace scattered QA Gate + Refinement Layer. Returns composite score (A–F grade).
+- **Transaction safety**: All finalize DB writes (snapshot + metadata + cost) go through a single `BEGIN/COMMIT/ROLLBACK` transaction.
+- **Mandate-scoped differentiation**: Compares against resumes with the same primary mandate first, falling back to any recent resumes.
+- **Global budget cap**: LLM calls, cost, tokens, and time are tracked and enforced across the entire pipeline run.
+
+### Retry Architecture
+
+- **v1**: Stages 4→5→6→7 repeat up to 3 times. Stage 8 runs repair loops. On stage 7 failure, stage 4 receives previous resume + violation report for correction.
+- **v2**: Stages 4→5→6→7 repeat up to `min(max_attempts, max_repair_loops)` times. Stage 8 runs ONCE (no repair). Budget enforced between attempts.
+- Both: Best-of-N selection if all attempts fail.
+
+### Entry Points
+
+- `pipeline.ts:runPipeline()` — Routes to v1/v2/dry-run based on `PIPELINE_ARCH` and `dry_run` flag
 - `auto-generate.ts:autoGeneratePackets()` — Batch generation for top-N scored jobs (default: score ≥ 60, top 20)
+- Dry-run: `runPipeline({ job_id: 0, dry_run: true, logger: console })` — validates contracts using fixtures
 
 ## Data Flow
 
@@ -273,6 +329,13 @@ The resume engine at `src/resume-engine/` is a deterministic-first pipeline that
 - **Claim ID linkage**: 4-strategy matching (direct ID, substring, reverse substring, source span overlap) links every resume bullet to its source claim.
 - **2-phase JD enrichment**: Phase 1 tries deterministic URL scraping (fast, free, 10s timeout per URL). Phase 2 uses LLM agent web search for remaining jobs (batches of 3, maxSteps 15, 2s inter-batch delay to avoid rate limiting). Runs as fire-and-forget background task with outer try/catch to prevent silent death.
 - **Background enrichment resilience**: The enrichment IIFE is wrapped in outer try/catch so individual batch failures don't kill the entire process. Frontend polls every 15s for up to 30 minutes.
+- **Pipeline feature flag**: `PIPELINE_ARCH=v1|v2` routes to different implementations via dynamic import. v1 is preserved exactly from the legacy codebase; v2 adds budget enforcement, detection-only QA, and transaction safety. Default is v1 for safe rollout.
+- **Stage Contract Matrix**: Each pipeline stage declares `allowed_mutations`, `forbidden_mutations`, `failure_mode`, and `max_attempts`. Enforced at runtime via `validateStageContract()` and validated in dry-run mode.
+- **Detection-only post-processing**: v2's Post-Processing Controller consolidates 10 sub-passes (corruption, verb integrity, hype, phrase quality, mandate alignment, differentiation, layout, exec depth, ownership inflation, cover letter QA) into a single detection-only pass that never mutates input.
+- **Budget enforcement**: v2 pipeline tracks LLM calls, repair loops, tokens, cost, and elapsed time. `BudgetExceededError` triggers graceful degradation to best-of-N rather than hard failure.
+- **Transaction safety (v2)**: Finalize DB writes (resume snapshot, pipeline metadata, cost flush) wrapped in `BEGIN/COMMIT/ROLLBACK` via `pipeline-transaction.ts`. On failure, all writes roll back atomically.
+- **Mandate-scoped divergence**: Differentiation gate and divergence enforcer prioritize comparison against resumes with the same primary mandate cluster. Falls back to any recent resumes when insufficient same-mandate history exists.
+- **Dry-run mode**: `runPipeline({ dry_run: true })` validates stage contracts, budget enforcement, and post-processing immutability using fixture data — no LLM calls or DB writes required.
 
 ## Database Schema
 
@@ -400,6 +463,12 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 - `DEBUG_GENERATION` — Enable verbose logging during packet generation
 - `USE_LEGACY_PIPELINE` — Use legacy agent-driven pipeline instead of resume engine (default: false)
 - `AUTO_GENERATE_AFTER_SCORE` — Auto-generate packets after scoring (default: true)
+- `PIPELINE_ARCH` — Resume engine architecture: `v1` (legacy, default) or `v2` (consolidated with budget enforcement)
+- `PIPELINE_MAX_LLM_CALLS` — v2 budget: max LLM calls per pipeline run (default: 12)
+- `PIPELINE_MAX_REPAIR_LOOPS` — v2 budget: max repair loop iterations (default: 3)
+- `PIPELINE_MAX_TOKENS` — v2 budget: max tokens per pipeline run (default: 500000)
+- `PIPELINE_MAX_COST_USD` — v2 budget: max cost in USD per pipeline run (default: 2.00)
+- `PIPELINE_TIMEOUT_MS` — v2 budget: pipeline timeout in milliseconds (default: 600000)
 
 **Optional (Messaging):**
 - `TELEGRAM_BOT_TOKEN` — Telegram bot token for workflow triggers
@@ -407,7 +476,7 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 ## Known Issues / TODOs
 
 1. **PDF page counting fragility**: `countPdfPages()` uses regex on PDF binary (`/Type /Page` pattern). Can miscount on some PDF structures.
-2. **No transaction safety**: DB operations use individual queries, not transactions. A failure mid-packet-generation can leave partial state.
+2. **No transaction safety (v1 only)**: v1 pipeline uses individual queries, not transactions. v2 pipeline wraps finalize DB writes in a single transaction (`pipeline-transaction.ts`).
 3. **Dashboard trigger is fire-and-forget**: `POST /api/dashboard/trigger` starts the workflow but returns immediately with no run tracking handle.
 4. **LibreOffice dependency**: PDF conversion requires LibreOffice headless. Works in Docker but not in all local dev environments.
 5. **Cover letter word count**: Schema enforces 250-350 words but the LLM sometimes drifts. The verifier catches this but correction doesn't always converge.

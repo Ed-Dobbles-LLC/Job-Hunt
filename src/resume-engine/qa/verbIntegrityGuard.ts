@@ -288,12 +288,15 @@ function capitalize(word: string): string {
  * Run the verb integrity and semantic drift guard on a resume.
  *
  * Scans all bullets for:
- *   1. Corrupted/malformed tokens → deterministic repair
- *   2. Semantic verb drift → deterministic verb swap
- *   3. Hype verbs → flag (not auto-replaced here, deferred to Stage 6)
+ *   1. Corrupted/malformed tokens → DETECT AND REPORT
+ *   2. Semantic verb drift → DETECT AND REPORT
+ *   3. Hype verbs → DETECT AND REPORT
  *
- * Mutates `resume` in place when auto-fixing (unless detectOnly=true).
- * Returns structured results for pipeline logging.
+ * DEFAULT BEHAVIOR: Detection-only. Does NOT mutate the resume.
+ * Set detectOnly=false to enable legacy auto-fix behavior (deprecated).
+ *
+ * Returns structured results for the pipeline to decide whether to
+ * feed issues back to an LLM correction prompt.
  */
 export function runVerbIntegrityGuard(
   resume: TailoredResume,
@@ -301,7 +304,7 @@ export function runVerbIntegrityGuard(
 ): VerbGuardResult {
   const start = Date.now();
   const issues: VerbIssue[] = [];
-  const detectOnly = opts.detectOnly ?? false;
+  const detectOnly = opts.detectOnly ?? true; // Default changed: detection-only
 
   // ── 1. Scan for corruption in all text sections ───────────────
 

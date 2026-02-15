@@ -21,6 +21,8 @@ export interface DifferentiationInput {
   resume: TailoredResume;
   jobId: number;
   mandate: MandateProfile;
+  /** When provided, prioritizes comparison against same-mandate resumes (with fallback to all recent) */
+  mandateCluster?: string;
 }
 
 export interface DifferentiationResult {

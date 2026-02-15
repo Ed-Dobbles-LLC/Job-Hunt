@@ -315,20 +315,47 @@ export async function storeResumeSnapshot(
 
 /**
  * Load the last N resume snapshots (excluding the current job).
+ *
+ * When mandateCluster is provided, returns snapshots for the SAME mandate
+ * cluster first (mandate-scoped comparison), then fills remaining slots
+ * with other recent snapshots. This ensures differentiation is most strict
+ * against similar roles and relaxed for dissimilar ones.
  */
 export async function loadRecentSnapshots(
   currentJobId: number,
   limit: number = 3,
+  mandateCluster?: string,
 ): Promise<ResumeSnapshot[]> {
   try {
-    const result = await query(
-      `SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
-       FROM resume_history
-       WHERE job_id != $1
-       ORDER BY created_at DESC
-       LIMIT $2`,
-      [currentJobId, limit],
-    );
+    let result;
+
+    if (mandateCluster) {
+      // Mandate-scoped: prioritize same-mandate snapshots
+      result = await query(
+        `(SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
+          FROM resume_history
+          WHERE job_id != $1 AND archetype_primary = $3
+          ORDER BY created_at DESC
+          LIMIT $2)
+         UNION ALL
+         (SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
+          FROM resume_history
+          WHERE job_id != $1 AND (archetype_primary IS NULL OR archetype_primary != $3)
+          ORDER BY created_at DESC
+          LIMIT $2)
+         LIMIT $2`,
+        [currentJobId, limit, mandateCluster],
+      );
+    } else {
+      result = await query(
+        `SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
+         FROM resume_history
+         WHERE job_id != $1
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        [currentJobId, limit],
+      );
+    }
 
     return result.rows.map((row: any) => ({
       job_id: row.job_id,
@@ -479,7 +506,9 @@ export async function checkDivergenceAgainstHistory(
   jobId: number,
   mandate: MandateProfile,
 ): Promise<DivergenceResult> {
-  const priorResumes = await loadRecentSnapshots(jobId, 3);
+  // Mandate-scoped: compare primarily against same-mandate resumes,
+  // with fallback to any recent resumes when insufficient same-mandate history exists.
+  const priorResumes = await loadRecentSnapshots(jobId, 3, mandate.primary_mandate);
 
   const result: DivergenceResult = {
     compared_against: priorResumes.length,
