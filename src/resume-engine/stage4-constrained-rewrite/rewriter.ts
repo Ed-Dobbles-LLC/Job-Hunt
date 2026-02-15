@@ -8,9 +8,7 @@
  * Type: LLM (structured output via generateObject)
  */
 
-import { z } from "zod";
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+import { resilientGenerateObject } from "../llm-retry";
 import {
   TailoredResumeSchema,
   buildResumeSystemPrompt,
@@ -30,82 +28,6 @@ import {
 import type { MandateProfile } from "../stage2-mandate-classifier/classifier";
 import type { ScoredBulletPlan, ClarificationQuestion, AttemptRecord } from "../types";
 import type { Violation, LineItemFix, VerifierReport } from "../../mastra/tools/truthfulnessVerifier";
-
-// ── OpenAI Client ────────────────────────────────────────────────
-
-let _openai: ReturnType<typeof createOpenAI> | null = null;
-function getOpenAI() {
-  if (!_openai) {
-    const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("OpenAI API key not configured.");
-    _openai = createOpenAI({ apiKey });
-  }
-  return _openai;
-}
-
-// ── Safe Generate Object (with retries) ──────────────────────────
-
-async function safeGenerateObject<T extends z.ZodTypeAny>(opts: {
-  schema: T;
-  system: string;
-  prompt: string;
-  temperature: number;
-  label: string;
-  timeoutMs?: number;
-  maxRetries?: number;
-}): Promise<z.infer<T>> {
-  const { schema, system, prompt, temperature, label, timeoutMs = 120_000, maxRetries = 2 } = opts;
-
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0) {
-      const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 30_000);
-      await new Promise(r => setTimeout(r, backoffMs));
-    }
-
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-      const { object } = await generateObject({
-        model: getOpenAI()("gpt-4o"),
-        schema,
-        system,
-        prompt,
-        temperature,
-        abortSignal: controller.signal,
-      });
-
-      clearTimeout(timer);
-      return object;
-    } catch (err: any) {
-      const msg = err.message || String(err);
-
-      if (err.name === "AbortError" || msg.includes("abort")) {
-        throw new Error(`[${label}] LLM timed out. Prompt may be too large (${prompt.length} chars).`);
-      }
-      if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("API key")) {
-        throw new Error(`[${label}] OpenAI API key is invalid.`);
-      }
-
-      if (msg.includes("429") || msg.includes("rate") || msg.includes("Rate limit")) {
-        lastError = new Error(`[${label}] Rate limited`);
-        continue;
-      }
-      if (msg.includes("did not match schema") || msg.includes("No object generated")) {
-        if (attempt < maxRetries) { lastError = new Error(`[${label}] Schema validation failed`); continue; }
-      }
-      if (msg.includes("500") || msg.includes("502") || msg.includes("503")) {
-        if (attempt < maxRetries) { lastError = new Error(`[${label}] Server error`); continue; }
-      }
-
-      throw new Error(`[${label}] LLM call failed: ${msg.substring(0, 500)}`);
-    }
-  }
-
-  throw lastError || new Error(`[${label}] All attempts failed`);
-}
 
 // ── Generic Opener Detection ─────────────────────────────────────
 
@@ -440,6 +362,8 @@ export interface RewriteInput {
     report: VerifierReport;
     attemptNumber: number;
   };
+  /** Logger for structured telemetry */
+  logger?: any;
 }
 
 export interface RewriteResult {
@@ -511,13 +435,15 @@ export async function constrainedRewrite(input: RewriteInput): Promise<RewriteRe
 
     if (resumeViolations.length > 0) {
       const corrPrompt = buildCorrectionPrompt("resume", JSON.stringify(previousResume, null, 2), resumeViolations, resumeFixes, attemptNumber);
-      resume = await safeGenerateObject({
+      resume = (await resilientGenerateObject({
         schema: TailoredResumeSchema,
         system: resumeSystemPrompt,
         prompt: `${resumeUserPrompt}\n\n${corrPrompt}`,
         temperature: 0.2,
-        label: `resume-correction-attempt${attemptNumber}`,
-      });
+        label: `Stage 4: resume-correction-attempt${attemptNumber}`,
+        lane: "medium",
+        logger: input.logger,
+      })).object;
     } else {
       resume = previousResume;
     }
@@ -529,13 +455,15 @@ export async function constrainedRewrite(input: RewriteInput): Promise<RewriteRe
       const clUserPrompt = buildCoverLetterUserPrompt(
         input.inventory, input.allowlist, input.requirements, input.title, input.company, input.companyContext,
       ) + "\n\n" + bulletContext;
-      coverLetter = await safeGenerateObject({
+      coverLetter = (await resilientGenerateObject({
         schema: TailoredCoverLetterSchema,
         system: clSystemPrompt,
         prompt: `${clUserPrompt}\n\n${corrPrompt}`,
         temperature: 0.2,
-        label: `coverLetter-correction-attempt${attemptNumber}`,
-      });
+        label: `Stage 4: coverLetter-correction-attempt${attemptNumber}`,
+        lane: "medium",
+        logger: input.logger,
+      })).object;
     } else {
       coverLetter = previousCoverLetter;
     }
@@ -544,13 +472,15 @@ export async function constrainedRewrite(input: RewriteInput): Promise<RewriteRe
     let finalPrompt = resumeUserPrompt;
     if (input.divergencePrompt) finalPrompt += "\n\n" + input.divergencePrompt;
 
-    resume = await safeGenerateObject({
+    resume = (await resilientGenerateObject({
       schema: TailoredResumeSchema,
       system: resumeSystemPrompt,
       prompt: finalPrompt,
       temperature: 0.3,
-      label: "resume-initial",
-    });
+      label: "Stage 4: resume-initial",
+      lane: "heavy",
+      logger: input.logger,
+    })).object;
 
     // ── Post-LLM Resume Validation: Generic Opener ──
     const genericOpener = detectGenericOpener(resume.professional_summary);
@@ -564,13 +494,15 @@ Do NOT use "[Domain] leader/executive who has...", "Executive with a track recor
 "Seasoned/Accomplished/Results-driven...", or any "[Role] who/with" pattern.
 Anchor the opener to THIS job's specific mandate: ${input.mandate.primary_mandate.replace(/_/g, " ")}.`;
 
-      resume = await safeGenerateObject({
+      resume = (await resilientGenerateObject({
         schema: TailoredResumeSchema,
         system: resumeSystemPrompt,
         prompt: openerCorrectionPrompt,
         temperature: 0.2,
-        label: "resume-opener-correction",
-      });
+        label: "Stage 4: resume-opener-correction",
+        lane: "medium",
+        logger: input.logger,
+      })).object;
     }
 
     // ── Post-LLM Resume Validation: ATS Keywords ──
@@ -588,13 +520,15 @@ Anchor the opener to THIS job's specific mandate: ${input.mandate.primary_mandat
       input.inventory, input.allowlist, input.requirements, input.title, input.company, input.companyContext,
     ) + "\n\n" + bulletContext;
 
-    coverLetter = await safeGenerateObject({
+    coverLetter = (await resilientGenerateObject({
       schema: TailoredCoverLetterSchema,
       system: clSystemPrompt,
       prompt: clUserPrompt,
       temperature: 0.4,
-      label: "coverLetter-initial",
-    });
+      label: "Stage 4: coverLetter-initial",
+      lane: "heavy",
+      logger: input.logger,
+    })).object;
 
     // ── Post-LLM Cover Letter Validation: Word Count ──
     const actualWordCount = countCoverLetterWords(coverLetter);
@@ -608,13 +542,15 @@ The cover letter is ${wcDirection} at ${actualWordCount} words. MUST be 250-350 
 ${wcTarget}. Aim for ~300 words. Keep all value claims and evidence pointers.
 ${actualWordCount < 250 ? "Add more specific detail to body paragraphs — connect achievements to company needs." : "Remove redundant phrases and tighten language. Cut filler, not substance."}`;
 
-      coverLetter = await safeGenerateObject({
+      coverLetter = (await resilientGenerateObject({
         schema: TailoredCoverLetterSchema,
         system: clSystemPrompt,
         prompt: wcCorrectionPrompt,
         temperature: 0.2,
-        label: "coverLetter-wordcount-correction",
-      });
+        label: "Stage 4: coverLetter-wordcount-correction",
+        lane: "medium",
+        logger: input.logger,
+      })).object;
       coverLetter.word_count = countCoverLetterWords(coverLetter);
     }
 
@@ -634,13 +570,15 @@ ${repList}
 Rewrite the body_paragraphs to use DIFFERENT angles on the same achievements. The cover letter should AMPLIFY resume signals, not repeat them verbatim.
 Pattern: instead of restating the achievement, explain the STRATEGIC CONTEXT — why you did it, what you learned, how it serves this company.`;
 
-      coverLetter = await safeGenerateObject({
+      coverLetter = (await resilientGenerateObject({
         schema: TailoredCoverLetterSchema,
         system: clSystemPrompt,
         prompt: repCorrectionPrompt,
         temperature: 0.3,
-        label: "coverLetter-repetition-correction",
-      });
+        label: "Stage 4: coverLetter-repetition-correction",
+        lane: "medium",
+        logger: input.logger,
+      })).object;
       coverLetter.word_count = countCoverLetterWords(coverLetter);
     }
 
@@ -668,13 +606,15 @@ RULES:
 - NO defensive hedging ("I am confident that", "I hope to")
 - Tone: strategic peer, not eager applicant.`;
 
-      coverLetter = await safeGenerateObject({
+      coverLetter = (await resilientGenerateObject({
         schema: TailoredCoverLetterSchema,
         system: clSystemPrompt,
         prompt: structureCorrectionPrompt,
         temperature: 0.2,
-        label: "coverLetter-structure-correction",
-      });
+        label: "Stage 4: coverLetter-structure-correction",
+        lane: "medium",
+        logger: input.logger,
+      })).object;
       coverLetter.word_count = countCoverLetterWords(coverLetter);
     }
 

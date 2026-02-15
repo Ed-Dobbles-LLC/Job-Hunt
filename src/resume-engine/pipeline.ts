@@ -235,6 +235,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
           bulletPlan,
           companyContext: input.company_context,
           correctionContext,
+          logger,
         });
       }, logger);
 
@@ -267,6 +268,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
             inventory, allowlist, requirements, title, company, mandate, bulletPlan,
             companyContext: input.company_context,
             divergencePrompt: stage5.data.divergence_prompt,
+            logger,
           });
         }, logger);
 
@@ -487,6 +489,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
           resume: finalResume,
           coverLetter: finalCoverLetter,
           priorSummaries,
+          logger,
         });
       }, logger);
 
@@ -530,6 +533,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
                     attemptNumber: attemptHistory.length + repairLoop,
                   },
                   divergencePrompt: repairInstructions,
+                  logger,
                 });
               }, logger);
 
@@ -582,6 +586,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
                   resume: finalResume,
                   coverLetter: finalCoverLetter,
                   priorSummaries,
+                  logger,
                 });
               }, logger);
 

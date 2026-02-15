@@ -16,6 +16,7 @@ import { query, initDatabase } from "../mastra/tools/db";
 import { extractJDRequirementsTool } from "../mastra/tools/extractJDRequirementsTool";
 import { buildOutputTool } from "../mastra/tools/buildOutputTool";
 import { runPipeline } from "./pipeline";
+import { LLMError } from "./llm-retry";
 
 // ── Config ───────────────────────────────────────────────────────
 
@@ -34,6 +35,18 @@ interface AutoGenerateConfig {
   mastra?: any;
   /** Optional specific job IDs to process (overrides query) */
   jobIds?: number[];
+  /** Number of jobs to process concurrently (default: 1) */
+  concurrency?: number;
+  /** Progress callback for UI updates */
+  onProgress?: (progress: BatchProgress) => void;
+}
+
+export interface BatchProgress {
+  completed: number;
+  total: number;
+  current_job?: { job_id: number; company: string; title: string };
+  last_status?: "success" | "failed";
+  last_error?: string;
 }
 
 interface AutoGenerateResult {
@@ -41,6 +54,7 @@ interface AutoGenerateResult {
   succeeded: number;
   failed: number;
   skipped: number;
+  batch_duration_ms?: number;
   jobs: Array<{
     job_id: number;
     company: string;
@@ -49,6 +63,7 @@ interface AutoGenerateResult {
     status: "success" | "failed" | "skipped";
     pass?: boolean;
     error?: string;
+    duration_ms?: number;
   }>;
 }
 
@@ -116,9 +131,21 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
 
     if (candidates.length === 0) return result;
 
-    // Process each job sequentially
-    for (const job of candidates) {
+    const concurrency = config.concurrency ?? 1;
+    const batchStart = Date.now();
+
+    logger?.info(`🤖 [auto-gen] Processing with concurrency=${concurrency}`);
+
+    // ── Job processor ─────────────────────────────────────────────
+    const processJob = async (job: any) => {
+      const jobStart = Date.now();
       try {
+        config.onProgress?.({
+          completed: result.succeeded + result.failed,
+          total: candidates.length,
+          current_job: { job_id: job.job_id, company: job.company, title: job.title },
+        });
+
         logger?.info(`📦 [auto-gen] Processing ${job.company} — ${job.title} (score: ${job.total_score})`);
 
         // Ensure JD requirements are extracted
@@ -139,7 +166,7 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
           } as any);
         }
 
-        // Run the 7-stage pipeline
+        // Run the 8-stage pipeline
         const pipelineResult = await runPipeline({
           job_id: job.job_id,
           company: job.company,
@@ -227,11 +254,22 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
           score: job.total_score,
           status: "success",
           pass: pipelineResult.pass,
+          duration_ms: Date.now() - jobStart,
         });
 
-        logger?.info(`✅ [auto-gen] ${job.company} — ${job.title}: done (pass=${pipelineResult.pass})`);
+        logger?.info(`✅ [auto-gen] ${job.company} — ${job.title}: done (pass=${pipelineResult.pass}, ${Date.now() - jobStart}ms)`);
+
+        config.onProgress?.({
+          completed: result.succeeded + result.failed,
+          total: candidates.length,
+          current_job: { job_id: job.job_id, company: job.company, title: job.title },
+          last_status: "success",
+        });
 
       } catch (err: any) {
+        const errorMessage = err instanceof LLMError ? err.toUserMessage() : err.message;
+        const debugPayload = err instanceof LLMError ? err.toDebugPayload() : undefined;
+
         result.failed++;
         result.jobs.push({
           job_id: job.job_id,
@@ -239,13 +277,49 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
           title: job.title,
           score: job.total_score,
           status: "failed",
-          error: err.message,
+          error: errorMessage,
+          duration_ms: Date.now() - jobStart,
         });
-        logger?.error(`❌ [auto-gen] ${job.company} — ${job.title}: ${err.message}`);
+
+        logger?.error(`❌ [auto-gen] ${job.company} — ${job.title}: ${errorMessage}`);
+        if (debugPayload) {
+          logger?.error(`❌ [auto-gen] Debug: ${JSON.stringify(debugPayload)}`);
+        }
+
+        config.onProgress?.({
+          completed: result.succeeded + result.failed,
+          total: candidates.length,
+          current_job: { job_id: job.job_id, company: job.company, title: job.title },
+          last_status: "failed",
+          last_error: errorMessage,
+        });
       }
+    };
+
+    // ── Concurrent pool processing ──────────────────────────────
+    if (concurrency <= 1) {
+      // Sequential mode (backward compatible default)
+      for (const job of candidates) {
+        await processJob(job);
+      }
+    } else {
+      // Concurrent mode: run up to `concurrency` jobs at once.
+      // The LLM concurrency limiter ensures Stage 4 (heavy) calls
+      // are serialized while lighter stages can overlap.
+      const executing = new Set<Promise<void>>();
+      for (const job of candidates) {
+        const p = processJob(job).finally(() => executing.delete(p));
+        executing.add(p);
+        if (executing.size >= concurrency) {
+          await Promise.race(executing);
+        }
+      }
+      await Promise.all(executing);
     }
 
-    logger?.info(`🏁 [auto-gen] Complete: ${result.succeeded} succeeded, ${result.failed} failed, ${result.skipped} skipped`);
+    result.batch_duration_ms = Date.now() - batchStart;
+
+    logger?.info(`🏁 [auto-gen] Complete: ${result.succeeded} succeeded, ${result.failed} failed, ${result.skipped} skipped (${result.batch_duration_ms}ms total)`);
 
   } catch (err: any) {
     logger?.error(`💥 [auto-gen] Fatal error: ${err.message}`);

@@ -24,8 +24,7 @@
  *   9. Cover letter — word count, generic enthusiasm, resume contradiction
  */
 
-import { generateObject } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { resilientGenerateObject } from "../llm-retry";
 import { RecruiterReviewReportSchema, type RecruiterReviewReport } from "../types";
 import type { ClaimsLedger } from "../types";
 import type { MandateProfile } from "../types";
@@ -54,6 +53,8 @@ export interface RecruiterReviewInput {
   coverLetter: TailoredCoverLetter;
   /** Last 3 resume summaries from resume_history for differentiation check */
   priorSummaries?: string[];
+  /** Logger for structured telemetry */
+  logger?: any;
 }
 
 export interface RecruiterReviewResult {
@@ -265,42 +266,23 @@ export async function runRecruiterReview(
 ): Promise<RecruiterReviewResult> {
   const start = Date.now();
 
-  const openai = createOpenAI({
-    apiKey: process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  });
-
   const systemPrompt = buildSystemPrompt();
   const userPrompt = buildUserPrompt(input);
 
-  let lastError: Error | null = null;
+  const result = await resilientGenerateObject({
+    schema: RecruiterReviewReportSchema,
+    system: systemPrompt,
+    prompt: userPrompt,
+    temperature: 0.2,
+    label: "Stage 8: recruiter-review",
+    lane: "medium",
+    logger: input.logger,
+  });
 
-  // Retry up to 2 times on transient failures
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const { object } = await generateObject({
-        model: openai("gpt-4o"),
-        schema: RecruiterReviewReportSchema,
-        system: systemPrompt,
-        prompt: userPrompt,
-        temperature: 0.2,
-        maxRetries: 1,
-      });
-
-      return {
-        report: object,
-        duration_ms: Date.now() - start,
-      };
-    } catch (err: any) {
-      lastError = err;
-      if (attempt < 2) {
-        // Wait before retry (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
-      }
-    }
-  }
-
-  throw new Error(`Recruiter review failed after 2 attempts: ${lastError?.message}`);
+  return {
+    report: result.object,
+    duration_ms: Date.now() - start,
+  };
 }
 
 // ── Repair Prompt Builder ───────────────────────────────────────

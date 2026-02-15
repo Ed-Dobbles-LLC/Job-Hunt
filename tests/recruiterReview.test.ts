@@ -21,16 +21,28 @@ import {
   type RecruiterReviewIssue,
 } from "../src/resume-engine/types";
 
-// ── Mock the LLM ──────────────────────────────────────────────────
+// ── Mock the LLM retry wrapper ────────────────────────────────────
 
-const mockGenerateObject = vi.fn();
+const mockResilientGenerateObject = vi.fn();
 
-vi.mock("ai", () => ({
-  generateObject: (...args: any[]) => mockGenerateObject(...args),
-}));
-
-vi.mock("@ai-sdk/openai", () => ({
-  createOpenAI: () => (model: string) => ({ modelId: model }),
+vi.mock("../src/resume-engine/llm-retry", () => ({
+  resilientGenerateObject: (...args: any[]) => mockResilientGenerateObject(...args),
+  LLMError: class LLMError extends Error {
+    errorType: string;
+    requestId: string;
+    attempts: number;
+    telemetry: any[];
+    constructor(msg: string, errorType: string, requestId: string, attempts: number, telemetry: any[]) {
+      super(msg);
+      this.name = "LLMError";
+      this.errorType = errorType;
+      this.requestId = requestId;
+      this.attempts = attempts;
+      this.telemetry = telemetry;
+    }
+    toUserMessage() { return this.message; }
+    toDebugPayload() { return {}; }
+  },
 }));
 
 // ── Import after mocks ────────────────────────────────────────────
@@ -334,7 +346,7 @@ describe("runRecruiterReview", () => {
 
   it("returns PASS when LLM says clean resume is good", async () => {
     const passReport = makePassingReviewReport();
-    mockGenerateObject.mockResolvedValueOnce({ object: passReport });
+    mockResilientGenerateObject.mockResolvedValueOnce({ object: passReport, attempts: 1, total_duration_ms: 100, telemetry: [] });
 
     const result = await runRecruiterReview({
       claimsLedger: makeTestLedger(),
@@ -351,7 +363,7 @@ describe("runRecruiterReview", () => {
     expect(result.report.critical_issues).toHaveLength(0);
     expect(result.report.scores.truthfulness).toBeGreaterThanOrEqual(80);
     expect(result.duration_ms).toBeGreaterThanOrEqual(0);
-    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+    expect(mockResilientGenerateObject).toHaveBeenCalledTimes(1);
   });
 
   it("flags new numbers not in ledger", async () => {
@@ -366,7 +378,7 @@ describe("runRecruiterReview", () => {
       recommended_actions: ["Remove $50M claim"],
       safe_rewrite_allowed: true,
     };
-    mockGenerateObject.mockResolvedValueOnce({ object: failReport });
+    mockResilientGenerateObject.mockResolvedValueOnce({ object: failReport, attempts: 1, total_duration_ms: 100, telemetry: [] });
 
     const result = await runRecruiterReview({
       claimsLedger: makeTestLedger(),
@@ -397,7 +409,7 @@ describe("runRecruiterReview", () => {
       recommended_actions: ["Remove board investment claim"],
       safe_rewrite_allowed: true,
     };
-    mockGenerateObject.mockResolvedValueOnce({ object: failReport });
+    mockResilientGenerateObject.mockResolvedValueOnce({ object: failReport, attempts: 1, total_duration_ms: 100, telemetry: [] });
 
     const result = await runRecruiterReview({
       claimsLedger: makeTestLedger(),
@@ -428,7 +440,7 @@ describe("runRecruiterReview", () => {
       recommended_actions: ["Fix corrupted word"],
       safe_rewrite_allowed: true,
     };
-    mockGenerateObject.mockResolvedValueOnce({ object: failReport });
+    mockResilientGenerateObject.mockResolvedValueOnce({ object: failReport, attempts: 1, total_duration_ms: 100, telemetry: [] });
 
     const result = await runRecruiterReview({
       claimsLedger: makeTestLedger(),
@@ -459,7 +471,7 @@ describe("runRecruiterReview", () => {
       recommended_actions: ["Rewrite summary opener with mandate-specific thesis"],
       safe_rewrite_allowed: true,
     };
-    mockGenerateObject.mockResolvedValueOnce({ object: failReport });
+    mockResilientGenerateObject.mockResolvedValueOnce({ object: failReport, attempts: 1, total_duration_ms: 100, telemetry: [] });
 
     const result = await runRecruiterReview({
       claimsLedger: makeTestLedger(),
@@ -480,10 +492,15 @@ describe("runRecruiterReview", () => {
     expect(summaryIssues.length).toBeGreaterThan(0);
   });
 
-  it("retries on transient failure", async () => {
-    mockGenerateObject
-      .mockRejectedValueOnce(new Error("rate_limit"))
-      .mockResolvedValueOnce({ object: makePassingReviewReport() });
+  it("delegates retry handling to resilientGenerateObject", async () => {
+    // Retry logic is now inside resilientGenerateObject.
+    // The reviewer makes a single call — resilientGenerateObject handles retries internally.
+    mockResilientGenerateObject.mockResolvedValueOnce({
+      object: makePassingReviewReport(),
+      attempts: 2, // resilientGenerateObject retried internally
+      total_duration_ms: 3500,
+      telemetry: [],
+    });
 
     const result = await runRecruiterReview({
       claimsLedger: makeTestLedger(),
@@ -497,13 +514,23 @@ describe("runRecruiterReview", () => {
     });
 
     expect(result.report.status).toBe("PASS");
-    expect(mockGenerateObject).toHaveBeenCalledTimes(2);
+    // Only one call to resilientGenerateObject — it handles retries internally
+    expect(mockResilientGenerateObject).toHaveBeenCalledTimes(1);
   });
 
-  it("throws after 2 failed attempts", async () => {
-    mockGenerateObject
-      .mockRejectedValueOnce(new Error("rate_limit"))
-      .mockRejectedValueOnce(new Error("rate_limit"));
+  it("throws LLMError when resilientGenerateObject exhausts retries", async () => {
+    // Import the mock LLMError from our mock setup
+    const { LLMError } = await import("../src/resume-engine/llm-retry");
+
+    mockResilientGenerateObject.mockRejectedValueOnce(
+      new LLMError(
+        "[Stage 8: recruiter-review] Rate limit reached after 6 attempts",
+        "rate_limit",
+        "req-test",
+        6,
+        [],
+      ),
+    );
 
     await expect(
       runRecruiterReview({
@@ -516,11 +543,11 @@ describe("runRecruiterReview", () => {
         resume: makeTestResume(),
         coverLetter: makeTestCoverLetter(),
       }),
-    ).rejects.toThrow("Recruiter review failed after 2 attempts");
+    ).rejects.toThrow("Rate limit reached");
   });
 
-  it("passes correct temperature and schema to generateObject", async () => {
-    mockGenerateObject.mockResolvedValueOnce({ object: makePassingReviewReport() });
+  it("passes correct temperature, label, and lane to resilientGenerateObject", async () => {
+    mockResilientGenerateObject.mockResolvedValueOnce({ object: makePassingReviewReport(), attempts: 1, total_duration_ms: 100, telemetry: [] });
 
     await runRecruiterReview({
       claimsLedger: makeTestLedger(),
@@ -533,16 +560,18 @@ describe("runRecruiterReview", () => {
       coverLetter: makeTestCoverLetter(),
     });
 
-    const callArgs = mockGenerateObject.mock.calls[0][0];
+    const callArgs = mockResilientGenerateObject.mock.calls[0][0];
     expect(callArgs.temperature).toBe(0.2);
     expect(callArgs.schema).toBeDefined();
+    expect(callArgs.label).toBe("Stage 8: recruiter-review");
+    expect(callArgs.lane).toBe("medium");
     expect(callArgs.system).toContain("SKEPTICAL");
     expect(callArgs.prompt).toContain("CLAIMS LEDGER");
     expect(callArgs.prompt).toContain("MANDATE PROFILE");
   });
 
   it("includes prior summaries in prompt when provided", async () => {
-    mockGenerateObject.mockResolvedValueOnce({ object: makePassingReviewReport() });
+    mockResilientGenerateObject.mockResolvedValueOnce({ object: makePassingReviewReport(), attempts: 1, total_duration_ms: 100, telemetry: [] });
 
     await runRecruiterReview({
       claimsLedger: makeTestLedger(),
@@ -556,7 +585,7 @@ describe("runRecruiterReview", () => {
       priorSummaries: ["Previous summary text for differentiation check"],
     });
 
-    const callArgs = mockGenerateObject.mock.calls[0][0];
+    const callArgs = mockResilientGenerateObject.mock.calls[0][0];
     expect(callArgs.prompt).toContain("PRIOR RESUME SUMMARIES");
     expect(callArgs.prompt).toContain("Previous summary text");
   });
