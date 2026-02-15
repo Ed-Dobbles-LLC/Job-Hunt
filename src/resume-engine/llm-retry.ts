@@ -314,6 +314,13 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
         if (!classified.retryable) {
           entry.status = "fatal";
           telemetry.push(entry);
+
+          // Record fatal attempt to cost accumulator (estimated tokens)
+          const costAcc = getGlobalCostAccumulator();
+          if (costAcc) {
+            costAcc.recordCall(entry);
+          }
+
           opts.logger?.error(`[llm-retry] ${opts.label} fatal error (${classified.type}) on attempt ${attempt + 1}: ${err.message?.substring(0, 200)}`);
           throw new LLMError(
             `[${opts.label}] ${classified.type}: ${err.message?.substring(0, 300)}`,
@@ -331,6 +338,12 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
           if (classified.retryAfterMs) entry.retry_after_ms = classified.retryAfterMs;
           telemetry.push(entry);
 
+          // Record retry attempt to cost accumulator (estimated tokens)
+          const costAcc = getGlobalCostAccumulator();
+          if (costAcc) {
+            costAcc.recordCall(entry);
+          }
+
           opts.logger?.warn(`[llm-retry] ${opts.label} ${classified.type} on attempt ${attempt + 1}, retrying in ${Math.round(delayMs)}ms${classified.retryAfterMs ? ` (Retry-After: ${classified.retryAfterMs}ms)` : ""}`);
 
           await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -338,6 +351,13 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
         } else {
           entry.status = "fatal";
           telemetry.push(entry);
+
+          // Record final exhausted attempt to cost accumulator
+          const costAcc = getGlobalCostAccumulator();
+          if (costAcc) {
+            costAcc.recordCall(entry);
+          }
+
           opts.logger?.error(`[llm-retry] ${opts.label} exhausted ${config.maxRetries + 1} attempts, last error: ${classified.type}`);
         }
       }

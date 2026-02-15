@@ -17,6 +17,7 @@ import { extractJDRequirementsTool } from "../mastra/tools/extractJDRequirements
 import { buildOutputTool } from "../mastra/tools/buildOutputTool";
 import { runPipeline } from "./pipeline";
 import { LLMError } from "./llm-retry";
+import { BatchCostAccumulator, formatBatchCostSummary, type BatchCostSummary } from "./cost-tracker";
 
 // ── Config ───────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ interface AutoGenerateResult {
   failed: number;
   skipped: number;
   batch_duration_ms?: number;
+  batch_cost?: BatchCostSummary;
   jobs: Array<{
     job_id: number;
     company: string;
@@ -64,6 +66,7 @@ interface AutoGenerateResult {
     pass?: boolean;
     error?: string;
     duration_ms?: number;
+    cost_usd?: number;
   }>;
 }
 
@@ -133,8 +136,9 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
 
     const concurrency = config.concurrency ?? 1;
     const batchStart = Date.now();
+    const batchCost = new BatchCostAccumulator({ logger });
 
-    logger?.info(`🤖 [auto-gen] Processing with concurrency=${concurrency}`);
+    logger?.info(`🤖 [auto-gen] Processing with concurrency=${concurrency}, run_id=${batchCost.id}`);
 
     // ── Job processor ─────────────────────────────────────────────
     const processJob = async (job: any) => {
@@ -172,8 +176,14 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
           company: job.company,
           title: job.title,
           max_attempts: maxAttempts,
+          run_id: batchCost.id,
           logger,
         });
+
+        // Track per-packet cost
+        if (pipelineResult.cost_summary) {
+          batchCost.addPacketCost(job.job_id, pipelineResult.cost_summary);
+        }
 
         // Build output files
         const resumePointers = (pipelineResult.resume?.evidence_pointers || []).map((p: any) => ({
@@ -255,6 +265,7 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
           status: "success",
           pass: pipelineResult.pass,
           duration_ms: Date.now() - jobStart,
+          cost_usd: pipelineResult.cost_summary?.total_cost_usd,
         });
 
         logger?.info(`✅ [auto-gen] ${job.company} — ${job.title}: done (pass=${pipelineResult.pass}, ${Date.now() - jobStart}ms)`);
@@ -318,6 +329,14 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
     }
 
     result.batch_duration_ms = Date.now() - batchStart;
+
+    // Batch cost summary
+    const batchSummary = batchCost.getSummary();
+    result.batch_cost = batchSummary;
+
+    if (batchSummary.call_count > 0) {
+      logger?.info(formatBatchCostSummary(batchSummary));
+    }
 
     logger?.info(`🏁 [auto-gen] Complete: ${result.succeeded} succeeded, ${result.failed} failed, ${result.skipped} skipped (${result.batch_duration_ms}ms total)`);
 

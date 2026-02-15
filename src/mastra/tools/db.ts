@@ -182,6 +182,7 @@ export async function initDatabase(): Promise<void> {
         id SERIAL PRIMARY KEY,
         request_id TEXT,
         job_id BIGINT REFERENCES jobs(job_id),
+        run_id TEXT,
         label TEXT NOT NULL,
         model TEXT NOT NULL,
         prompt_tokens INTEGER NOT NULL DEFAULT 0,
@@ -190,9 +191,24 @@ export async function initDatabase(): Promise<void> {
         estimated BOOLEAN NOT NULL DEFAULT false,
         cost_usd DECIMAL(10, 6) NOT NULL DEFAULT 0,
         duration_ms INTEGER,
+        attempt INTEGER NOT NULL DEFAULT 0,
         status TEXT,
+        error_type TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    // Add missing columns and indexes to llm_usage (idempotent)
+    await client.query(`
+      ALTER TABLE llm_usage ADD COLUMN IF NOT EXISTS run_id TEXT;
+      ALTER TABLE llm_usage ADD COLUMN IF NOT EXISTS attempt INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE llm_usage ADD COLUMN IF NOT EXISTS error_type TEXT;
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_llm_usage_job_id ON llm_usage(job_id);
+      CREATE INDEX IF NOT EXISTS idx_llm_usage_run_id ON llm_usage(run_id);
+      CREATE INDEX IF NOT EXISTS idx_llm_usage_created_at ON llm_usage(created_at);
     `);
   } finally {
     client.release();

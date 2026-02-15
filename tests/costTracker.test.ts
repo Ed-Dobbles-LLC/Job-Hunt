@@ -1,29 +1,37 @@
 /**
  * Tests for the LLM Cost Tracker module.
  *
- * Covers: pricing registry, cost calculation, token estimation,
- * CostAccumulator, summarization, formatting, budget guardrails,
- * and global accumulator singleton.
+ * Covers: pricing registry (incl. env overrides), cost calculation,
+ * estimateCostUSD, token estimation, CostAccumulator (with run_id,
+ * retry persistence, error_type), BatchCostAccumulator, summarization,
+ * formatting, budget guardrails, global accumulator singleton,
+ * DB query constants, and integration test for batch cost tracking.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   PRICING_REGISTRY,
   calculateCost,
+  estimateCostUSD,
   estimateTokenUsage,
   getModelPricing,
   CostAccumulator,
+  BatchCostAccumulator,
   summarizeEvents,
   formatCostSummary,
+  formatBatchCostSummary,
   setGlobalCostAccumulator,
   getGlobalCostAccumulator,
+  extractStageKey,
   COST_QUERY_BY_JOB,
+  COST_QUERY_BY_RUN,
   COST_QUERY_DAILY,
   COST_QUERY_BY_STAGE,
   type TokenUsage,
   type UsageEvent,
   type ModelPricing,
   type CostSummary,
+  type BatchCostSummary,
   type BudgetGuardrail,
 } from "../src/resume-engine/cost-tracker";
 import type { AttemptTelemetry } from "../src/resume-engine/llm-retry";
@@ -136,6 +144,29 @@ describe("Cost Calculation", () => {
   });
 });
 
+// ── estimateCostUSD Convenience ──────────────────────────────────
+
+describe("estimateCostUSD", () => {
+  it("returns same result as calculateCost with equivalent inputs", () => {
+    const convenience = estimateCostUSD("gpt-4o", 1000, 500);
+    const direct = calculateCost("gpt-4o", {
+      prompt_tokens: 1000,
+      completion_tokens: 500,
+      total_tokens: 1500,
+      estimated: false,
+    });
+    expect(convenience).toEqual(direct);
+  });
+
+  it("calculates known cost correctly", () => {
+    // gpt-4o: $2.50/1M input, $10.00/1M output
+    const cost = estimateCostUSD("gpt-4o", 10000, 2000);
+    // Input: 10000/1M * $2.50 = $0.025
+    // Output: 2000/1M * $10.00 = $0.02
+    expect(cost).toBeCloseTo(0.045, 6);
+  });
+});
+
 // ── Token Estimation ─────────────────────────────────────────────
 
 describe("Token Estimation", () => {
@@ -167,7 +198,7 @@ describe("CostAccumulator", () => {
   let acc: CostAccumulator;
 
   beforeEach(() => {
-    acc = new CostAccumulator({ jobId: 42 });
+    acc = new CostAccumulator({ jobId: 42, runId: "test-run-1" });
   });
 
   it("starts empty", () => {
@@ -188,6 +219,7 @@ describe("CostAccumulator", () => {
     expect(event.usage.completion_tokens).toBe(800);
     expect(event.usage.estimated).toBe(false);
     expect(event.job_id).toBe(42);
+    expect(event.run_id).toBe("test-run-1");
     expect(event.cost_usd).toBeGreaterThan(0);
   });
 
@@ -249,7 +281,32 @@ describe("CostAccumulator", () => {
     expect(summary.estimated_pct).toBe(50);
   });
 
-  it("clears events", () => {
+  it("tracks retry count", () => {
+    acc.recordCall(makeTelemetry({ status: "retry", error_type: "rate_limit" }));
+    acc.recordCall(makeTelemetry({ status: "retry", error_type: "server_error" }));
+    acc.recordCall(makeTelemetry({ status: "success" }), { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 });
+
+    const summary = acc.getSummary();
+    expect(summary.call_count).toBe(3);
+    expect(summary.retry_count).toBe(2);
+  });
+
+  it("records error_type on events", () => {
+    const retryTelemetry = makeTelemetry({ status: "retry", error_type: "rate_limit" });
+    const event = acc.recordCall(retryTelemetry);
+
+    expect(event.error_type).toBe("rate_limit");
+    expect(event.status).toBe("retry");
+  });
+
+  it("includes elapsed_ms in summary", () => {
+    acc.recordCall(makeTelemetry(), { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 });
+    const summary = acc.getSummary();
+    expect(summary.elapsed_ms).toBeDefined();
+    expect(summary.elapsed_ms).toBeGreaterThanOrEqual(0);
+  });
+
+  it("clears events and resets start time", () => {
     acc.recordCall(makeTelemetry(), { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 });
     expect(acc.size).toBe(1);
 
@@ -258,26 +315,33 @@ describe("CostAccumulator", () => {
     expect(acc.getEvents()).toEqual([]);
   });
 
-  it("builds correct SQL for DB flush", () => {
+  it("builds correct SQL for DB flush (all events including retries)", () => {
+    acc.recordCall(makeTelemetry({ status: "retry", error_type: "rate_limit" }));
     acc.recordCall(makeTelemetry({ status: "success" }), { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 });
-    acc.recordCall(makeTelemetry({ status: "success" }), { promptTokens: 800, completionTokens: 300, totalTokens: 1100 });
+    acc.recordCall(makeTelemetry({ status: "fatal", error_type: "auth_error" }));
 
     const insert = acc.buildInsertSQL();
     expect(insert).not.toBeNull();
     expect(insert!.sql).toContain("INSERT INTO llm_usage");
     expect(insert!.sql).toContain("request_id");
+    expect(insert!.sql).toContain("run_id");
+    expect(insert!.sql).toContain("attempt");
+    expect(insert!.sql).toContain("error_type");
     expect(insert!.sql).toContain("cost_usd");
-    expect(insert!.params.length).toBe(22); // 2 events × 11 params each
+    // 3 events × 14 params each = 42
+    expect(insert!.params.length).toBe(42);
   });
 
   it("returns null SQL when no events", () => {
     expect(acc.buildInsertSQL()).toBeNull();
   });
 
-  it("skips retry events in SQL (only success/fatal)", () => {
-    acc.recordCall(makeTelemetry({ status: "retry" }), { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 });
+  it("persists retry events in SQL (no longer filters them out)", () => {
+    acc.recordCall(makeTelemetry({ status: "retry" }));
 
-    expect(acc.buildInsertSQL()).toBeNull();
+    const insert = acc.buildInsertSQL();
+    expect(insert).not.toBeNull();
+    expect(insert!.params.length).toBe(14); // 1 event × 14 params
   });
 });
 
@@ -310,6 +374,161 @@ describe("Budget Guardrails", () => {
   });
 });
 
+// ── BatchCostAccumulator ─────────────────────────────────────────
+
+describe("BatchCostAccumulator", () => {
+  it("starts with a generated run ID", () => {
+    const batch = new BatchCostAccumulator();
+    expect(batch.id).toMatch(/^batch-/);
+  });
+
+  it("uses provided run ID", () => {
+    const batch = new BatchCostAccumulator({ runId: "my-run-123" });
+    expect(batch.id).toBe("my-run-123");
+  });
+
+  it("aggregates costs from multiple packets", () => {
+    const batch = new BatchCostAccumulator({ runId: "test-batch" });
+
+    const summary1: CostSummary = {
+      total_cost_usd: 0.05,
+      total_prompt_tokens: 3000,
+      total_completion_tokens: 1000,
+      total_tokens: 4000,
+      call_count: 3,
+      retry_count: 1,
+      avg_cost_per_call: 0.0167,
+      by_stage: { "Stage 4": { cost_usd: 0.04, tokens: 3500, calls: 2 }, "Stage 8": { cost_usd: 0.01, tokens: 500, calls: 1 } },
+      by_model: { "gpt-4o": { cost_usd: 0.05, tokens: 4000, calls: 3 } },
+      estimated_pct: 0,
+    };
+
+    const summary2: CostSummary = {
+      total_cost_usd: 0.03,
+      total_prompt_tokens: 2000,
+      total_completion_tokens: 800,
+      total_tokens: 2800,
+      call_count: 2,
+      retry_count: 0,
+      avg_cost_per_call: 0.015,
+      by_stage: { "Stage 4": { cost_usd: 0.025, tokens: 2300, calls: 1 }, "Stage 8": { cost_usd: 0.005, tokens: 500, calls: 1 } },
+      by_model: { "gpt-4o": { cost_usd: 0.03, tokens: 2800, calls: 2 } },
+      estimated_pct: 50,
+    };
+
+    batch.addPacketCost(100, summary1);
+    batch.addPacketCost(200, summary2);
+
+    const batchSummary = batch.getSummary();
+
+    expect(batchSummary.packet_count).toBe(2);
+    expect(batchSummary.total_cost_usd).toBeCloseTo(0.08, 4);
+    expect(batchSummary.avg_cost_per_packet).toBeCloseTo(0.04, 4);
+    expect(batchSummary.total_tokens).toBe(6800);
+    expect(batchSummary.call_count).toBe(5);
+    expect(batchSummary.retry_count).toBe(1);
+    expect(batchSummary.elapsed_ms).toBeGreaterThanOrEqual(0);
+    expect(batchSummary.packet_costs.length).toBe(2);
+    expect(batchSummary.packet_costs[0].job_id).toBe(100);
+    expect(batchSummary.packet_costs[1].job_id).toBe(200);
+  });
+
+  it("merges stage breakdowns across packets", () => {
+    const batch = new BatchCostAccumulator();
+
+    const s1: CostSummary = {
+      total_cost_usd: 0.05,
+      total_prompt_tokens: 3000, total_completion_tokens: 1000, total_tokens: 4000,
+      call_count: 2, retry_count: 0, avg_cost_per_call: 0.025,
+      by_stage: { "Stage 4": { cost_usd: 0.04, tokens: 3500, calls: 1 }, "Stage 8": { cost_usd: 0.01, tokens: 500, calls: 1 } },
+      by_model: {}, estimated_pct: 0,
+    };
+    const s2: CostSummary = {
+      total_cost_usd: 0.03,
+      total_prompt_tokens: 2000, total_completion_tokens: 800, total_tokens: 2800,
+      call_count: 1, retry_count: 0, avg_cost_per_call: 0.03,
+      by_stage: { "Stage 4": { cost_usd: 0.03, tokens: 2800, calls: 1 } },
+      by_model: {}, estimated_pct: 0,
+    };
+
+    batch.addPacketCost(1, s1);
+    batch.addPacketCost(2, s2);
+
+    const summary = batch.getSummary();
+    expect(summary.by_stage["Stage 4"].calls).toBe(2);
+    expect(summary.by_stage["Stage 4"].cost_usd).toBeCloseTo(0.07, 4);
+    expect(summary.by_stage["Stage 8"].calls).toBe(1);
+  });
+
+  it("handles empty batch", () => {
+    const batch = new BatchCostAccumulator();
+    const summary = batch.getSummary();
+    expect(summary.packet_count).toBe(0);
+    expect(summary.total_cost_usd).toBe(0);
+    expect(summary.avg_cost_per_packet).toBe(0);
+  });
+});
+
+// ── Integration: Total Cost = Sum of Packet Costs ────────────────
+
+describe("Integration: batch total equals sum of packets", () => {
+  it("2 packets: total cost matches sum of individual costs", () => {
+    const batch = new BatchCostAccumulator();
+
+    // Simulate packet 1: 2 LLM calls
+    const acc1 = new CostAccumulator({ jobId: 1, runId: batch.id });
+    acc1.recordCall(makeTelemetry({ label: "Stage 2: Mandate Classifier" }), { promptTokens: 1500, completionTokens: 400, totalTokens: 1900 });
+    acc1.recordCall(makeTelemetry({ label: "Stage 4: Resume Generation" }), { promptTokens: 3000, completionTokens: 1200, totalTokens: 4200 });
+    const summary1 = acc1.getSummary();
+
+    // Simulate packet 2: 3 LLM calls (1 retry + 2 success)
+    const acc2 = new CostAccumulator({ jobId: 2, runId: batch.id });
+    acc2.recordCall(makeTelemetry({ label: "Stage 2: Mandate Classifier", status: "retry", error_type: "rate_limit" }));
+    acc2.recordCall(makeTelemetry({ label: "Stage 2: Mandate Classifier" }), { promptTokens: 1500, completionTokens: 400, totalTokens: 1900 });
+    acc2.recordCall(makeTelemetry({ label: "Stage 4: Resume Generation" }), { promptTokens: 2800, completionTokens: 1000, totalTokens: 3800 });
+    const summary2 = acc2.getSummary();
+
+    batch.addPacketCost(1, summary1);
+    batch.addPacketCost(2, summary2);
+
+    const batchSummary = batch.getSummary();
+
+    // Total should equal sum
+    expect(batchSummary.total_cost_usd).toBeCloseTo(summary1.total_cost_usd + summary2.total_cost_usd, 4);
+    expect(batchSummary.total_tokens).toBe(summary1.total_tokens + summary2.total_tokens);
+    expect(batchSummary.call_count).toBe(summary1.call_count + summary2.call_count);
+    expect(batchSummary.retry_count).toBe(1); // 1 retry in packet 2
+    expect(batchSummary.packet_count).toBe(2);
+    expect(batchSummary.avg_cost_per_packet).toBeCloseTo(batchSummary.total_cost_usd / 2, 4);
+  });
+
+  it("retry events are included in totals", () => {
+    const acc = new CostAccumulator({ jobId: 1 });
+
+    // Record retry + success
+    const retryEvent = acc.recordCall(
+      makeTelemetry({ status: "retry", error_type: "rate_limit", attempt: 0 }),
+    );
+    const successEvent = acc.recordCall(
+      makeTelemetry({ status: "success", attempt: 1 }),
+      { promptTokens: 2000, completionTokens: 800, totalTokens: 2800 },
+    );
+
+    const summary = acc.getSummary();
+
+    // Both events contribute to totals
+    expect(summary.call_count).toBe(2);
+    expect(summary.retry_count).toBe(1);
+    expect(summary.total_cost_usd).toBeCloseTo(retryEvent.cost_usd + successEvent.cost_usd, 6);
+    expect(summary.total_tokens).toBe(retryEvent.usage.total_tokens + successEvent.usage.total_tokens);
+
+    // SQL should include both
+    const insert = acc.buildInsertSQL();
+    expect(insert).not.toBeNull();
+    expect(insert!.params.length).toBe(28); // 2 events × 14 params
+  });
+});
+
 // ── Summarization ────────────────────────────────────────────────
 
 describe("summarizeEvents", () => {
@@ -317,6 +536,7 @@ describe("summarizeEvents", () => {
     const summary = summarizeEvents([]);
     expect(summary.total_cost_usd).toBe(0);
     expect(summary.call_count).toBe(0);
+    expect(summary.retry_count).toBe(0);
     expect(summary.avg_cost_per_call).toBe(0);
     expect(summary.estimated_pct).toBe(0);
   });
@@ -351,24 +571,67 @@ describe("summarizeEvents", () => {
 
     const summary = summarizeEvents(events);
     expect(summary.call_count).toBe(2);
+    expect(summary.retry_count).toBe(0);
     expect(summary.total_prompt_tokens).toBe(3000);
     expect(summary.total_completion_tokens).toBe(1100);
     expect(summary.total_tokens).toBe(4100);
     expect(summary.total_cost_usd).toBeCloseTo(0.0185, 4);
     expect(summary.estimated_pct).toBe(50);
   });
+
+  it("counts retry events separately", () => {
+    const events: UsageEvent[] = [
+      {
+        request_id: "r1", job_id: 1, label: "Stage 4: Resume", model: "gpt-4o",
+        usage: { prompt_tokens: 1000, completion_tokens: 0, total_tokens: 1000, estimated: true },
+        cost_usd: 0.003, duration_ms: 1000, attempt: 0, status: "retry", error_type: "rate_limit",
+        timestamp: new Date().toISOString(),
+      },
+      {
+        request_id: "r1", job_id: 1, label: "Stage 4: Resume", model: "gpt-4o",
+        usage: { prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500, estimated: false },
+        cost_usd: 0.0075, duration_ms: 3000, attempt: 1, status: "success",
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    const summary = summarizeEvents(events);
+    expect(summary.call_count).toBe(2);
+    expect(summary.retry_count).toBe(1);
+  });
+});
+
+// ── extractStageKey ──────────────────────────────────────────────
+
+describe("extractStageKey", () => {
+  it("extracts 'Stage 4' from full label", () => {
+    expect(extractStageKey("Stage 4: Resume Generation")).toBe("Stage 4");
+  });
+
+  it("extracts 'Stage 8' from full label", () => {
+    expect(extractStageKey("Stage 8: recruiter-review")).toBe("Stage 8");
+  });
+
+  it("returns full label if no stage prefix", () => {
+    expect(extractStageKey("Custom Label")).toBe("Custom Label");
+  });
+
+  it("is case-insensitive", () => {
+    expect(extractStageKey("stage 2: Mandate")).toBe("stage 2");
+  });
 });
 
 // ── Format Cost Summary ──────────────────────────────────────────
 
 describe("formatCostSummary", () => {
-  it("produces readable output", () => {
+  it("produces readable output with retry info", () => {
     const summary: CostSummary = {
       total_cost_usd: 0.0475,
       total_prompt_tokens: 5000,
       total_completion_tokens: 2000,
       total_tokens: 7000,
       call_count: 3,
+      retry_count: 1,
       avg_cost_per_call: 0.0158,
       by_stage: {
         "Stage 4": { cost_usd: 0.035, tokens: 5000, calls: 2 },
@@ -378,12 +641,15 @@ describe("formatCostSummary", () => {
         "gpt-4o": { cost_usd: 0.0475, tokens: 7000, calls: 3 },
       },
       estimated_pct: 0,
+      elapsed_ms: 12500,
     };
 
     const output = formatCostSummary(summary);
     expect(output).toContain("LLM Cost Summary");
     expect(output).toContain("$0.0475");
     expect(output).toContain("3 call(s)");
+    expect(output).toContain("1 retries");
+    expect(output).toContain("12.5s");
     expect(output).toContain("Stage 4");
     expect(output).toContain("Stage 8");
   });
@@ -395,6 +661,7 @@ describe("formatCostSummary", () => {
       total_completion_tokens: 500,
       total_tokens: 1500,
       call_count: 2,
+      retry_count: 0,
       avg_cost_per_call: 0.005,
       by_stage: {},
       by_model: {},
@@ -404,6 +671,44 @@ describe("formatCostSummary", () => {
     const output = formatCostSummary(summary);
     expect(output).toContain("50%");
     expect(output).toContain("estimated");
+  });
+});
+
+// ── Format Batch Cost Summary ────────────────────────────────────
+
+describe("formatBatchCostSummary", () => {
+  it("produces readable batch output", () => {
+    const summary: BatchCostSummary = {
+      total_cost_usd: 0.12,
+      total_prompt_tokens: 10000,
+      total_completion_tokens: 4000,
+      total_tokens: 14000,
+      call_count: 6,
+      retry_count: 2,
+      avg_cost_per_call: 0.02,
+      by_stage: {},
+      by_model: {},
+      estimated_pct: 0,
+      elapsed_ms: 45000,
+      packet_count: 3,
+      avg_cost_per_packet: 0.04,
+      packet_costs: [
+        { job_id: 1, cost_usd: 0.05, tokens: 5000, calls: 2 },
+        { job_id: 2, cost_usd: 0.04, tokens: 5000, calls: 2 },
+        { job_id: 3, cost_usd: 0.03, tokens: 4000, calls: 2 },
+      ],
+    };
+
+    const output = formatBatchCostSummary(summary);
+    expect(output).toContain("Batch LLM Cost Summary");
+    expect(output).toContain("$0.1200");
+    expect(output).toContain("3 packet(s)");
+    expect(output).toContain("Avg per packet: $0.0400");
+    expect(output).toContain("Retries: 2");
+    expect(output).toContain("Job 1:");
+    expect(output).toContain("Job 2:");
+    expect(output).toContain("Job 3:");
+    expect(output).toContain("45.0s");
   });
 });
 
@@ -434,19 +739,28 @@ describe("Global Cost Accumulator", () => {
 // ── SQL Query Constants ──────────────────────────────────────────
 
 describe("SQL Query Constants", () => {
-  it("exports COST_QUERY_BY_JOB", () => {
+  it("exports COST_QUERY_BY_JOB with retry_count", () => {
     expect(COST_QUERY_BY_JOB).toContain("llm_usage");
     expect(COST_QUERY_BY_JOB).toContain("job_id = $1");
+    expect(COST_QUERY_BY_JOB).toContain("retry");
+  });
+
+  it("exports COST_QUERY_BY_RUN", () => {
+    expect(COST_QUERY_BY_RUN).toContain("run_id = $1");
+    expect(COST_QUERY_BY_RUN).toContain("packet_count");
+    expect(COST_QUERY_BY_RUN).toContain("retry");
   });
 
   it("exports COST_QUERY_DAILY", () => {
     expect(COST_QUERY_DAILY).toContain("DATE(created_at)");
     expect(COST_QUERY_DAILY).toContain("LIMIT $1");
+    expect(COST_QUERY_DAILY).toContain("retry");
   });
 
   it("exports COST_QUERY_BY_STAGE", () => {
     expect(COST_QUERY_BY_STAGE).toContain("GROUP BY label");
     expect(COST_QUERY_BY_STAGE).toContain("job_id = $1");
+    expect(COST_QUERY_BY_STAGE).toContain("retry");
   });
 });
 
@@ -456,11 +770,15 @@ describe("Module Exports", () => {
   it("exports all expected types and functions", () => {
     expect(typeof PRICING_REGISTRY).toBe("object");
     expect(typeof calculateCost).toBe("function");
+    expect(typeof estimateCostUSD).toBe("function");
     expect(typeof estimateTokenUsage).toBe("function");
     expect(typeof getModelPricing).toBe("function");
     expect(typeof CostAccumulator).toBe("function");
+    expect(typeof BatchCostAccumulator).toBe("function");
     expect(typeof summarizeEvents).toBe("function");
     expect(typeof formatCostSummary).toBe("function");
+    expect(typeof formatBatchCostSummary).toBe("function");
+    expect(typeof extractStageKey).toBe("function");
     expect(typeof setGlobalCostAccumulator).toBe("function");
     expect(typeof getGlobalCostAccumulator).toBe("function");
   });

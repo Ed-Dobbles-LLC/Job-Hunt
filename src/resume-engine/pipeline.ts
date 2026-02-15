@@ -108,6 +108,8 @@ export interface PipelineInput {
   requirements?: Record<string, any>;
   company_context?: string;
   max_attempts?: number;
+  /** Batch run identifier for cost tracking across multiple packets */
+  run_id?: string;
   embedding_config?: EmbeddingConfig;
   logger?: any;
 }
@@ -126,7 +128,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
 
   // ── Set up cost tracking ────────────────────────────────────────
 
-  const costAccumulator = new CostAccumulator({ jobId: input.job_id, logger });
+  const costAccumulator = new CostAccumulator({ jobId: input.job_id, runId: input.run_id, logger });
   setGlobalCostAccumulator(costAccumulator);
 
   // ── Load job data ──────────────────────────────────────────────

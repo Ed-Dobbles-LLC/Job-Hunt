@@ -1815,5 +1815,51 @@ CRITICAL INSTRUCTIONS:
         }
       },
     },
+    // ── Cost Tracking Endpoints ────────────────────────────────────
+
+    {
+      path: "/api/dashboard/cost/job/:jobId",
+      method: "GET" as const,
+      createHandler: async () => async (c: any) => {
+        const { getPacketCost, getStageCost } = await import("../resume-engine/cost-tracker");
+        const jobId = parseInt(c.req.param("jobId"));
+        if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
+
+        const [packetCost, stageCosts] = await Promise.all([
+          getPacketCost(jobId),
+          getStageCost(jobId),
+        ]);
+
+        return c.json({
+          job_id: jobId,
+          cost: packetCost,
+          stages: stageCosts,
+        });
+      },
+    },
+    {
+      path: "/api/dashboard/cost/daily",
+      method: "GET" as const,
+      createHandler: async () => async (c: any) => {
+        const { COST_QUERY_DAILY } = await import("../resume-engine/cost-tracker");
+        const days = parseInt(c.req.query("days") || "30");
+        try {
+          const result = await query(COST_QUERY_DAILY, [days]);
+          return c.json({ days: result.rows });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/dashboard/cost/run/:runId",
+      method: "GET" as const,
+      createHandler: async () => async (c: any) => {
+        const { getRunCost } = await import("../resume-engine/cost-tracker");
+        const runId = c.req.param("runId");
+        const runCost = await getRunCost(runId);
+        return c.json({ run_id: runId, cost: runCost });
+      },
+    },
   ];
 }
