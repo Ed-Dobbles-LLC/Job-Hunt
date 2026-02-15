@@ -560,6 +560,87 @@ function verbStrengthPass(resume: TailoredResume, mandate: MandateProfile): Verb
   };
 }
 
+// ── Outcome Integrity Verification ──────────────────────────────
+//
+// After compression and truncation, verify that outcome clauses
+// (Action → Context → Outcome) were not stripped from impact bullets.
+// If a bullet previously had a quantified outcome and now lacks one,
+// flag it for restoration. Does NOT fabricate — only detects losses.
+
+export interface OutcomeIntegrityResult {
+  bullets_checked: number;
+  outcome_losses_detected: number;
+  cleanups_applied: number;
+  details: string[];
+}
+
+/**
+ * Verify outcome clause integrity after compression passes.
+ * Detects bullets that appear to have been truncated mid-sentence
+ * and cleans up ragged endings (trailing commas, prepositions).
+ *
+ * Does NOT add new content — only cleans up truncation artifacts
+ * and flags bullets that lost their outcome clause.
+ */
+export function verifyOutcomeIntegrity(resume: TailoredResume): OutcomeIntegrityResult {
+  const details: string[] = [];
+  let bulletsChecked = 0;
+  let outcomeLosses = 0;
+  let cleanupsApplied = 0;
+
+  // Trailing preposition/conjunction patterns (truncation artifacts)
+  const TRAILING_ARTIFACTS: RegExp[] = [
+    /\s+(?:to|for|with|by|from|in|on|at|through|across|via|into)\s*$/i,
+    /\s+(?:and|or|but|that|which|who|where)\s*$/i,
+    /\s+(?:including|resulting|generating|delivering|achieving)\s*$/i,
+  ];
+
+  for (let i = 0; i < resume.experience.length; i++) {
+    const exp = resume.experience[i];
+    for (let j = 0; j < exp.bullets.length; j++) {
+      const bullet = exp.bullets[j];
+      bulletsChecked++;
+
+      // Clean up trailing truncation artifacts (SAFE DETERMINISTIC)
+      for (const pattern of TRAILING_ARTIFACTS) {
+        if (pattern.test(bullet.text)) {
+          const cleaned = bullet.text.replace(pattern, "");
+          if (cleaned.length > 20) { // Don't over-trim short bullets
+            details.push(`Cleaned trailing artifact at experience[${i}].bullets[${j}]: "${bullet.text.slice(-15)}" → clean`);
+            bullet.text = cleaned;
+            cleanupsApplied++;
+          }
+        }
+      }
+
+      // Ensure clean ending punctuation
+      if (bullet.text.length > 0 && !bullet.text.match(/[.!?—]$/)) {
+        bullet.text = bullet.text.replace(/[,;:\s]+$/, "");
+      }
+
+      // Detect if this is a major-role bullet (top 3 roles, first 2 bullets) that lost its outcome
+      if (i < 3 && j < 2 && !bulletHasOutcome(bullet.text)) {
+        // Check if the evidence_quote (original source) had a quantified outcome
+        const evidenceHasOutcome = bullet.evidence_quote &&
+          (/\$[\d,.]+\s*[KMBTkmbt]?\b/.test(bullet.evidence_quote) ||
+           /\d+\.?\d*%/.test(bullet.evidence_quote));
+
+        if (evidenceHasOutcome) {
+          outcomeLosses++;
+          details.push(`Outcome loss: experience[${i}].bullets[${j}] (${exp.employer}) — evidence has metrics but bullet does not`);
+        }
+      }
+    }
+  }
+
+  return {
+    bullets_checked: bulletsChecked,
+    outcome_losses_detected: outcomeLosses,
+    cleanups_applied: cleanupsApplied,
+    details,
+  };
+}
+
 // ── Competency Cap Enforcement ──────────────────────────────────
 
 /** Mandate keyword relevance for competency sorting. */
@@ -1048,6 +1129,7 @@ export interface GovernorResult {
   competency_capped: boolean;
   scope_line_fixes: string[];
   summary_trimmed: boolean;
+  outcome_integrity: OutcomeIntegrityResult;
   page_estimate: PageEstimate;
   page_budget_actions: string[];
   compression_suggestions: string[];
@@ -1109,6 +1191,9 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
   // 9. Summary density enforcement (max 4 lines — mandate sharpening)
   const summaryTrimmed = enforceSummaryDensity(resume);
 
+  // 9b. Outcome integrity verification (clean up truncation artifacts, detect lost outcomes)
+  const outcomeIntegrity = verifyOutcomeIntegrity(resume);
+
   // 10. Page estimation + compression to 2-page budget (Compression Mode)
   const pageBudget = compressToPageBudget(resume);
 
@@ -1139,6 +1224,7 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
     competency_capped: competencyCapped,
     scope_line_fixes: scopeLineFixes,
     summary_trimmed: summaryTrimmed,
+    outcome_integrity: outcomeIntegrity,
     page_estimate: pageEstimate,
     page_budget_actions: pageBudget.actions,
     compression_suggestions: pageEstimate.compression_suggestions,

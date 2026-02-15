@@ -185,6 +185,7 @@ export interface PipelineResult {
   final_report: any;
   recruiter_review?: RecruiterReviewReport;
   refinement_score?: import("./refinement-layer").RefinementScore;
+  positioning_score?: import("./positioning-pass").PositioningScore;
   attempt_history: AttemptRecord[];
   human_review_required: boolean;
   human_review_notes: string[];

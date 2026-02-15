@@ -336,7 +336,15 @@ For every resume bullet, you MUST populate the claim_ids array with at least one
 IDs follow the format "cl-{roleIndex}-{type}-{seq}" (e.g., "cl-0-metric-1", "cl-1-tool-2").
 An empty claim_ids array is a SCHEMA VIOLATION and will cause the bullet to be REJECTED.
 If you cannot find claim IDs for a bullet, DROP THE BULLET — do not emit it.
-Every metric, tool, team size, and scope fact must trace to a specific claim ID.`;
+Every metric, tool, team size, and scope fact must trace to a specific claim ID.
+
+### POSITIONING ENFORCEMENT (CRITICAL)
+The resume will be scored on 5 positioning dimensions post-generation. Optimize for ALL of them:
+1. SUMMARY MANDATE ANCHORING: First sentence MUST declare a strategic dimension matching "${mandate.primary_mandate.replace(/_/g, " ")}". Not a generic identity claim.
+2. IMPACT DENSITY: At least 2 bullets per major role (top 3) MUST contain quantified outcomes ($X, N%). The outcome clause is the most valuable part — never truncate it.
+3. AUTHORITY TONE: No "managed day-to-day", "responsible for", "played a key role", "helped", "supported". Every opener must be a concrete executive action verb.
+4. NO CLICHÉS: Ban "leveraged", "actionable insights", "unlocking value", "thought leader", "fostering a culture". Use precise, fact-anchored language.
+5. OUTCOME PRESERVATION: Every bullet with a quantified result must end with the result intact. Pattern: Action → Context → Outcome (e.g., "Architected governance framework across 6 BUs — reducing compliance gaps 40%").`;
 }
 
 // ── Correction Prompt Builder ────────────────────────────────────

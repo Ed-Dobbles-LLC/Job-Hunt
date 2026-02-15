@@ -379,7 +379,32 @@ The resume should feel balanced and calm across both pages — no cramming.
    - Clear separation between: Role title, Company, Scope line, Bullets
    - The resume must feel "calm" and executive — generous white space, clear hierarchy
 
-10. **OUTPUT**
+10. **POSITIONING ENFORCEMENT (FINAL CHECK BEFORE OUTPUT)**
+   Before emitting the JSON, verify these 5 positioning rules:
+
+   a. **SUMMARY MANDATE ANCHORING**: Re-read the first sentence. Does it declare a STRATEGIC DIMENSION
+      matching the job's primary mandate? Governance → control/rigor. Platform → architecture/scalability.
+      Insight delivery → stakeholder clarity. Revenue → financial impact. If the first sentence is a
+      generic identity claim ("Data leader who..."), REWRITE it now.
+
+   b. **BULLET IMPACT DENSITY**: Count impact bullets (those with $X, N%, or quantified outcomes) per
+      major role (first 3 roles). Each must have ≥2. If a role has <2 impact bullets, promote a bullet
+      with metrics from that role or drop a non-impact bullet and replace it with one that has a
+      quantified outcome from the inventory.
+
+   c. **AUTHORITY TONE CHECK**: Scan every bullet opener. If any start with "managed day-to-day",
+      "responsible for", "played a key role", "served as", "helped", "supported", "contributed" —
+      these are managerial, not executive. Replace with a concrete action verb from the mandate pool.
+
+   d. **CORPORATE CLICHÉ BAN**: Remove "leveraged", "actionable insights", "drove synergies",
+      "unlocking value", "thought leader", "fostering a culture of", "at the forefront of".
+      Replace with precise, fact-anchored language.
+
+   e. **OUTCOME CLAUSE PRESERVATION**: For every bullet with a quantified outcome, ensure the
+      outcome clause (the part after "—" or "resulting in") is intact and not truncated. The outcome
+      is the most valuable part of the bullet — never sacrifice it for word count.
+
+11. **OUTPUT**
    Return ONLY the JSON object. No markdown fences, no commentary, no explanation.`;
 }
 

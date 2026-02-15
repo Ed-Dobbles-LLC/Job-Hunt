@@ -194,7 +194,25 @@ export function buildCoverLetterSystemPrompt(): string {
    This includes mentions of tools, team sizes, metrics, job titles at previous companies, etc.
    Confidence must be ≥ 0.7 for all pointers.
 
-10. **OUTPUT**
+10. **POSITIONING ENFORCEMENT (FINAL CHECK BEFORE OUTPUT)**
+    Before emitting the JSON, verify these 4 positioning rules:
+
+    a. **MANDATE THESIS IN OPENING**: The opening_paragraph FIRST SENTENCE must declare the strategic
+       capability matching the job's primary mandate. NOT "I am excited to apply" — that is generic
+       interest. Pattern: "[Role] at [Company] calls for [mandate X]. At [Employer], I [proof]."
+
+    b. **NO SUPPLICANT CLOSING**: The closing_paragraph must NOT use "Thank you for considering",
+       "I look forward to the opportunity", "I hope to hear from you", or "I humbly submit".
+       Instead: state what strategic conversation you want to have. Frame what you will BUILD.
+
+    c. **VALUE CLAIMS MUST DIFFER FROM RESUME**: Each value claim must use DIFFERENT phrasing
+       from the resume bullets. Same achievement, different angle. The cover letter provides
+       NARRATIVE CONTEXT that resume bullets cannot.
+
+    d. **NO CORPORATE CLICHÉS**: Remove "leveraged", "actionable insights", "unique combination",
+       "thought leader", "fostering a culture of", "at the forefront of", "drove synergies".
+
+11. **OUTPUT**
     Return ONLY the JSON object. No markdown fences, no commentary, no explanation.`;
 }
 
