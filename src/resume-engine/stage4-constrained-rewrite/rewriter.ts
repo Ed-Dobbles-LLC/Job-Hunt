@@ -181,11 +181,42 @@ function detectGenericEnthusiasm(cl: TailoredCoverLetter): string[] {
   return matches;
 }
 
+// ── Cover Letter Anti-Repetition Patterns ────────────────────────
+
+const COVER_LETTER_REPETITION_PATTERNS: { pattern: RegExp; fix: string }[] = [
+  { pattern: /\baligns? with [\w']+'s need for\b/gi, fix: "Remove 'aligns with [Company]'s need for' — weave connection implicitly" },
+  { pattern: /\bthis aligns (?:directly )?with\b/gi, fix: "Remove 'this aligns with' — let specificity imply alignment" },
+  { pattern: /\bwhich aligns (?:directly )?with\b/gi, fix: "Remove 'which aligns with' — implicit connection is stronger" },
+  { pattern: /\bdirectly address(?:es|ing) [\w']+'s need for\b/gi, fix: "Remove 'directly addressing [Company]'s need' — too template-driven" },
+  { pattern: /\bthis (?:directly )?mirrors\b/gi, fix: "Remove 'this mirrors' — redundant alignment language" },
+  { pattern: /\bthis experience (?:directly )?translates to\b/gi, fix: "Remove 'this experience translates to' — resume recap language" },
+];
+
+/**
+ * Detect template-driven repetition patterns in cover letter.
+ * Returns matched patterns for correction.
+ */
+function detectCoverLetterRepetition(cl: TailoredCoverLetter): string[] {
+  const fullText = [
+    cl.opening_paragraph,
+    ...cl.body_paragraphs,
+    cl.closing_paragraph,
+  ].join(" ");
+
+  const matches: string[] = [];
+  for (const { pattern, fix } of COVER_LETTER_REPETITION_PATTERNS) {
+    pattern.lastIndex = 0;
+    const match = fullText.match(pattern);
+    if (match) matches.push(`"${match[0]}" — ${fix}`);
+  }
+  return matches;
+}
+
 /**
  * Validate cover letter follows the 3-paragraph strategic structure:
  * - Opening: mandate thesis (not recap)
  * - Body: 1-2 high-impact examples
- * - Closing: forward-looking value proposition
+ * - Closing: forward-looking contribution
  *
  * Returns violations if structure is wrong.
  */
@@ -198,7 +229,6 @@ function validateCoverLetterStructure(cl: TailoredCoverLetter): string[] {
   }
 
   // Opening must NOT be a generic interest statement
-  const openingLower = cl.opening_paragraph.toLowerCase();
   if (/^(i am writing|i am applying|i am interested|i would like to apply)/i.test(cl.opening_paragraph)) {
     violations.push("Opening starts with generic interest — must lead with mandate alignment thesis");
   }
@@ -206,7 +236,22 @@ function validateCoverLetterStructure(cl: TailoredCoverLetter): string[] {
   // Closing must NOT be supplicant
   const closingLower = cl.closing_paragraph.toLowerCase();
   if (closingLower.includes("thank you for considering") || closingLower.includes("i hope to hear")) {
-    violations.push("Closing uses supplicant language — must state forward-looking value proposition");
+    violations.push("Closing uses supplicant language — must state forward-looking contribution");
+  }
+
+  // Check for resume recap in body paragraphs
+  for (let i = 0; i < cl.body_paragraphs.length; i++) {
+    const para = cl.body_paragraphs[i];
+    // If paragraph starts with a list of achievements without narrative framing
+    if (/^(?:I |At |During |While )/i.test(para) && (para.match(/[,;]/g) || []).length >= 3) {
+      violations.push(`Body paragraph ${i + 1} reads as a resume recap — use narrative framing instead`);
+    }
+  }
+
+  // Check for anti-repetition patterns
+  const repetitions = detectCoverLetterRepetition(cl);
+  for (const rep of repetitions) {
+    violations.push(`Repetition: ${rep}`);
   }
 
   return violations;

@@ -18,7 +18,7 @@
 
 import type { TailoredResume } from "../mastra/tools/tailoredResumePrompt";
 import type { TailoredCoverLetter } from "../mastra/tools/tailoredCoverLetterPrompt";
-import { HYPE_WORDS } from "./stage6-layout-governor/governor";
+import { HYPE_WORDS, bulletHasOutcome } from "./stage6-layout-governor/governor";
 
 // ── Interfaces ───────────────────────────────────────────────────
 
@@ -54,6 +54,22 @@ export interface SpellcheckResult {
   suspicious_tokens: { location: string; token: string; reason: string }[];
 }
 
+export interface ExecutiveDepthCheck {
+  passed: boolean;
+  roles_with_2_impact: number;
+  roles_lacking_impact: string[];
+  career_arc_visible: boolean;
+  summary_mandate_anchored: boolean;
+  outcome_clauses_present: boolean;
+  issues: string[];
+}
+
+export interface CoverLetterQACheck {
+  hype_residuals: { word: string; location: string }[];
+  corruption: { text: string; issue: string; location: string }[];
+  repetition_patterns: string[];
+}
+
 export interface QAGateResult {
   passed: boolean;
   checks: {
@@ -63,6 +79,8 @@ export interface QAGateResult {
     phrase_duplication: PhraseDuplicationCheck;
     page_validation: PageValidationCheck;
     spellcheck: SpellcheckResult;
+    executive_depth?: ExecutiveDepthCheck;
+    cover_letter_qa?: CoverLetterQACheck;
   };
   blocking_issues: string[];
   warnings: string[];
@@ -380,12 +398,80 @@ function checkSpelling(resume: TailoredResume): SpellcheckResult {
   return { passed: suspicious.length === 0, suspicious_tokens: suspicious };
 }
 
+// ── Executive Depth QA ──────────────────────────────────────────
+//
+// FINAL QA: Before output, confirm executive depth is preserved.
+
+function checkExecutiveDepth(resume: TailoredResume): ExecutiveDepthCheck {
+  const issues: string[] = [];
+  let rolesWithImpact = 0;
+  const rolesLackingImpact: string[] = [];
+  let totalOutcomes = 0;
+
+  // Check: 2+ bullets per major role contain quantified impact
+  for (let i = 0; i < resume.experience.length; i++) {
+    const exp = resume.experience[i];
+    const impactCount = exp.bullets.filter(b => bulletHasOutcome(b.text)).length;
+    totalOutcomes += impactCount;
+
+    if (impactCount >= 2) {
+      rolesWithImpact++;
+    } else {
+      rolesLackingImpact.push(`${exp.employer} (${impactCount} impact bullets)`);
+      if (i < 3) { // Major roles = top 3
+        issues.push(`${exp.employer}: only ${impactCount}/2 required impact bullets for major role`);
+      }
+    }
+  }
+
+  // Check: Summary reflects mandate (not generic)
+  const GENERIC_SUMMARY_STARTS = [
+    /^(?:data|analytics)\s+(?:and\s+)?(?:analytics\s+)?(?:leader|executive|professional)\b/i,
+    /^(?:seasoned|accomplished|dynamic|experienced|senior|results-driven)\s+/i,
+    /^(?:proven|established|recognized)\s+(?:leader|executive)\b/i,
+  ];
+  const firstSentence = (resume.professional_summary.split(/[.!?]\s/)[0] || "").trim();
+  const summaryMandateAnchored = !GENERIC_SUMMARY_STARTS.some(p => p.test(firstSentence));
+
+  if (!summaryMandateAnchored) {
+    issues.push("Summary opens with generic pattern — must anchor to job mandate");
+  }
+
+  // Check: Career arc visible (3+ roles)
+  const careerArcVisible = resume.experience.length >= 3;
+  if (!careerArcVisible) {
+    issues.push(`Only ${resume.experience.length} role(s) — need 3+ for visible career arc`);
+  }
+
+  // Check: No outcome clauses removed (at least 1 impact bullet overall)
+  const outcomeClausesPresent = totalOutcomes >= 2;
+  if (!outcomeClausesPresent) {
+    issues.push(`Only ${totalOutcomes} total impact bullets — at least 2 required`);
+  }
+
+  return {
+    passed: issues.length === 0,
+    roles_with_2_impact: rolesWithImpact,
+    roles_lacking_impact: rolesLackingImpact,
+    career_arc_visible: careerArcVisible,
+    summary_mandate_anchored: summaryMandateAnchored,
+    outcome_clauses_present: outcomeClausesPresent,
+    issues,
+  };
+}
+
+// ── Cover Letter Anti-Repetition QA ─────────────────────────────
+
+const CL_REPETITION_PATTERNS: RegExp[] = [
+  /\baligns? with [\w']+'s need\b/gi,
+  /\bthis aligns (?:directly )?with\b/gi,
+  /\bwhich aligns (?:directly )?with\b/gi,
+  /\bdirectly address(?:es|ing) [\w']+'s need\b/gi,
+];
+
 // ── Cover Letter QA ──────────────────────────────────────────────
 
-function checkCoverLetterQA(cl: TailoredCoverLetter): {
-  hype_residuals: { word: string; location: string }[];
-  corruption: { text: string; issue: string; location: string }[];
-} {
+function checkCoverLetterQA(cl: TailoredCoverLetter): CoverLetterQACheck {
   const hype: { word: string; location: string }[] = [];
   const corruption: { text: string; issue: string; location: string }[] = [];
 
@@ -413,7 +499,16 @@ function checkCoverLetterQA(cl: TailoredCoverLetter): {
     }
   }
 
-  return { hype_residuals: hype, corruption };
+  // Check repetition patterns
+  const fullText = sections.map(s => s.text).join(" ");
+  const repetitionPatterns: string[] = [];
+  for (const pat of CL_REPETITION_PATTERNS) {
+    pat.lastIndex = 0;
+    const match = fullText.match(pat);
+    if (match) repetitionPatterns.push(match[0]);
+  }
+
+  return { hype_residuals: hype, corruption, repetition_patterns: repetitionPatterns };
 }
 
 // ── Main QA Gate ─────────────────────────────────────────────────
@@ -500,17 +595,37 @@ export function runQAGate(
     );
   }
 
-  // 7. Cover letter QA (if provided)
+  // 7. Executive depth QA (balanced executive depth & impact pass)
+  const executiveDepth = checkExecutiveDepth(resume);
+  if (!executiveDepth.passed) {
+    for (const issue of executiveDepth.issues) {
+      warnings.push(`Executive depth: ${issue}`);
+    }
+    if (!executiveDepth.career_arc_visible) {
+      warnings.push("Career arc not visible — fewer than 3 roles");
+    }
+    if (!executiveDepth.outcome_clauses_present) {
+      warnings.push("Insufficient quantified impact — outcome clauses may have been stripped");
+    }
+  }
+
+  // 8. Cover letter QA (if provided)
+  let clQAResult: CoverLetterQACheck | undefined;
   if (coverLetter) {
-    const clQA = checkCoverLetterQA(coverLetter);
-    if (clQA.hype_residuals.length > 0) {
+    clQAResult = checkCoverLetterQA(coverLetter);
+    if (clQAResult.hype_residuals.length > 0) {
       warnings.push(
-        `Cover letter: ${clQA.hype_residuals.length} hype word(s): ${clQA.hype_residuals.map(r => `"${r.word}"`).join(", ")}`,
+        `Cover letter: ${clQAResult.hype_residuals.length} hype word(s): ${clQAResult.hype_residuals.map(r => `"${r.word}"`).join(", ")}`,
       );
     }
-    if (clQA.corruption.length > 0) {
+    if (clQAResult.corruption.length > 0) {
       blocking.push(
-        `Cover letter: ${clQA.corruption.length} corruption issue(s): ${clQA.corruption.map(c => `"${c.text}" (${c.issue})`).slice(0, 3).join(", ")}`,
+        `Cover letter: ${clQAResult.corruption.length} corruption issue(s): ${clQAResult.corruption.map(c => `"${c.text}" (${c.issue})`).slice(0, 3).join(", ")}`,
+      );
+    }
+    if (clQAResult.repetition_patterns.length > 0) {
+      warnings.push(
+        `Cover letter repetition: ${clQAResult.repetition_patterns.map(p => `"${p}"`).join(", ")} — remove template-driven alignment phrases`,
       );
     }
   }
@@ -524,6 +639,8 @@ export function runQAGate(
       phrase_duplication: phraseDuplication,
       page_validation: pageValidation,
       spellcheck: spellcheck,
+      executive_depth: executiveDepth,
+      cover_letter_qa: clQAResult,
     },
     blocking_issues: blocking,
     warnings,

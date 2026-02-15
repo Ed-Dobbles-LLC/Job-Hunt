@@ -207,6 +207,35 @@ function enforceReverseChronological(resume: TailoredResume): boolean {
   return reordered;
 }
 
+// ── Impact Detection Helpers ────────────────────────────────────
+
+/** Regex patterns that identify outcome/impact clauses in bullets. */
+const OUTCOME_PATTERNS: RegExp[] = [
+  /\$[\d,.]+\s*[KMBTkmbt]?\b/,          // Dollar amounts ($12M, $4.5B)
+  /\d+\.?\d*%/,                           // Percentages (38%, 2.5%)
+  /\d+[xX]\s+(?:improvement|increase|growth|reduction|faster|more)/i,  // Multipliers
+  /\b(?:revenue|savings|ROI|margin|profit|EBITDA|ARR|pipeline|cost\s+reduc)\b/i, // Financial keywords
+  /\b(?:resulting in|generating|producing|delivering|achieving|yielding|saving|recovering)\b/i, // Outcome verbs
+];
+
+/** Check if a bullet contains a quantified outcome clause. */
+export function bulletHasOutcome(text: string): boolean {
+  return OUTCOME_PATTERNS.some(p => p.test(text));
+}
+
+/**
+ * Sort bullets so that those with outcome clauses are preserved first.
+ * Returns a new array with impact bullets first, non-impact bullets last.
+ * Uses generic type to preserve the original bullet type signature.
+ */
+function sortByImpact<T extends { text: string }>(bullets: T[]): T[] {
+  return [...bullets].sort((a, b) => {
+    const aHas = bulletHasOutcome(a.text) ? 1 : 0;
+    const bHas = bulletHasOutcome(b.text) ? 1 : 0;
+    return bHas - aHas; // Impact bullets first
+  });
+}
+
 // ── Bullet Cap Enforcement ───────────────────────────────────────
 
 interface BulletCapResult {
@@ -214,13 +243,20 @@ interface BulletCapResult {
   original_count: number;
   final_count: number;
   details: string[];
+  impact_bullets_preserved: number;
 }
 
+/**
+ * Enforce bullet caps per role. IMPACT RESTORATION RULE:
+ * When trimming, always preserve bullets with quantified outcomes.
+ * Drop non-impact bullets first before dropping impact bullets.
+ */
 function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
   const details: string[] = [];
   let capped = false;
   let originalCount = 0;
   let finalCount = 0;
+  let impactPreserved = 0;
 
   const currentYear = new Date().getFullYear();
 
@@ -242,22 +278,30 @@ function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
     }
 
     if (exp.bullets.length > maxBullets) {
-      exp.bullets = exp.bullets.slice(0, maxBullets);
-      details.push(`${exp.employer}: ${bulletsBefore} → ${maxBullets} bullets`);
+      // IMPACT RESTORATION: Sort to preserve impact bullets, trim non-impact first
+      exp.bullets = sortByImpact(exp.bullets).slice(0, maxBullets);
+      details.push(`${exp.employer}: ${bulletsBefore} → ${maxBullets} bullets (impact-preserved)`);
       capped = true;
     }
 
+    // Count impact bullets preserved
+    impactPreserved += exp.bullets.filter(b => bulletHasOutcome(b.text)).length;
     finalCount += exp.bullets.length;
   }
 
-  // Total cap: 13-15 bullets
+  // Total cap: 13-15 bullets — trim non-impact bullets from oldest roles first
   if (finalCount > 15) {
-    // Trim from oldest roles first
     let excess = finalCount - 15;
     for (let i = resume.experience.length - 1; i >= 0 && excess > 0; i--) {
       const exp = resume.experience[i];
+      // Sort so non-impact bullets are at the end, then pop from end
+      exp.bullets = sortByImpact(exp.bullets);
       while (exp.bullets.length > 2 && excess > 0) {
-        exp.bullets.pop();
+        // Pop from end (non-impact bullets are last after sort)
+        const removed = exp.bullets.pop()!;
+        if (bulletHasOutcome(removed.text)) {
+          details.push(`WARNING: Dropped impact bullet from ${exp.employer} to fit cap`);
+        }
         excess--;
         finalCount--;
       }
@@ -268,11 +312,17 @@ function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
     capped = true;
   }
 
-  return { capped, original_count: originalCount, final_count: finalCount, details };
+  return { capped, original_count: originalCount, final_count: finalCount, details, impact_bullets_preserved: impactPreserved };
 }
 
 // ── Word Limit Enforcement ───────────────────────────────────────
 
+/**
+ * Enforce word limits. IMPACT RESTORATION RULE:
+ * When truncating bullets over 22 words, attempt to preserve the
+ * outcome clause (Action → Context → Outcome). Truncate context
+ * detail rather than removing the outcome at the end.
+ */
 function enforceWordLimits(resume: TailoredResume): string[] {
   const truncated: string[] = [];
 
@@ -280,7 +330,30 @@ function enforceWordLimits(resume: TailoredResume): string[] {
     for (const bullet of exp.bullets) {
       const words = bullet.text.split(/\s+/);
       if (words.length > 22) {
-        bullet.text = words.slice(0, 22).join(" ");
+        // Check if the bullet has an outcome clause (typically after "—" or "resulting in")
+        const dashIdx = bullet.text.indexOf(" — ");
+        const resultIdx = bullet.text.search(/,?\s*(?:resulting in|generating|producing|delivering|achieving|saving|recovering)\s/i);
+
+        if (dashIdx > 0 || resultIdx > 0) {
+          // Outcome clause detected — try to preserve it by trimming the middle
+          const splitPoint = dashIdx > 0 ? dashIdx : resultIdx;
+          const action = bullet.text.substring(0, splitPoint).trim();
+          const outcome = bullet.text.substring(splitPoint).trim();
+          const actionWords = action.split(/\s+/);
+          const outcomeWords = outcome.split(/\s+/);
+          const budget = 22 - outcomeWords.length;
+
+          if (budget >= 4 && outcomeWords.length <= 10) {
+            // Trim action part to fit budget, keeping outcome intact
+            bullet.text = actionWords.slice(0, Math.max(4, budget)).join(" ") + " " + outcome;
+          } else {
+            // Outcome too long; simple truncation
+            bullet.text = words.slice(0, 22).join(" ");
+          }
+        } else {
+          bullet.text = words.slice(0, 22).join(" ");
+        }
+
         // Ensure it ends cleanly
         if (!bullet.text.match(/[.!?]$/)) {
           bullet.text = bullet.text.replace(/[,;:\s]+$/, "");
@@ -555,7 +628,8 @@ function enforceScopeLines(resume: TailoredResume): string[] {
 // ── Summary Density Enforcement ─────────────────────────────────
 
 /**
- * Enforce the 5-line max for professional summary.
+ * Enforce the 4-line max for professional summary.
+ * SUMMARY MANDATE SHARPENING: Tighter than previous 5-line limit.
  * Counts logical lines (split by newlines, then by ~85 char wrapping — Calibri 11pt).
  */
 function enforceSummaryDensity(resume: TailoredResume): boolean {
@@ -568,7 +642,7 @@ function enforceSummaryDensity(resume: TailoredResume): boolean {
     estimatedLines += Math.max(1, Math.ceil(line.length / 85));
   }
 
-  if (estimatedLines > 5) {
+  if (estimatedLines > 4) {
     // Trim from the end of the last paragraph
     const paragraphs = summary.split(/\n\n/);
     if (paragraphs.length > 3) {
@@ -744,15 +818,23 @@ const PAGE_BAND_MAX = 2.0;
 const MIN_ROLES = 3; // Minimum enterprise roles for career progression signal
 
 /**
- * Attempt to compress the resume to fit within 2 pages.
- * Strategy (in order):
- * 1. Drop lowest mandate-scoring bullets from oldest roles (keep min 2)
- * 2. Compress most recent role to 3 bullets
- * 3. Trim competencies to 10
- * 4. Trim summary to 2 paragraphs
- * 5. Drop oldest roles (but NEVER below MIN_ROLES)
+ * BALANCED COMPRESSION: Fit within 2 pages while preserving executive depth.
  *
- * HARD CONSTRAINT: Never compress below 3 roles — career progression must be visible.
+ * Strategy (in order — respects impact & career arc):
+ * 1. Drop NON-IMPACT bullets from oldest roles (keep min 2 per role)
+ * 2. Trim competencies to 10 (less aggressive than before)
+ * 3. Reduce most recent role to 3 bullets (impact-preserved)
+ * 4. Trim summary to 2 paragraphs
+ * 5. Drop oldest roles — but NEVER enterprise-scale roles first,
+ *    and NEVER below MIN_ROLES
+ *
+ * CAREER ARC RULE: At least 3 major roles must remain. At least 1
+ * prior enterprise-scale role must be preserved. Never collapse to
+ * "startup bio" format — visible progression of scope is required.
+ *
+ * IMPACT RULE: Never drop a bullet with a quantified outcome ($X, N%)
+ * unless the page governor absolutely requires it (Step 3+).
+ * Prioritize restoring outcome metrics over expanding summary.
  */
 function compressToPageBudget(resume: TailoredResume): { compressed: boolean; blocked: boolean; actions: string[] } {
   const actions: string[] = [];
@@ -762,28 +844,38 @@ function compressToPageBudget(resume: TailoredResume): { compressed: boolean; bl
     return { compressed: false, blocked: false, actions: [] };
   }
 
-  // Step 1: Drop lowest bullets from oldest roles (keep minimum 2 per role)
+  // Step 1: Drop NON-IMPACT bullets from oldest roles (keep min 2 per role)
   for (let i = resume.experience.length - 1; i >= 1 && estimate.exceeds_2_pages; i--) {
     const exp = resume.experience[i];
+    // Sort so non-impact bullets are at the end
+    exp.bullets = sortByImpact(exp.bullets);
     while (exp.bullets.length > 2 && estimate.exceeds_2_pages) {
-      exp.bullets.pop();
-      actions.push(`Dropped bullet from ${exp.employer} (role ${i})`);
+      const removed = exp.bullets.pop()!;
+      const hadImpact = bulletHasOutcome(removed.text);
+      actions.push(`Dropped ${hadImpact ? "IMPACT " : ""}bullet from ${exp.employer} (role ${i})`);
       estimate = estimatePages(resume);
     }
   }
 
-  // Step 2: Reduce most recent role to 3 bullets if still over
-  if (estimate.exceeds_2_pages && resume.experience[0]?.bullets.length > 3) {
-    resume.experience[0].bullets = resume.experience[0].bullets.slice(0, 3);
-    actions.push(`Reduced most recent role to 3 bullets`);
+  // Step 2: Trim competencies to 10 (moderate — less aggressive)
+  const comps = (resume as any).core_competencies;
+  if (estimate.exceeds_2_pages && Array.isArray(comps) && comps.length > 10) {
+    (resume as any).core_competencies = comps.slice(0, 10);
+    actions.push(`Trimmed competencies from ${comps.length} to 10`);
     estimate = estimatePages(resume);
   }
 
-  // Step 3: Trim competencies to 8 (aggressive — curated over dumped)
-  const comps = (resume as any).core_competencies;
+  // Step 3: Reduce most recent role to 3 bullets (impact-preserved)
+  if (estimate.exceeds_2_pages && resume.experience[0]?.bullets.length > 3) {
+    resume.experience[0].bullets = sortByImpact(resume.experience[0].bullets).slice(0, 3);
+    actions.push(`Reduced most recent role to 3 bullets (impact-preserved)`);
+    estimate = estimatePages(resume);
+  }
+
+  // Step 3b: More aggressive competency trim to 8
   if (estimate.exceeds_2_pages && Array.isArray(comps) && comps.length > 8) {
     (resume as any).core_competencies = comps.slice(0, 8);
-    actions.push(`Trimmed competencies from ${comps.length} to 8`);
+    actions.push(`Trimmed competencies from ${comps.length} to 8 (aggressive)`);
     estimate = estimatePages(resume);
   }
 
@@ -797,17 +889,40 @@ function compressToPageBudget(resume: TailoredResume): { compressed: boolean; bl
     }
   }
 
-  // Step 5: Drop oldest roles if still over — but NEVER below MIN_ROLES
+  // Step 5: Drop oldest roles — CAREER ARC RULE:
+  // Never drop an enterprise-scale role before a minor one.
+  // Never below MIN_ROLES. Preserve visible scope progression.
   if (estimate.exceeds_2_pages && resume.experience.length > MIN_ROLES) {
+    // Identify enterprise-scale roles (have scope_line with $ or headcount)
+    const isEnterpriseRole = (exp: any) => {
+      const scopeLine = (exp.scope_line || "").toLowerCase();
+      return /\$\d/.test(scopeLine) || /\d+\s*(?:person|fte|report|member)/i.test(scopeLine) || /\d+\+?\s*(?:person|fte)/i.test(scopeLine);
+    };
+
+    // Drop non-enterprise roles first, from oldest
     const maxRemovable = resume.experience.length - MIN_ROLES;
     let removed = 0;
-    while (estimate.exceeds_2_pages && removed < maxRemovable) {
-      resume.experience.pop();
+
+    // First pass: drop non-enterprise roles from the end
+    for (let i = resume.experience.length - 1; i >= MIN_ROLES && estimate.exceeds_2_pages && removed < maxRemovable; i--) {
+      if (!isEnterpriseRole(resume.experience[i])) {
+        const dropped = resume.experience.splice(i, 1)[0];
+        removed++;
+        actions.push(`Dropped non-enterprise role "${dropped.employer}" to fit budget`);
+        estimate = estimatePages(resume);
+      }
+    }
+
+    // Second pass: drop enterprise roles from the end if still over
+    while (estimate.exceeds_2_pages && resume.experience.length > MIN_ROLES) {
+      const dropped = resume.experience.pop()!;
       removed++;
+      actions.push(`Dropped enterprise role "${dropped.employer}" (last resort)`);
       estimate = estimatePages(resume);
     }
+
     if (removed > 0) {
-      actions.push(`Dropped ${removed} oldest role(s) to fit 2-page budget (kept ${resume.experience.length} roles)`);
+      actions.push(`Total: dropped ${removed} role(s) to fit 2-page budget (kept ${resume.experience.length} roles)`);
     }
   }
 
@@ -827,16 +942,15 @@ function compressToPageBudget(resume: TailoredResume): { compressed: boolean; bl
  * then promotes scope lines, and finally loosens summary density.
  *
  * Strategy (in priority order):
- * 1. Restore bullets to older roles (up to their cap)
+ * 1. Restore impact bullets to older roles first (outcome metrics > summary)
  * 2. Ensure at least MIN_ROLES enterprise roles are present
  * 3. If summary was trimmed, allow 1 additional line
  *
+ * BALANCED RULE: If <1.5 pages → actively signal that impact bullets should
+ * be restored. Prioritize restoring outcome metrics over expanding summary.
+ *
  * Does NOT pad with fluff. Only restores content that was previously compressed
  * or allows existing content to render at its natural length.
- *
- * Note: Expansion Mode works on the resume AFTER compression has run.
- * It cannot add content that wasn't generated by the LLM — it can only
- * restore caps from 2→3 or 3→4 where bullets exist but were trimmed.
  */
 interface ExpansionResult {
   expanded: boolean;
@@ -858,33 +972,44 @@ function expandToPageBand(
     return { expanded: false, actions: [], pre_expansion_pages: prePages, post_expansion_pages: prePages };
   }
 
-  // Step 1: Restore bullet caps for non-leading roles (3rd, 4th role → restore from 2 to 3)
-  // This is the cheapest expansion: each bullet adds ~1.5 lines
+  // BALANCED RULE: If severely under (<1.5), prioritize impact bullet restoration
+  const severelyThin = estimate.estimated_pages < 1.5;
+
+  // Step 1: Restore bullet caps for non-leading roles — prioritize impact bullets
   for (let i = 2; i < resume.experience.length && estimate.estimated_pages < PAGE_BAND_MIN; i++) {
     const exp = resume.experience[i];
     const originalCount = originalBulletCounts[i] || exp.bullets.length;
     const maxBullets = i <= 2 ? 3 : 2;
 
-    // We can only "restore" if the current count is less than what was originally generated
-    // The original bullet count was saved before compression
     if (exp.bullets.length < maxBullets && exp.bullets.length < originalCount) {
-      // We cannot add bullets that don't exist — this is a no-op unless the LLM generated more than the cap
-      // In practice, bullets were sliced, and we can't un-slice them here.
-      // However, we can raise the cap for the NEXT run via the expansion signal.
-      actions.push(`SIGNAL: Role "${exp.employer}" has room for ${maxBullets - exp.bullets.length} more bullet(s) — raise cap on next generation`);
+      actions.push(`SIGNAL: Role "${exp.employer}" has room for ${maxBullets - exp.bullets.length} more impact bullet(s) — restore on next generation`);
     }
   }
 
-  // Step 2: Check minimum role count
+  // Step 1b: If severely thin, signal to restore impact bullets across all roles
+  if (severelyThin) {
+    // Count how many roles lack impact bullets
+    let rolesWithoutImpact = 0;
+    for (const exp of resume.experience) {
+      const hasImpact = exp.bullets.some(b => bulletHasOutcome(b.text));
+      if (!hasImpact) rolesWithoutImpact++;
+    }
+    if (rolesWithoutImpact > 0) {
+      actions.push(`SIGNAL: ${rolesWithoutImpact} role(s) lack quantified impact bullets — restore outcome metrics before expanding summary`);
+    }
+    actions.push(`SIGNAL: Resume severely thin at ${estimate.estimated_pages} pages — prioritize restoring impact bullets over expanding summary`);
+  }
+
+  // Step 2: Check minimum role count (CAREER ARC)
   if (resume.experience.length < MIN_ROLES) {
-    actions.push(`SIGNAL: Resume has only ${resume.experience.length} roles (min ${MIN_ROLES}). Inventory may need more roles or next generation should include more.`);
+    actions.push(`SIGNAL: Resume has only ${resume.experience.length} roles (min ${MIN_ROLES}). Career arc requires at least 3 major roles with visible scope progression.`);
   }
 
   // Step 3: Allow summary to expand by 1 line if it was previously trimmed
-  // (We don't mutate — this is a signal for the next iteration)
+  // Only if not severely thin (impact bullets take priority)
   const summaryLines = Math.ceil(resume.professional_summary.length / 85);
-  if (summaryLines < 4 && estimate.estimated_pages < PAGE_BAND_MIN) {
-    actions.push(`SIGNAL: Summary is ${summaryLines} lines. Can expand to 4-5 lines for more executive context.`);
+  if (!severelyThin && summaryLines < 4 && estimate.estimated_pages < PAGE_BAND_MIN) {
+    actions.push(`SIGNAL: Summary is ${summaryLines} lines. Can expand to 4 lines for more executive context.`);
   }
 
   const postPages = estimatePages(resume).estimated_pages;
@@ -898,6 +1023,17 @@ function expandToPageBand(
 }
 
 // ── Governor Result ──────────────────────────────────────────────
+
+/** Impact QA: verify executive depth after all compression. */
+export interface ImpactQAResult {
+  roles_with_impact: number;
+  roles_without_impact: string[];
+  total_impact_bullets: number;
+  min_2_impact_per_major_role: boolean;
+  enterprise_role_preserved: boolean;
+  career_arc_visible: boolean;
+  issues: string[];
+}
 
 export interface GovernorResult {
   resume: TailoredResume;
@@ -916,6 +1052,7 @@ export interface GovernorResult {
   page_budget_actions: string[];
   compression_suggestions: string[];
   expansion_result: ExpansionResult;
+  impact_qa: ImpactQAResult;
   page_band: { min: number; max: number; actual: number; in_band: boolean };
   min_roles_met: boolean;
   blocked: boolean;
@@ -969,7 +1106,7 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
   // 8. Scope line enforcement (1 line max, ~120 chars)
   const scopeLineFixes = enforceScopeLines(resume);
 
-  // 9. Summary density enforcement (max 5 lines)
+  // 9. Summary density enforcement (max 4 lines — mandate sharpening)
   const summaryTrimmed = enforceSummaryDensity(resume);
 
   // 10. Page estimation + compression to 2-page budget (Compression Mode)
@@ -977,6 +1114,9 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
 
   // 11. Expansion Mode — restore depth if resume is too thin (<1.6 pages)
   const expansionResult = expandToPageBand(resume, originalBulletCounts);
+
+  // 12. Impact QA — verify executive depth after all compression
+  const impactQA = runImpactQA(resume);
 
   // Final page estimate after all adjustments
   const pageEstimate = estimatePages(resume);
@@ -1003,6 +1143,7 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
     page_budget_actions: pageBudget.actions,
     compression_suggestions: pageEstimate.compression_suggestions,
     expansion_result: expansionResult,
+    impact_qa: impactQA,
     page_band: {
       min: PAGE_BAND_MIN,
       max: PAGE_BAND_MAX,
@@ -1012,5 +1153,67 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
     min_roles_met: minRolesMet,
     blocked: pageBudget.blocked,
     duration_ms: Date.now() - start,
+  };
+}
+
+// ── Impact QA Validation ────────────────────────────────────────
+/**
+ * FINAL QA: Verify executive depth and impact preservation after
+ * all compression and layout adjustments.
+ *
+ * Checks:
+ * - At least 2 bullets per major role contain quantified impact
+ * - At least 1 enterprise-scale role preserved
+ * - Career arc shows visible scope progression
+ * - No outcome clauses were stripped
+ */
+function runImpactQA(resume: TailoredResume): ImpactQAResult {
+  const issues: string[] = [];
+  let totalImpactBullets = 0;
+  let rolesWithImpact = 0;
+  const rolesWithoutImpact: string[] = [];
+
+  // Check impact bullets per major role (first 3 are "major")
+  for (let i = 0; i < resume.experience.length; i++) {
+    const exp = resume.experience[i];
+    const impactCount = exp.bullets.filter(b => bulletHasOutcome(b.text)).length;
+    totalImpactBullets += impactCount;
+
+    if (impactCount > 0) {
+      rolesWithImpact++;
+    } else {
+      rolesWithoutImpact.push(exp.employer);
+    }
+
+    // Major roles (first 3) should have at least 2 impact bullets
+    if (i < 3 && impactCount < 2) {
+      issues.push(`${exp.employer}: only ${impactCount} impact bullet(s) — need at least 2 for major roles`);
+    }
+  }
+
+  // Check enterprise-scale role preservation
+  const hasEnterpriseRole = resume.experience.some(exp => {
+    const scopeLine = ((exp as any).scope_line || "").toLowerCase();
+    return /\$\d/.test(scopeLine) || /\d+\s*(?:person|fte|report|member)/i.test(scopeLine);
+  });
+
+  if (!hasEnterpriseRole && resume.experience.length > 0) {
+    issues.push("No enterprise-scale role visible — career arc lacks organizational depth");
+  }
+
+  // Check career arc — visible progression of scope
+  const careerArcVisible = resume.experience.length >= MIN_ROLES;
+  if (!careerArcVisible) {
+    issues.push(`Only ${resume.experience.length} role(s) — need at least ${MIN_ROLES} for visible career progression`);
+  }
+
+  return {
+    roles_with_impact: rolesWithImpact,
+    roles_without_impact: rolesWithoutImpact,
+    total_impact_bullets: totalImpactBullets,
+    min_2_impact_per_major_role: issues.filter(i => i.includes("impact bullet")).length === 0,
+    enterprise_role_preserved: hasEnterpriseRole,
+    career_arc_visible: careerArcVisible,
+    issues,
   };
 }

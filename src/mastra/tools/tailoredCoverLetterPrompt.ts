@@ -150,14 +150,15 @@ export function buildCoverLetterSystemPrompt(): string {
      Pattern: "[Role] at [Company] calls for [mandate X]. At [Most Recent Employer], I [your top achievement that proves mandate X]."
      Example: "The VP, Data & Analytics role at [Company] calls for someone who can build an enterprise analytics operating model from the ground up. At [Employer], I stood up the analytics function from zero, scaling to 45 analysts across 6 business units."
 
-   - **body_paragraphs** = 1-2 EVIDENCE PARAGRAPHS (array with 1-2 entries):
+   - **body_paragraphs** = 1-2 HIGH-IMPACT EVIDENCE PARAGRAPHS (array with 1-2 entries):
      Each paragraph makes ONE value claim backed by a specific metric, then CONNECTS it to the company's need.
      Pattern: [What you did] → [Scale/impact metric] → [Why this matters for THIS company].
      Do NOT repeat resume bullets verbatim. Use different phrasing — the cover letter AMPLIFIES signals, it does not parrot them.
      Do NOT list achievements bullet-style. Write in flowing narrative.
 
-   - **closing_paragraph** = STRATEGIC POSITIONING (1-2 sentences):
+   - **closing_paragraph** = FORWARD-LOOKING CONTRIBUTION (1-2 sentences):
      Forward-looking, confident. State what you bring to the table and what you want to discuss.
+     Frame what you will BUILD or DELIVER in the first 90 days — not what you hope.
      Do NOT use: "Thank you for considering", "I look forward to the opportunity", "I am excited to apply".
      Do use: "I'd welcome a conversation about [specific strategic topic relevant to the role]."
 
@@ -165,6 +166,15 @@ export function buildCoverLetterSystemPrompt(): string {
 
    **RESUME REPETITION BAN:**
    The cover letter must NOT copy or closely paraphrase resume bullet text. If the resume says "Architected a $12M analytics platform serving 6 business units," the cover letter might say "Building the analytics platform taught me that enterprise-scale data requires..." — same achievement, different angle. The cover letter provides the NARRATIVE that resume bullets cannot.
+
+   **COVER LETTER ANTI-REPETITION RULES (STRICTLY ENFORCED):**
+   - NEVER use the pattern "aligns with [Company]'s need for..." — it reads as template-driven and appears in every cover letter.
+   - NEVER use "this aligns with...", "which aligns directly with...", "directly addressing [Company]'s need for..." — same problem.
+   - Instead: weave the connection IMPLICITLY. Let the reader infer alignment from the specificity of your examples.
+   - NEVER recap resume bullets. The cover letter is a NARRATIVE — it contextualizes WHY you did what you did, not WHAT you did.
+   - NEVER use the same verb-noun pair in the cover letter that appears in the resume. Use fresh language.
+   - Each body paragraph must make a DIFFERENT point — not two variations of the same claim.
+   - No repeated phrasing across paragraphs. If "operating model" appears in P1, do not use it again in P2.
 
    **PERSONALIZATION STRATEGY:**
    When company_context IS available:

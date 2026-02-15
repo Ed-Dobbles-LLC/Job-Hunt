@@ -222,10 +222,13 @@ The resume should feel balanced and calm across both pages — no cramming.
    Position the combination of skills that is unusual at this level.
    This paragraph answers: "Why should I call THIS person instead of 50 other VPs?"
 
-   **SUMMARY LINE LIMIT: Max 5 lines.** No blocky paragraphs. Keep it tight and scannable.
-   Do NOT repeat phrasing from the first experience bullet in the summary.
-
-   IMPORTANT: Every fact, number, and metric in the summary MUST come from the inventory.
+   **SUMMARY MANDATE SHARPENING (NON-NEGOTIABLE):**
+   - **Max 4 lines.** Not 5. No blocky paragraphs. Keep it tight and scannable.
+   - The first sentence MUST reflect the dominant job mandate — not generic transformation phrasing.
+   - Must include 1 explicit strategic dimension (e.g., operating model, governance, embedded analytics, revenue ops, platform architecture, organizational design).
+   - Must NOT simply restate achievements from experience bullets — the summary frames the NARRATIVE, not the FACTS.
+   - Do NOT repeat phrasing from the first experience bullet in the summary.
+   - Every fact, number, and metric in the summary MUST come from the inventory.
 
 3. **CORE COMPETENCIES** (core_competencies field)
    10-12 enterprise-level keywords. **MAX 2 LINES when rendered.** Compact, clustered by mandate.
@@ -240,6 +243,18 @@ The resume should feel balanced and calm across both pages — no cramming.
    Remove redundant terms. Cluster by mandate alignment.
 
 4. **EXPERIENCE** (experience array) — **REVERSE CHRONOLOGICAL ORDER. Most recent first. Any deviation is a violation.**
+
+   **CAREER ARC PRESERVATION (NON-NEGOTIABLE):**
+   - Must include at least 3 major roles to show visible career progression.
+   - Must include at least 1 prior enterprise-scale role (team >20, budget >$1M, or multi-BU scope).
+   - Do NOT collapse to "startup bio" format — enterprise depth is a hiring signal.
+   - Visible progression of scope (team size, budget, organizational complexity) must be apparent across roles.
+
+   **IMPACT RESTORATION (NON-NEGOTIABLE):**
+   - At least 2 bullets per major role (top 3) MUST contain quantified business impact ($X, N%, or similar).
+   - NEVER remove outcome clauses (revenue impact, performance improvement, cost savings) unless page budget absolutely requires it.
+   - Bullet format MUST remain: Action → Context → Outcome.
+
    Each role must include:
    - **scope_line**: One SHORT line of enterprise context — team headcount, business unit context, budget/investment if known. Use ONLY verifiable facts from inventory. Pipe-separated. E.g., "45-person org | 3 business units | $8M investment"
    - **Clear visual separation**: Role Title, Company, Location | Dates, and Scope Line must each be distinct lines. Do NOT combine them.

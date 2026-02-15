@@ -330,11 +330,11 @@ export function compressResume(resume: TailoredResume, mandate?: MandateProfile)
     resume.professional_summary = passiveSummary;
   }
 
-  // ── Phase 1c: Summary line enforcement (max 5 lines) ──
+  // ── Phase 1c: Summary line enforcement (max 4 lines — mandate sharpening) ──
   const summaryLines = countSummaryLines(resume.professional_summary);
-  if (summaryLines > 5) {
-    // Trim to approximately 5 lines (~400 chars)
-    const maxChars = 400;
+  if (summaryLines > 4) {
+    // Trim to approximately 4 lines (~340 chars)
+    const maxChars = 340;
     if (resume.professional_summary.length > maxChars) {
       const trimmed = resume.professional_summary.substring(0, maxChars);
       const lastSentenceEnd = Math.max(

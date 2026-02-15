@@ -317,6 +317,21 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
           logger?.warn(`📐 [Pipeline] Compression actions taken: ${stage6.data.page_budget_actions.join("; ")}`);
         }
 
+        // Log impact QA results
+        if (stage6.data.impact_qa) {
+          const iq = stage6.data.impact_qa;
+          logger?.info(`📊 [Pipeline] Impact QA: ${iq.total_impact_bullets} impact bullets across ${iq.roles_with_impact} roles`);
+          if (iq.issues.length > 0) {
+            logger?.warn(`⚠️ [Pipeline] Impact QA issues: ${iq.issues.join("; ")}`);
+          }
+          if (!iq.enterprise_role_preserved) {
+            logger?.warn(`⚠️ [Pipeline] No enterprise-scale role visible in resume`);
+          }
+          if (!iq.career_arc_visible) {
+            logger?.warn(`⚠️ [Pipeline] Career arc not visible — fewer than 3 roles`);
+          }
+        }
+
         // Log page band compliance
         if (stage6.data.page_band) {
           const band = stage6.data.page_band;

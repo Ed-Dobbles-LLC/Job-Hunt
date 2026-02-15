@@ -55,7 +55,7 @@ export interface ReadabilityScore {
   bullets_action_first: number;      // Start with action verb
   avg_word_count: number;
   max_word_count: number;
-  summary_line_count: number;        // Estimated lines (≤5 is compliant)
+  summary_line_count: number;        // Estimated lines (≤4 is compliant — mandate sharpening)
 }
 
 export interface PageComplianceStatus {
@@ -69,7 +69,7 @@ export interface PageComplianceStatus {
   competency_limit: 12;
   competency_compliant: boolean;
   summary_lines: number;
-  summary_limit: 5;
+  summary_limit: 4;
   summary_compliant: boolean;
 }
 
@@ -450,7 +450,7 @@ export function scoreReadability(resume: TailoredResume): ReadabilityScore {
     (passiveFree / total) * 15 +
     (actionFirst / total) * 20 +
     (summaryClean ? 10 : 0) +
-    (summaryLines <= 5 ? 5 : 0),
+    (summaryLines <= 4 ? 5 : 0),
   ) : 0;
 
   return {
@@ -476,7 +476,7 @@ export function scorePageCompliance(
 
   const withinBulletRange = totalBullets >= 13 && totalBullets <= 15;
   const compCompliant = competencies.length <= 12;
-  const summaryCompliant = summaryLines <= 5;
+  const summaryCompliant = summaryLines <= 4;
   const pageCompliant = pageCount === undefined || pageCount <= 2;
 
   return {
@@ -490,7 +490,7 @@ export function scorePageCompliance(
     competency_limit: 12,
     competency_compliant: compCompliant,
     summary_lines: summaryLines,
-    summary_limit: 5,
+    summary_limit: 4,
     summary_compliant: summaryCompliant,
   };
 }
@@ -892,7 +892,7 @@ export function computeQualityReport(
     warnings.push(`Total bullets: ${pageCompliance.total_bullets} (target: 13-15)`);
   }
   if (!pageCompliance.summary_compliant) {
-    warnings.push(`Summary is ~${pageCompliance.summary_lines} lines (max: 5)`);
+    warnings.push(`Summary is ~${pageCompliance.summary_lines} lines (max: 4)`);
   }
   if (readability.max_word_count > 22) {
     warnings.push(`Longest bullet: ${readability.max_word_count} words (max: 22)`);
