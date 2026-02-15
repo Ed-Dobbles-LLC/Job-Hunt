@@ -287,6 +287,18 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
           logger?.warn(`📐 [Pipeline] Compression actions taken: ${stage6.data.page_budget_actions.join("; ")}`);
         }
 
+        // Log page band compliance
+        if (stage6.data.page_band) {
+          const band = stage6.data.page_band;
+          logger?.info(`📐 [Pipeline] Page band: ${band.actual} pages (target: ${band.min}–${band.max}) ${band.in_band ? "IN BAND" : "OUT OF BAND"}`);
+        }
+        if (!stage6.data.min_roles_met) {
+          logger?.warn(`⚠️ [Pipeline] Minimum roles not met: ${currentResume!.experience.length} roles (min 3 for executive depth)`);
+        }
+        if (stage6.data.expansion_result?.expanded) {
+          logger?.info(`📐 [Pipeline] Expansion mode signals: ${stage6.data.expansion_result.actions.join("; ")}`);
+        }
+
         // Log tone violations as diagnostics
         if (stage6.data.tone_violations.length > 0) {
           logger?.info(`⚠️ [Pipeline] ${stage6.data.tone_violations.length} bullet tone violation(s): ${stage6.data.tone_violations.map(v => v.issue).join(", ")}`);

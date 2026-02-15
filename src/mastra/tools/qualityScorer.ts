@@ -91,6 +91,17 @@ export interface LayoutComplianceScore {
   education_present: boolean;
 }
 
+export interface ExecutiveToneScore {
+  score: number;                     // 0-100
+  soft_verb_count: number;           // Opening verbs that are weak/passive
+  passive_voice_count: number;       // Bullets starting with passive constructions
+  stacked_clause_count: number;      // Bullets with 3+ commas
+  hedge_phrase_count: number;        // "I believe", "I think", "helped to"
+  supplicant_phrase_count: number;   // "I would be honored", "Thank you for considering"
+  decisive_action_pct: number;       // % of bullets starting with strong action verbs
+  career_depth_roles: number;        // Number of enterprise roles (min 3 for exec presence)
+}
+
 export interface QualityReport {
   overall_score: number;             // Weighted composite 0-100
   grade: "A" | "B" | "C" | "D" | "F";
@@ -98,6 +109,7 @@ export interface QualityReport {
   mandate_alignment: MandateAlignmentScore;
   differentiation: DifferentiationScore;
   readability: ReadabilityScore;
+  executive_tone: ExecutiveToneScore;
   page_compliance: PageComplianceStatus;
   phrase_repetition: PhraseRepetitionReport;
   layout_compliance: LayoutComplianceScore;
@@ -567,15 +579,116 @@ export function scoreLayoutCompliance(resume: TailoredResume): LayoutComplianceS
   };
 }
 
+// ── Executive Tone Scorer ────────────────────────────────────────
+
+const SOFT_VERBS = [
+  "supported", "helped", "contributed", "assisted",
+  "participated", "aided", "facilitated",
+];
+
+const HEDGE_PHRASES = [
+  "i believe", "i think", "i feel", "helped to",
+  "tried to", "attempted to", "worked to", "sought to",
+  "may have", "might have", "could have",
+];
+
+const SUPPLICANT_PHRASES = [
+  "i would be honored", "i humbly", "thank you for considering",
+  "i hope to", "i look forward to the opportunity",
+  "i am excited to apply", "please consider",
+  "i am writing to express",
+];
+
+const STRONG_ACTION_VERBS = new Set([
+  "led", "built", "designed", "architected", "launched", "scaled",
+  "transformed", "drove", "delivered", "established", "created",
+  "negotiated", "secured", "restructured", "automated", "deployed",
+  "unified", "consolidated", "modernized", "accelerated", "reduced",
+  "increased", "expanded", "implemented", "orchestrated", "directed",
+  "defined", "owned", "introduced", "pioneered", "overhauled",
+  "replaced", "eliminated", "generated", "recovered", "converted",
+]);
+
+export function scoreExecutiveTone(resume: TailoredResume): ExecutiveToneScore {
+  const allBullets = resume.experience.flatMap(e => e.bullets.map(b => b.text));
+  const total = allBullets.length;
+  if (total === 0) {
+    return {
+      score: 0, soft_verb_count: 0, passive_voice_count: 0,
+      stacked_clause_count: 0, hedge_phrase_count: 0,
+      supplicant_phrase_count: 0, decisive_action_pct: 0,
+      career_depth_roles: resume.experience.length,
+    };
+  }
+
+  const fullText = [
+    resume.professional_summary,
+    ...allBullets,
+  ].join(" ").toLowerCase();
+
+  // Count soft verbs at bullet openers
+  let softVerbCount = 0;
+  let passiveVoiceCount = 0;
+  let stackedClauseCount = 0;
+  let decisiveActionCount = 0;
+
+  for (const bulletText of allBullets) {
+    const firstWord = bulletText.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z]/g, "") || "";
+
+    if (SOFT_VERBS.includes(firstWord)) softVerbCount++;
+    if (/^(was|were|has been|have been|had been|being)\s/i.test(bulletText)) passiveVoiceCount++;
+    if ((bulletText.match(/,/g) || []).length >= 3) stackedClauseCount++;
+    if (STRONG_ACTION_VERBS.has(firstWord)) decisiveActionCount++;
+  }
+
+  // Count hedge and supplicant phrases (more common in summary than bullets)
+  let hedgeCount = 0;
+  for (const hedge of HEDGE_PHRASES) {
+    if (fullText.includes(hedge)) hedgeCount++;
+  }
+
+  let supplicantCount = 0;
+  for (const sup of SUPPLICANT_PHRASES) {
+    if (fullText.includes(sup)) supplicantCount++;
+  }
+
+  const decisivePct = Math.round((decisiveActionCount / total) * 100);
+
+  // Scoring: start at 100, deduct for violations
+  let score = 100;
+  score -= softVerbCount * 8;          // Soft verbs are weak — heavy penalty
+  score -= passiveVoiceCount * 10;     // Passive is unacceptable at exec level
+  score -= stackedClauseCount * 5;     // Over-complex but not fatal
+  score -= hedgeCount * 12;            // Hedging destroys exec confidence
+  score -= supplicantCount * 15;       // Supplicant language is the worst
+  // Bonus for decisive action verb coverage
+  if (decisivePct >= 80) score = Math.min(100, score + 5);
+  else if (decisivePct < 50) score -= 10;
+  // Career depth: at least 3 roles for exec presence
+  if (resume.experience.length < 3) score -= 15;
+
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    soft_verb_count: softVerbCount,
+    passive_voice_count: passiveVoiceCount,
+    stacked_clause_count: stackedClauseCount,
+    hedge_phrase_count: hedgeCount,
+    supplicant_phrase_count: supplicantCount,
+    decisive_action_pct: decisivePct,
+    career_depth_roles: resume.experience.length,
+  };
+}
+
 // ── Composite Scorer ─────────────────────────────────────────────
 
 /**
  * Compute the full quality report for a generated resume.
  *
- * Weights (truthfulness-first — zero-fabrication is the primary mandate):
- *   Truthfulness:      35%  (non-negotiable — factual accuracy is the hard gate)
- *   Mandate Alignment: 20%  (does the resume serve THIS job?)
- *   Readability:       20%  (executive tone + compression)
+ * Weights (truthfulness-first, executive-tone elevated):
+ *   Truthfulness:      30%  (non-negotiable — factual accuracy is the hard gate)
+ *   Executive Tone:    15%  (decisive, board-level, no hedging/supplicant)
+ *   Mandate Alignment: 15%  (does the resume serve THIS job?)
+ *   Readability:       15%  (compression + formatting cleanliness)
  *   Differentiation:   10%  (distinct from prior outputs)
  *   Layout Compliance: 10%  (structural rules)
  *   Phrase Cleanliness:  5% (inverse of repetition)
@@ -593,6 +706,7 @@ export function computeQualityReport(
   const mandateAlignment = scoreMandateAlignment(resume, options.mandate);
   const differentiation = scoreDifferentiation(options.divergenceResult);
   const readability = scoreReadability(resume);
+  const executiveTone = scoreExecutiveTone(resume);
   const pageCompliance = scorePageCompliance(resume, options.pageCount);
   const phraseRepetition = scorePhraseRepetition(resume);
   const layoutCompliance = scoreLayoutCompliance(resume);
@@ -600,11 +714,12 @@ export function computeQualityReport(
   // Phrase cleanliness score (inverse of repetition)
   const phraseCleanScore = Math.max(0, 100 - phraseRepetition.count * 8);
 
-  // Weighted composite (truthfulness-first: 35/20/20/10/10/5)
+  // Weighted composite (30/15/15/15/10/10/5)
   const overall = Math.round(
-    truthfulness.score * 0.35 +
-    mandateAlignment.score * 0.20 +
-    readability.score * 0.20 +
+    truthfulness.score * 0.30 +
+    executiveTone.score * 0.15 +
+    mandateAlignment.score * 0.15 +
+    readability.score * 0.15 +
     differentiation.score * 0.10 +
     layoutCompliance.score * 0.10 +
     phraseCleanScore * 0.05,
@@ -634,6 +749,12 @@ export function computeQualityReport(
   if (truthfulness.score < 100) {
     blocking.push(`Truthfulness score is ${truthfulness.score}% — must be 100% (all bullets need valid claim_ids)`);
   }
+  if (differentiation.worst_summary_overlap > 50) {
+    blocking.push(`Summary overlap ${differentiation.worst_summary_overlap}% with prior resume — must be < 30% (force rewrite)`);
+  }
+  if (differentiation.worst_bullet_similarity > 60) {
+    blocking.push(`Top-bullet similarity ${differentiation.worst_bullet_similarity}% with prior resume — must be < 40% (force rewrite)`);
+  }
 
   // Warnings
   const warnings: string[] = [];
@@ -662,6 +783,25 @@ export function computeQualityReport(
   if (differentiation.worst_summary_overlap > 25) {
     warnings.push(`Summary ${differentiation.worst_summary_overlap}% overlap with prior resume`);
   }
+  // Executive tone warnings
+  if (executiveTone.passive_voice_count > 0) {
+    warnings.push(`${executiveTone.passive_voice_count} bullet(s) start with passive voice — rewrite with active construction`);
+  }
+  if (executiveTone.soft_verb_count > 0) {
+    warnings.push(`${executiveTone.soft_verb_count} bullet(s) open with weak verbs (helped, supported, etc.) — use decisive action verbs`);
+  }
+  if (executiveTone.hedge_phrase_count > 0) {
+    warnings.push(`${executiveTone.hedge_phrase_count} hedging phrase(s) detected ("I believe", "tried to") — state directly`);
+  }
+  if (executiveTone.supplicant_phrase_count > 0) {
+    blocking.push(`${executiveTone.supplicant_phrase_count} supplicant phrase(s) detected ("I would be honored", etc.) — remove immediately`);
+  }
+  if (executiveTone.decisive_action_pct < 60) {
+    warnings.push(`Only ${executiveTone.decisive_action_pct}% of bullets start with strong action verbs — aim for 80%+`);
+  }
+  if (executiveTone.career_depth_roles < 3) {
+    warnings.push(`Only ${executiveTone.career_depth_roles} role(s) shown — minimum 3 for executive career depth`);
+  }
 
   return {
     overall_score: Math.max(0, Math.min(100, overall)),
@@ -670,6 +810,7 @@ export function computeQualityReport(
     mandate_alignment: mandateAlignment,
     differentiation,
     readability,
+    executive_tone: executiveTone,
     page_compliance: pageCompliance,
     phrase_repetition: phraseRepetition,
     layout_compliance: layoutCompliance,
