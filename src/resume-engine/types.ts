@@ -184,6 +184,7 @@ export interface PipelineResult {
   ownership_warnings: OwnershipInflationWarning[];
   final_report: any;
   recruiter_review?: RecruiterReviewReport;
+  refinement_score?: import("./refinement-layer").RefinementScore;
   attempt_history: AttemptRecord[];
   human_review_required: boolean;
   human_review_notes: string[];

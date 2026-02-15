@@ -442,102 +442,45 @@ export interface VerbStrengthResult {
 }
 
 /**
- * Verb Strength Pass:
- * 1. Replace generic-strong verbs (led, built, managed, transformed) with
- *    mandate-aligned alternatives when the mandate provides a better option.
- * 2. Enforce verb diversity: no opener verb used more than twice across the
- *    entire resume. If duplicated, substitute from mandate pool or general pool.
+ * Verb Strength Pass (ANALYSIS ONLY — no mutation):
  *
- * Does NOT touch soft verbs (handled by refineBulletTone) or ownership
- * inflation (handled by Stage 7).
+ * Analyzes verb usage patterns across the resume and returns metrics.
+ * Does NOT mutate bullet text. Verb mutation was removed to prevent
+ * semantic distortion (e.g., "Organized transformation", "Recruited analytics").
+ *
+ * Verb quality is now enforced by the Refinement Layer's controlled whitelist
+ * which validates verbs against bullet content categories.
+ *
+ * Metrics computed:
+ * - verb_map: frequency of each opener verb
+ * - generic_verbs_remaining: count of overused generic verbs
+ * - mandate_aligned_pct: % of bullets using mandate-specific verbs
  */
 function verbStrengthPass(resume: TailoredResume, mandate: MandateProfile): VerbStrengthResult {
   const mandatePool = MANDATE_VERB_POOL[mandate.primary_mandate] || [];
-  let upgradesApplied = 0;
-  let diversityFixes = 0;
+  const mandateVerbSet = new Set(mandatePool.map(v => v.toLowerCase().split(/\s+/)[0]));
 
-  // Step 1: Collect all opener verbs and their positions
-  const verbPositions: { roleIdx: number; bulletIdx: number; verb: string }[] = [];
-  for (let ri = 0; ri < resume.experience.length; ri++) {
-    for (let bi = 0; bi < resume.experience[ri].bullets.length; bi++) {
-      const text = resume.experience[ri].bullets[bi].text;
-      const firstWord = text.trim().split(/\s+/)[0]?.replace(/[^a-zA-Z]/g, "") || "";
-      verbPositions.push({ roleIdx: ri, bulletIdx: bi, verb: firstWord.toLowerCase() });
-    }
-  }
-
-  // Step 2: Replace generic-strong verbs with mandate-aligned alternatives
-  // Only upgrade if mandate pool has unused alternatives
-  const usedMandateVerbs = new Set<string>();
-  for (const vp of verbPositions) {
-    if (GENERIC_STRONG_VERBS.includes(vp.verb) && mandatePool.length > 0) {
-      // Find a mandate verb that hasn't been used yet
-      const available = mandatePool.filter(v => !usedMandateVerbs.has(v.toLowerCase()));
-      if (available.length > 0) {
-        const replacement = available[0];
-        usedMandateVerbs.add(replacement.toLowerCase());
-        const bullet = resume.experience[vp.roleIdx].bullets[vp.bulletIdx];
-        // Safe: replace only the leading word, no indexOf/substring heuristic
-        bullet.text = bullet.text.replace(/^\S+/, replacement);
-        vp.verb = replacement.toLowerCase().split(/\s+/)[0]; // Update tracker
-        upgradesApplied++;
-      }
-    }
-  }
-
-  // Step 3: Enforce verb diversity — no verb used more than 2x
-  const verbCounts = new Map<string, number>();
-  for (const vp of verbPositions) {
-    verbCounts.set(vp.verb, (verbCounts.get(vp.verb) || 0) + 1);
-  }
-
-  // General-purpose diverse verb pool for substitution
-  const generalPool = [
-    "Spearheaded", "Directed", "Executed", "Implemented", "Negotiated",
-    "Secured", "Deployed", "Integrated", "Replaced", "Eliminated",
-    "Generated", "Accelerated", "Expanded", "Introduced", "Formalized",
-  ];
-  const usedDiversity = new Set<string>(verbPositions.map(vp => vp.verb));
-
-  for (const vp of verbPositions) {
-    const count = verbCounts.get(vp.verb) || 0;
-    if (count > 2) {
-      // Find a substitute from mandate pool first, then general pool
-      const allOptions = [...mandatePool, ...generalPool];
-      const available = allOptions.filter(v => !usedDiversity.has(v.toLowerCase()));
-      if (available.length > 0) {
-        const replacement = available[0];
-        usedDiversity.add(replacement.toLowerCase());
-        const bullet = resume.experience[vp.roleIdx].bullets[vp.bulletIdx];
-        // Safe: replace only the leading word, no indexOf/substring heuristic
-        bullet.text = bullet.text.replace(/^\S+/, replacement);
-        verbCounts.set(vp.verb, count - 1); // Decrement old count
-        diversityFixes++;
-      }
-    }
-  }
-
-  // Step 4: Compute final verb map and metrics
+  // Collect all opener verbs (read-only analysis)
   const finalVerbMap: Record<string, number> = {};
   let mandateAlignedCount = 0;
-  const mandateVerbSet = new Set(mandatePool.map(v => v.toLowerCase().split(/\s+/)[0]));
+  let totalBullets = 0;
 
   for (const exp of resume.experience) {
     for (const bullet of exp.bullets) {
+      totalBullets++;
       const verb = bullet.text.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z]/g, "") || "";
       finalVerbMap[verb] = (finalVerbMap[verb] || 0) + 1;
       if (mandateVerbSet.has(verb)) mandateAlignedCount++;
     }
   }
 
-  const totalBullets = resume.experience.reduce((s, e) => s + e.bullets.length, 0);
   const genericRemaining = Object.entries(finalVerbMap)
     .filter(([v]) => GENERIC_STRONG_VERBS.includes(v))
     .reduce((s, [, c]) => s + c, 0);
 
   return {
-    upgrades_applied: upgradesApplied,
-    diversity_fixes: diversityFixes,
+    upgrades_applied: 0,
+    diversity_fixes: 0,
     verb_map: finalVerbMap,
     generic_verbs_remaining: genericRemaining,
     mandate_aligned_pct: totalBullets > 0 ? Math.round((mandateAlignedCount / totalBullets) * 100) : 0,

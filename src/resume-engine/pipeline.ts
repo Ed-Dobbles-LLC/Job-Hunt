@@ -43,6 +43,7 @@ import { renderPlaintext } from "./output/plaintext-renderer";
 import { buildClarificationQuestions } from "./output/clarification-builder";
 import { runQAGate, type QAGateResult } from "./qa-gate";
 import { CostAccumulator, setGlobalCostAccumulator, formatCostSummary, type CostSummary } from "./cost-tracker";
+import { runRefinementLayer, type RefinementResult, type RefinementScore } from "./refinement-layer";
 
 import type {
   PipelineResult,
@@ -460,6 +461,52 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     logger?.warn(`⚠️ [Pipeline] QA Gate failed: ${err.message}`);
   }
 
+  // ── Final Refinement Layer ─────────────────────────────────────
+
+  let refinementResult: RefinementResult | null = null;
+  try {
+    // Fetch prior summaries and competencies for differentiation check
+    let priorSums: string[] = [];
+    let priorComps: string[][] = [];
+    try {
+      const histResult = await query(
+        `SELECT summary_text, competencies FROM resume_history
+         WHERE job_id != $1
+         ORDER BY created_at DESC LIMIT 3`,
+        [input.job_id],
+      );
+      priorSums = histResult.rows.map((r: any) => r.summary_text).filter(Boolean);
+      priorComps = histResult.rows.map((r: any) => {
+        const c = r.competencies;
+        return Array.isArray(c) ? c : typeof c === "string" ? JSON.parse(c) : [];
+      });
+    } catch { /* non-fatal — differentiation check degrades gracefully */ }
+
+    refinementResult = runRefinementLayer({
+      resume: finalResume,
+      mandate,
+      ledger,
+      inventory,
+      priorSummaries: priorSums,
+      priorCompetencies: priorComps,
+      logger,
+    });
+
+    stageResults["refinement"] = {
+      stage: "Final Refinement Layer",
+      success: true,
+      data: refinementResult,
+      duration_ms: refinementResult.duration_ms,
+    };
+
+    if (refinementResult.blocking_issues.length > 0) {
+      logger?.warn(`🚫 [Pipeline] Refinement blocking: ${refinementResult.blocking_issues.join("; ")}`);
+    }
+    logger?.info(`🔬 [Pipeline] Refinement: ${refinementResult.scores.composite}/100 (${refinementResult.scores.grade}) — ${refinementResult.passed ? "PASS" : "FAIL"}`);
+  } catch (err: any) {
+    logger?.warn(`⚠️ [Pipeline] Refinement layer failed: ${err.message}`);
+  }
+
   // ── Plaintext ATS render ───────────────────────────────────────
 
   let plaintextResume: string | undefined;
@@ -743,6 +790,21 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     }
   }
 
+  // Check for Refinement Layer issues
+  if (refinementResult && !refinementResult.passed) {
+    humanReviewNotes.push(
+      `[REFINEMENT] Final refinement failed (${refinementResult.scores.grade}): ${refinementResult.blocking_issues.join("; ")}`,
+    );
+  }
+  if (refinementResult) {
+    const s = refinementResult.scores;
+    if (s.verb_integrity < 70) humanReviewNotes.push(`[REFINEMENT] Low verb integrity: ${s.verb_integrity}/100`);
+    if (s.mandate_alignment < 50) humanReviewNotes.push(`[REFINEMENT] Low mandate alignment: ${s.mandate_alignment}/100`);
+    if (s.ownership_inflation < 80) humanReviewNotes.push(`[REFINEMENT] Ownership inflation detected: ${s.ownership_inflation}/100`);
+    if (s.differentiation < 60) humanReviewNotes.push(`[REFINEMENT] Low differentiation: ${s.differentiation}/100`);
+    if (s.executive_authority < 70) humanReviewNotes.push(`[REFINEMENT] Low executive authority: ${s.executive_authority}/100`);
+  }
+
   // Check for Stage 8 Recruiter Review issues
   if (recruiterReview && !recruiterReviewPassed) {
     humanReviewNotes.push(
@@ -772,6 +834,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
   logger?.info(`📊 [Pipeline] Ownership warnings: ${ownershipWarnings.length}`);
   logger?.info(`📊 [Pipeline] Plaintext rendered: ${!!plaintextResume}`);
   logger?.info(`📊 [Pipeline] QA Gate: ${qaResult?.passed ? "PASS" : qaResult ? "FAIL" : "SKIPPED"}`);
+  logger?.info(`📊 [Pipeline] Refinement: ${refinementResult ? `${refinementResult.scores.composite}/100 (${refinementResult.scores.grade})` : "SKIPPED"}`);
   logger?.info(`📊 [Pipeline] Human review required: ${humanReviewRequired}`);
 
   // ── Cost Summary ──────────────────────────────────────────────
@@ -808,6 +871,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     ownership_warnings: ownershipWarnings,
     final_report: finalReport,
     recruiter_review: recruiterReview,
+    refinement_score: refinementResult?.scores,
     attempt_history: attemptHistory,
     human_review_required: humanReviewRequired,
     human_review_notes: humanReviewNotes,
