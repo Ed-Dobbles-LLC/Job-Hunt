@@ -92,7 +92,7 @@ const MANDATE_STRATEGIC_DIMENSIONS: Record<string, {
 }> = {
   governance_standardization: {
     required_signals: ["governance", "compliance", "standardiz", "control", "framework", "quality", "rigor", "audit", "data quality", "reporting discipline"],
-    banned_openers: [/^(?:data|analytics)\s+(?:leader|executive)/i, /^revenue/i, /^built\s/i],
+    banned_openers: [/^(?:data|analytics)\s+(?:leader|executive)/i, /^(?:\$[\d,.]+[KMBTkmbt]?\s+)?revenue/i, /^built\s/i],
     anchor_template: "governance, compliance, or control-oriented framing",
   },
   bi_platform_modernization: {
@@ -454,9 +454,14 @@ export function checkAuthorityTone(
       cliché.pattern.lastIndex = 0;
       const match = result.match(cliché.pattern);
       if (match) {
-        result = result.replace(cliché.pattern, cliché.replacement);
+        // Preserve initial capitalization of the matched text
+        let replacement = cliché.replacement;
+        if (match[0].length > 0 && match[0][0] === match[0][0].toUpperCase() && match[0][0] !== match[0][0].toLowerCase()) {
+          replacement = replacement.charAt(0).toUpperCase() + replacement.slice(1);
+        }
+        result = result.replace(cliché.pattern, replacement);
         clichésReplaced++;
-        actions.push(`Replaced "${match[0]}" → "${cliché.replacement}" at ${location}`);
+        actions.push(`Replaced "${match[0]}" → "${replacement}" at ${location}`);
         issues.push({
           dimension: "authority",
           location,
@@ -464,7 +469,7 @@ export function checkAuthorityTone(
           severity: "info",
           auto_fixed: true,
           original: match[0],
-          replacement: cliché.replacement,
+          replacement,
         });
       }
     }
@@ -815,10 +820,9 @@ export function checkDifferentiation(
 
   // Enforce mandate-scoped competency ordering (SAFE DETERMINISTIC MUTATION)
   const mandateKeywords = MANDATE_COMP_KEYWORDS[mandate.primary_mandate] || [];
-  const topComps = currentComps.slice(0, 3);
-  const mandateSorted = topComps.some(comp =>
-    mandateKeywords.some(kw => comp.toLowerCase().includes(kw)),
-  );
+  // First competency must be mandate-aligned — not just any of the top 3
+  const mandateSorted = currentComps.length > 0 &&
+    mandateKeywords.some(kw => currentComps[0].toLowerCase().includes(kw));
 
   if (!mandateSorted && currentComps.length > 0) {
     // Reorder competencies to lead with mandate-aligned ones

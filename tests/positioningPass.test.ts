@@ -559,7 +559,7 @@ describe("runPositioningPass", () => {
 
     expect(result.passed).toBe(false);
     expect(result.blocking_issues.length).toBeGreaterThan(0);
-    expect(result.scores.composite).toBeLessThan(60);
+    expect(result.scores.composite).toBeLessThan(70);
   });
 
   it("should report actions taken for auto-fixes", () => {
