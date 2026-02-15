@@ -56,6 +56,7 @@ export const ResumeBulletSchema = z.object({
     .describe("Verbatim quote from the inventory bullet"),
   claim_ids: z
     .array(z.string())
+    .min(1, "Every bullet MUST have at least one claim ID from the Claims Ledger. Bullets with empty claim_ids are rejected.")
     .describe("MANDATORY. Claims Ledger IDs backing this bullet (e.g., ['claim-exp001-b2-metric-12M', 'claim-exp001-b2-tool-snowflake']). Every factual claim — metrics, tools, team sizes, budgets — MUST reference at least one claim ID from the Claims Ledger. No claim ID → bullet is rejected."),
 });
 export type ResumeBullet = z.infer<typeof ResumeBulletSchema>;
@@ -100,10 +101,10 @@ export const TailoredResumeSchema = z.object({
   core_competencies: z
     .array(z.string())
     .min(4)
-    .max(14)
+    .max(12)
     .optional()
     .describe(
-      "8-14 enterprise-level competency keywords for ATS and AI screening. Frame strategically, not tactically. Include terms like: Enterprise Data Strategy, Data Governance, Digital Transformation, AI/ML Strategy & Deployment, Revenue & Pricing Optimization, Forecasting & Demand Planning, Commercial Analytics, Organizational Transformation, P&L Influence, Board & C-Suite Advisory, Organizational Design, Change Management. Only include competencies supported by inventory evidence.",
+      "8-12 enterprise-level competency keywords for ATS and AI screening. HARD MAX 12. Frame strategically, not tactically. Include terms like: Enterprise Data Strategy, Data Governance, Digital Transformation, AI/ML Strategy & Deployment, Revenue & Pricing Optimization, Forecasting & Demand Planning, Commercial Analytics, Organizational Transformation, P&L Influence, Board & C-Suite Advisory, Organizational Design, Change Management. Only include competencies supported by inventory evidence.",
     ),
   experience: z
     .array(ResumeExperienceSchema)

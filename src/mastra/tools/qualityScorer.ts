@@ -176,7 +176,8 @@ function estimateSummaryLines(text: string): number {
   const paragraphs = text.split(/\n+/).filter(p => p.trim().length > 0);
   let totalLines = 0;
   for (const p of paragraphs) {
-    totalLines += Math.ceil(p.length / 80);
+    // 85 chars/line matches Calibri 11pt with 0.7" margins (actual DOCX rendering)
+    totalLines += Math.ceil(p.length / 85);
   }
   return totalLines;
 }
@@ -571,13 +572,13 @@ export function scoreLayoutCompliance(resume: TailoredResume): LayoutComplianceS
 /**
  * Compute the full quality report for a generated resume.
  *
- * Weights:
- *   Truthfulness:      25%  (non-negotiable — factual accuracy)
+ * Weights (truthfulness-first — zero-fabrication is the primary mandate):
+ *   Truthfulness:      35%  (non-negotiable — factual accuracy is the hard gate)
  *   Mandate Alignment: 20%  (does the resume serve THIS job?)
- *   Differentiation:   15%  (distinct from prior outputs)
  *   Readability:       20%  (executive tone + compression)
+ *   Differentiation:   10%  (distinct from prior outputs)
  *   Layout Compliance: 10%  (structural rules)
- *   Phrase Cleanliness: 10% (inverse of repetition)
+ *   Phrase Cleanliness:  5% (inverse of repetition)
  */
 export function computeQualityReport(
   resume: TailoredResume,
@@ -599,14 +600,14 @@ export function computeQualityReport(
   // Phrase cleanliness score (inverse of repetition)
   const phraseCleanScore = Math.max(0, 100 - phraseRepetition.count * 8);
 
-  // Weighted composite
+  // Weighted composite (truthfulness-first: 35/20/20/10/10/5)
   const overall = Math.round(
-    truthfulness.score * 0.25 +
+    truthfulness.score * 0.35 +
     mandateAlignment.score * 0.20 +
-    differentiation.score * 0.15 +
     readability.score * 0.20 +
+    differentiation.score * 0.10 +
     layoutCompliance.score * 0.10 +
-    phraseCleanScore * 0.10,
+    phraseCleanScore * 0.05,
   );
 
   // Grade
@@ -616,7 +617,7 @@ export function computeQualityReport(
     : overall >= 60 ? "D"
     : "F";
 
-  // Blocking issues
+  // Blocking issues (these MUST be fixed before output)
   const blocking: string[] = [];
   if (truthfulness.unsourced_bullets.length > 0) {
     blocking.push(`${truthfulness.unsourced_bullets.length} bullet(s) have no source evidence — remove or add claim_ids`);
@@ -629,6 +630,9 @@ export function computeQualityReport(
   }
   if (phraseRepetition.banned_phrases_found.length > 0) {
     blocking.push(`${phraseRepetition.banned_phrases_found.length} banned stock phrase(s) detected`);
+  }
+  if (truthfulness.score < 100) {
+    blocking.push(`Truthfulness score is ${truthfulness.score}% — must be 100% (all bullets need valid claim_ids)`);
   }
 
   // Warnings

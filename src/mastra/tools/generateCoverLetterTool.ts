@@ -119,13 +119,52 @@ export const generateCoverLetterTool = createTool({
     logger?.info(`📝 [generateCoverLetter] System prompt length: ${systemPrompt.length} chars`);
     logger?.info(`📝 [generateCoverLetter] User prompt length: ${userPrompt.length} chars`);
 
-    const { object: coverLetter } = await generateObject({
+    let coverLetter: TailoredCoverLetter;
+
+    const initial = await generateObject({
       model: getOpenAI()("gpt-4o"),
       schema: TailoredCoverLetterSchema,
       system: systemPrompt,
       prompt: userPrompt,
       temperature: 0.4,
     });
+    coverLetter = initial.object;
+
+    // ── Post-generation: verify actual word count ──
+    const fullText = [
+      coverLetter.salutation,
+      coverLetter.opening_paragraph,
+      ...coverLetter.body_paragraphs,
+      coverLetter.closing_paragraph,
+      coverLetter.sign_off,
+    ].join(" ");
+    const actualWordCount = fullText.split(/\s+/).filter(w => w.length > 0).length;
+    coverLetter.word_count = actualWordCount; // Correct LLM's self-reported count
+
+    if (actualWordCount < 250 || actualWordCount > 350) {
+      logger?.warn(`⚠️ [generateCoverLetter] Word count ${actualWordCount} outside 250-350 — regenerating`);
+      const wcDirection = actualWordCount < 250 ? "TOO SHORT" : "TOO LONG";
+      const wcTarget = actualWordCount < 250 ? "expand to 280-300 words" : "compress to 280-300 words";
+      const wcPrompt = `${userPrompt}\n\n## WORD COUNT CORRECTION
+The cover letter is ${wcDirection} at ${actualWordCount} words. MUST be 250-350 words.
+${wcTarget}. Aim for ~300 words. Keep all value claims and evidence pointers.`;
+
+      const corrected = await generateObject({
+        model: getOpenAI()("gpt-4o"),
+        schema: TailoredCoverLetterSchema,
+        system: systemPrompt,
+        prompt: wcPrompt,
+        temperature: 0.2,
+      });
+      coverLetter = corrected.object;
+
+      // Recount after correction
+      const corrFullText = [
+        coverLetter.salutation, coverLetter.opening_paragraph,
+        ...coverLetter.body_paragraphs, coverLetter.closing_paragraph, coverLetter.sign_off,
+      ].join(" ");
+      coverLetter.word_count = corrFullText.split(/\s+/).filter(w => w.length > 0).length;
+    }
 
     logger?.info(`✅ [generateCoverLetter] Cover letter generated successfully`);
     logger?.info(`📝 [generateCoverLetter] Word count: ${coverLetter.word_count}`);
@@ -138,7 +177,7 @@ export const generateCoverLetterTool = createTool({
       logger?.warn(`⚠️ [generateCoverLetter] WARNING: ${coverLetter.value_claims.length} value claims exceeds max of 3`);
     }
     if (coverLetter.word_count < 250 || coverLetter.word_count > 350) {
-      logger?.warn(`⚠️ [generateCoverLetter] WARNING: Word count ${coverLetter.word_count} outside 250-350 range`);
+      logger?.warn(`⚠️ [generateCoverLetter] WARNING: Word count ${coverLetter.word_count} still outside 250-350 after correction`);
     }
 
     const stats = {

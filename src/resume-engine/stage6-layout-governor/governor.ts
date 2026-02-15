@@ -308,16 +308,16 @@ function enforceScopeLines(resume: TailoredResume): string[] {
 
 /**
  * Enforce the 5-line max for professional summary.
- * Counts logical lines (split by newlines, then by ~80 char wrapping).
+ * Counts logical lines (split by newlines, then by ~85 char wrapping — Calibri 11pt).
  */
 function enforceSummaryDensity(resume: TailoredResume): boolean {
   const summary = resume.professional_summary;
   const lines = summary.split(/\n/).filter(l => l.trim().length > 0);
 
-  // Estimate rendered line count (assuming ~80 chars per line)
+  // Estimate rendered line count (85 chars/line for Calibri 11pt, 0.7" margins)
   let estimatedLines = 0;
   for (const line of lines) {
-    estimatedLines += Math.max(1, Math.ceil(line.length / 80));
+    estimatedLines += Math.max(1, Math.ceil(line.length / 85));
   }
 
   if (estimatedLines > 5) {
@@ -357,18 +357,24 @@ function enforceSummaryDensity(resume: TailoredResume): boolean {
  * - Certifications: ~1 line per entry
  * - Skills section: ~2-3 lines
  *
- * Standard page ~= 48 lines (11pt, 1" margins, standard resume layout)
+ * Standard page ~= 48 lines (Calibri 11pt, 0.7" margins, standard resume layout)
+ *
+ * Character-per-line estimates use 85 chars (Calibri 11pt at 0.7" margins),
+ * NOT the generic 75 chars used in earlier versions.
  */
 interface PageEstimate {
   estimated_lines: number;
   estimated_pages: number;
   section_breakdown: Record<string, number>;
   exceeds_2_pages: boolean;
+  compression_suggestions: string[];
 }
 
 function estimatePages(resume: TailoredResume): PageEstimate {
   const LINES_PER_PAGE = 48;
+  const CHARS_PER_LINE = 85; // Calibri 11pt, 0.7" margins — measured from DOCX output
   const breakdown: Record<string, number> = {};
+  const suggestions: string[] = [];
   let totalLines = 0;
 
   // Header (name, contact info, LinkedIn)
@@ -383,7 +389,7 @@ function estimatePages(resume: TailoredResume): PageEstimate {
 
   // Summary (estimate based on character count)
   const summaryChars = resume.professional_summary.length;
-  const summaryLines = Math.ceil(summaryChars / 75); // ~75 chars per line in resume font
+  const summaryLines = Math.ceil(summaryChars / CHARS_PER_LINE);
   breakdown.summary = summaryLines;
   totalLines += summaryLines;
 
@@ -392,7 +398,7 @@ function estimatePages(resume: TailoredResume): PageEstimate {
 
   // Core competencies
   const comps = ((resume as any).core_competencies || []) as string[];
-  const compLines = Math.ceil(comps.join(" | ").length / 75);
+  const compLines = Math.ceil(comps.join(" | ").length / CHARS_PER_LINE);
   breakdown.competencies = Math.max(2, compLines);
   totalLines += breakdown.competencies;
 
@@ -435,11 +441,49 @@ function estimatePages(resume: TailoredResume): PageEstimate {
 
   const estimatedPages = totalLines / LINES_PER_PAGE;
 
+  // Build actionable compression suggestions if over budget
+  if (estimatedPages > 2.0) {
+    const excessLines = totalLines - (LINES_PER_PAGE * 2);
+
+    // Suggest dropping bullets from oldest roles
+    for (let i = resume.experience.length - 1; i >= 1; i--) {
+      const exp = resume.experience[i];
+      const droppable = Math.max(0, exp.bullets.length - 2);
+      if (droppable > 0) {
+        const linesSaved = droppable * 1.5; // ~1.5 lines per bullet
+        suggestions.push(`Drop ${droppable} bullet(s) from "${exp.employer}" (role ${i + 1}) — saves ~${linesSaved.toFixed(1)} lines`);
+      }
+    }
+
+    // Suggest trimming competencies
+    if (comps.length > 10) {
+      suggestions.push(`Trim competencies from ${comps.length} to 10 — saves ~${Math.ceil((comps.length - 10) * 0.3)} lines`);
+    }
+
+    // Suggest trimming summary
+    if (summaryLines > 4) {
+      suggestions.push(`Trim summary from ${summaryLines} to 4 lines — saves ~${summaryLines - 4} lines`);
+    }
+
+    // Suggest dropping oldest role entirely
+    if (resume.experience.length > 4) {
+      const oldestRole = resume.experience[resume.experience.length - 1];
+      const roleLines = 2 + (oldestRole.scope_line ? 1 : 0) + oldestRole.bullets.length * 1.5;
+      suggestions.push(`Drop oldest role "${oldestRole.employer}" entirely — saves ~${roleLines.toFixed(0)} lines`);
+    }
+
+    // Suggest removing certifications if present
+    if (certEntries.length > 0) {
+      suggestions.push(`Remove certifications section — saves ~${breakdown.certifications + 1} lines`);
+    }
+  }
+
   return {
     estimated_lines: Math.ceil(totalLines),
     estimated_pages: Math.round(estimatedPages * 10) / 10,
     section_breakdown: breakdown,
     exceeds_2_pages: estimatedPages > 2.0,
+    compression_suggestions: suggestions,
   };
 }
 
@@ -527,6 +571,7 @@ export interface GovernorResult {
   summary_trimmed: boolean;
   page_estimate: PageEstimate;
   page_budget_actions: string[];
+  compression_suggestions: string[];
   blocked: boolean;
   duration_ms: number;
 }
@@ -585,6 +630,7 @@ export function governLayout(resume: TailoredResume, mandate: MandateProfile): G
     summary_trimmed: summaryTrimmed,
     page_estimate: pageEstimate,
     page_budget_actions: pageBudget.actions,
+    compression_suggestions: pageEstimate.compression_suggestions,
     blocked: pageBudget.blocked,
     duration_ms: Date.now() - start,
   };
