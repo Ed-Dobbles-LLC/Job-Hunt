@@ -62,6 +62,9 @@ export const CORRUPTION_PATTERNS: Array<{
     name: "doubled-terminal-d",
     pattern: /\b([A-Z][a-z]+)dd\b/g,
     fix: (match) => {
+      // Skip legitimate names/words ending in "dd"
+      const LEGIT_DD = new Set(["add", "odd", "todd", "kidd", "ladd", "budd", "rudd", "mudd", "dodd"]);
+      if (LEGIT_DD.has(match.toLowerCase())) return null;
       // "Influencedd" → "Influenced", "Briefedd" → "Briefed"
       return match.slice(0, -1);
     },
@@ -79,15 +82,35 @@ export const CORRUPTION_PATTERNS: Array<{
   },
   {
     // Doubled "-ed" suffix: "implementeded", "establisheded"
+    // Must skip legitimate English words like "succeeded", "needed", "exceeded".
     name: "doubled-ed",
     pattern: /\b(\w+ed)ed\b/gi,
-    fix: (match) => match.slice(0, -2),
+    fix: (match) => {
+      const LEGIT_EDED = new Set([
+        "succeeded", "exceeded", "preceded", "proceeded",
+        "needed", "seeded", "heeded", "deeded", "weeded",
+        "superseded", "acceded", "conceded", "receded",
+        "interceded", "ceded", "impeded", "stampeded",
+      ]);
+      if (LEGIT_EDED.has(match.toLowerCase())) return null;
+      return match.slice(0, -2);
+    },
   },
   {
     // Doubled "-ing" suffix: "managinging", "implementinging"
+    // Must skip legitimate English words like "singing", "bringing".
     name: "doubled-ing",
     pattern: /\b(\w+ing)ing\b/gi,
-    fix: (match) => match.slice(0, -3),
+    fix: (match) => {
+      const LEGIT_INGING = new Set([
+        "singing", "bringing", "ringing", "stinging",
+        "clinging", "wringing", "stringing", "swinging",
+        "springing", "flinging", "slinging", "dinging",
+        "pinging", "winging", "zinging", "tingeing",
+      ]);
+      if (LEGIT_INGING.has(match.toLowerCase())) return null;
+      return match.slice(0, -3);
+    },
   },
   {
     // Doubled "-ized" → "-izeded": "optimizeded"

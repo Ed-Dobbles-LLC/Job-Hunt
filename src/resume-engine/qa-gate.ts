@@ -116,6 +116,24 @@ const EXCEPTION_WORDS = new Set([
   "a", "i", // Valid single-letter words
 ]);
 
+// Legitimate words that match doubled-suffix patterns but are NOT corruptions.
+// Without this list, words like "succeeded", "exceeded", "needed", "singing" get
+// falsely flagged as malformed tokens.
+const LEGIT_DOUBLED_SUFFIX_WORDS = new Set([
+  // Legitimate "-eded" words (verb stem ends in -eed/-ced/-ped)
+  "succeeded", "exceeded", "preceded", "proceeded",
+  "needed", "seeded", "heeded", "deeded", "weeded",
+  "superseded", "acceded", "conceded", "receded",
+  "interceded", "ceded", "impeded", "stampeded",
+  // Legitimate "-inging" words (verb stem ends in -ing)
+  "singing", "bringing", "ringing", "stinging",
+  "clinging", "wringing", "stringing", "swinging",
+  "springing", "flinging", "slinging",
+  // Legitimate "-dd" words (names, common words)
+  "add", "odd", "todd", "kidd", "ladd", "budd", "rudd", "mudd", "dodd",
+  "added", "adding",
+]);
+
 // ── Check Implementations ────────────────────────────────────────
 
 function checkVerbIntegrity(resume: TailoredResume): VerbIntegrityCheck {
@@ -126,6 +144,7 @@ function checkVerbIntegrity(resume: TailoredResume): VerbIntegrityCheck {
     for (const word of words) {
       const clean = word.replace(/[^a-zA-Z]/g, "").toLowerCase();
       if (clean.length < 3) continue;
+      if (LEGIT_DOUBLED_SUFFIX_WORDS.has(clean)) continue;
 
       for (const pattern of DOUBLED_SUFFIX_PATTERNS) {
         if (pattern.test(clean)) {
@@ -160,6 +179,8 @@ function checkCorruption(resume: TailoredResume): CorruptionScanCheck {
         const token = match[0];
         // Skip known exceptions
         if (EXCEPTION_WORDS.has(token.toLowerCase())) continue;
+        // Skip legitimate words that match doubled-suffix patterns
+        if (LEGIT_DOUBLED_SUFFIX_WORDS.has(token.replace(/[^a-zA-Z]/g, "").toLowerCase())) continue;
         // Skip single consonant check for common abbreviations
         if (reason === "orphaned single consonant" && /^[A-Z]$/.test(token)) continue;
         issues.push({ location, text: token, issue: reason });

@@ -157,6 +157,39 @@ describe("Corruption Detection", () => {
     expect(resume.professional_summary).toContain("Experienced");
   });
 
+  it("does not corrupt 'succeeded', 'exceeded', 'needed'", () => {
+    const resume = makeTestResume({
+      bullets: [
+        { text: "Succeeded in delivering $3.2M revenue growth while exceeding quarterly targets", source_hash: "h1", evidence_quote: "test", claim_ids: [] },
+        { text: "Exceeded expectations by implementing needed infrastructure changes", source_hash: "h2", evidence_quote: "test", claim_ids: [] },
+      ],
+    });
+
+    const result = runVerbIntegrityGuard(resume);
+
+    // These are legitimate words, not doubled suffixes
+    const corruptionIssues = result.issues.filter(i => i.type === "CORRUPTION");
+    expect(corruptionIssues.length).toBe(0);
+    expect(resume.experience[0].bullets[0].text).toContain("Succeeded");
+    expect(resume.experience[0].bullets[0].text).toContain("exceeding");
+    expect(resume.experience[0].bullets[1].text).toContain("Exceeded");
+    expect(resume.experience[0].bullets[1].text).toContain("needed");
+  });
+
+  it("does not corrupt 'singing', 'bringing', 'ringing'", () => {
+    const resume = makeTestResume({
+      bullets: [
+        { text: "Bringing together cross-functional stakeholders for quarterly planning", source_hash: "h1", evidence_quote: "test", claim_ids: [] },
+      ],
+    });
+
+    const result = runVerbIntegrityGuard(resume);
+
+    const corruptionIssues = result.issues.filter(i => i.type === "CORRUPTION");
+    expect(corruptionIssues.length).toBe(0);
+    expect(resume.experience[0].bullets[0].text).toContain("Bringing");
+  });
+
   it("does not flag legitimate 'add' or 'odd' words", () => {
     const resume = makeTestResume({
       bullets: [
