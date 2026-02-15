@@ -1,7 +1,7 @@
 /**
  * Resume Tailoring Engine — Pipeline Orchestrator
  *
- * Runs the 7-stage pipeline in sequence with retry logic:
+ * Runs the 8-stage pipeline in sequence with retry logic:
  *
  * Stage 1: Claims Ledger Extraction (DETERMINISTIC)
  * Stage 2: Mandate Classification (DETERMINISTIC + optional LLM)
@@ -10,8 +10,12 @@
  * Stage 5: Differentiation Gate (DETERMINISTIC)
  * Stage 6: Layout Governor (DETERMINISTIC)
  * Stage 7: Truth Audit (DETERMINISTIC)
+ * Stage 8: Recruiter Review (LLM — audit/QA, not rewrite)
  *
  * Retry budget: Stage 4→5→6→7 loop max 3 attempts.
+ * After stage 7 passes, stage 8 runs. If stage 8 FAILs:
+ *   - Repair loop (max 2): constrained repair → stage 6 → stage 7 → stage 8
+ *   - If still FAIL after 2 repairs: human_review_required = true
  * After 3 failures: return best attempt + violation report.
  */
 
@@ -33,6 +37,7 @@ import { constrainedRewrite } from "./stage4-constrained-rewrite/rewriter";
 import { initDivergenceTracking, checkDifferentiation, storeDivergenceSnapshot } from "./stage5-differentiation/gate";
 import { governLayout } from "./stage6-layout-governor/governor";
 import { runTruthAudit, detectOwnershipInflation } from "./stage7-truth-audit/auditor";
+import { runRecruiterReview, buildRepairContext } from "./stage8-recruiter-review/reviewer";
 import { renderPlaintext } from "./output/plaintext-renderer";
 import { buildClarificationQuestions } from "./output/clarification-builder";
 import { runQAGate, type QAGateResult } from "./qa-gate";
@@ -45,6 +50,7 @@ import type {
   OwnershipInflationWarning,
   EmbeddingConfig,
   ScoredBulletPlan,
+  RecruiterReviewReport,
 } from "./types";
 
 // ── Config ───────────────────────────────────────────────────────
@@ -112,7 +118,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
   const stageResults: Record<string, StageResult<any>> = {};
 
   logger?.info(`\n${"═".repeat(60)}`);
-  logger?.info(`🚀 [Pipeline] Starting 7-stage resume tailoring pipeline`);
+  logger?.info(`🚀 [Pipeline] Starting 8-stage resume tailoring pipeline`);
   logger?.info(`🚀 [Pipeline] Job ID: ${input.job_id}, Max attempts: ${maxAttempts}`);
   logger?.info(`${"═".repeat(60)}\n`);
 
@@ -409,12 +415,12 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     }
   }
 
-  // ── Finalize ───────────────────────────────────────────────────
+  // ── Finalize best attempt from stages 4-7 ───────────────────────
 
-  const finalResume = currentReport?.pass ? currentResume! : bestResume || currentResume!;
-  const finalCoverLetter = currentReport?.pass ? currentCoverLetter! : bestCoverLetter || currentCoverLetter!;
-  const finalReport = currentReport?.pass ? currentReport : bestReport || currentReport!;
-  const passed = finalReport?.pass ?? false;
+  let finalResume = currentReport?.pass ? currentResume! : bestResume || currentResume!;
+  let finalCoverLetter = currentReport?.pass ? currentCoverLetter! : bestCoverLetter || currentCoverLetter!;
+  let finalReport = currentReport?.pass ? currentReport : bestReport || currentReport!;
+  let passed = finalReport?.pass ?? false;
 
   // ── QA Gate (final quality check before rendering) ──────────────
 
@@ -440,6 +446,181 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     plaintextResume = renderPlaintext(finalResume, candidateName);
   } catch (err: any) {
     logger?.warn(`⚠️ [Pipeline] Plaintext render failed: ${err.message}`);
+  }
+
+  // ── STAGE 8: Recruiter Review ─────────────────────────────────
+
+  const MAX_REPAIR_LOOPS = 2;
+  let recruiterReview: RecruiterReviewReport | undefined;
+  let recruiterReviewPassed = false;
+
+  // Fetch prior summaries for differentiation check
+  let priorSummaries: string[] = [];
+  try {
+    const histResult = await query(
+      `SELECT summary_text FROM resume_history
+       WHERE job_id != $1
+       ORDER BY created_at DESC LIMIT 3`,
+      [input.job_id],
+    );
+    priorSummaries = histResult.rows
+      .map((r: any) => r.summary_text)
+      .filter(Boolean);
+  } catch { /* non-fatal — differentiation check will skip */ }
+
+  if (plaintextResume && passed) {
+    try {
+      // Get layout report from the last successful stage 6
+      const lastS6Key = Object.keys(stageResults)
+        .filter(k => k.startsWith("stage6_"))
+        .pop();
+      const layoutReport = lastS6Key ? stageResults[lastS6Key]?.data ?? {} : {};
+
+      const stage8 = await runStage("Stage 8: Recruiter Review", async () => {
+        return runRecruiterReview({
+          claimsLedger: ledger,
+          mandateProfile: mandate,
+          truthAuditReport: finalReport!,
+          layoutReport,
+          jdText,
+          plaintextResume: plaintextResume!,
+          resume: finalResume,
+          coverLetter: finalCoverLetter,
+          priorSummaries,
+        });
+      }, logger);
+
+      stageResults["stage8"] = stage8;
+
+      if (stage8.success) {
+        recruiterReview = stage8.data.report;
+        recruiterReviewPassed = recruiterReview.status === "PASS";
+
+        logger?.info(`🎓 [Pipeline] Recruiter Review: ${recruiterReview.status} (truthfulness=${recruiterReview.scores.truthfulness}, readability=${recruiterReview.scores.readability}, mandate=${recruiterReview.scores.mandate_alignment})`);
+        logger?.info(`🎓 [Pipeline] Issues: ${recruiterReview.critical_issues.length} critical, ${recruiterReview.major_issues.length} major, ${recruiterReview.minor_issues.length} minor`);
+
+        // ── Repair Loop (max 2 iterations) ──────────────────────────
+
+        if (!recruiterReviewPassed && recruiterReview.safe_rewrite_allowed) {
+          for (let repairLoop = 1; repairLoop <= MAX_REPAIR_LOOPS; repairLoop++) {
+            logger?.info(`\n${"─".repeat(50)}`);
+            logger?.info(`🔧 [Pipeline] === REPAIR LOOP ${repairLoop}/${MAX_REPAIR_LOOPS} ===`);
+            logger?.info(`${"─".repeat(50)}`);
+
+            try {
+              // Build repair context from recruiter review
+              const { repairInstructions, fixCount } = buildRepairContext(recruiterReview!);
+              logger?.info(`🔧 [Pipeline] Repair instructions: ${fixCount} fixes to apply`);
+
+              // Run constrained repair rewrite (stage 4 with correction context)
+              const repairStage4 = await runStage(`Stage 4: Repair Rewrite (repair ${repairLoop})`, async () => {
+                return constrainedRewrite({
+                  inventory,
+                  allowlist,
+                  requirements,
+                  title,
+                  company,
+                  mandate,
+                  bulletPlan,
+                  companyContext: input.company_context,
+                  correctionContext: {
+                    previousResume: finalResume,
+                    previousCoverLetter: finalCoverLetter,
+                    report: finalReport!,
+                    attemptNumber: attemptHistory.length + repairLoop,
+                  },
+                  divergencePrompt: repairInstructions,
+                });
+              }, logger);
+
+              if (!repairStage4.success) {
+                logger?.warn(`⚠️ [Pipeline] Repair rewrite failed — skipping repair loop ${repairLoop}`);
+                break;
+              }
+
+              stageResults[`stage4_repair${repairLoop}`] = repairStage4;
+              finalResume = repairStage4.data.resume;
+              finalCoverLetter = repairStage4.data.coverLetter;
+
+              // Re-run stage 6: Layout Governor
+              const repairStage6 = await runStage(`Stage 6: Layout Governor (repair ${repairLoop})`, () => {
+                return governLayout(finalResume, mandate);
+              }, logger);
+
+              stageResults[`stage6_repair${repairLoop}`] = repairStage6;
+              if (repairStage6.success) {
+                finalResume = repairStage6.data.resume;
+              }
+
+              // Re-run stage 7: Truth Audit
+              const repairStage7 = await runStage(`Stage 7: Truth Audit (repair ${repairLoop})`, () => {
+                return runTruthAudit(finalResume, finalCoverLetter, allowlist, inventory);
+              }, logger);
+
+              stageResults[`stage7_repair${repairLoop}`] = repairStage7;
+              if (repairStage7.success) {
+                finalReport = repairStage7.data.report;
+                passed = finalReport?.pass ?? false;
+                ownershipWarnings = repairStage7.data.ownershipWarnings;
+              }
+
+              // Re-render plaintext for the new review
+              try {
+                const candidateName = inventory?.profile?.name;
+                plaintextResume = renderPlaintext(finalResume, candidateName);
+              } catch { /* non-fatal */ }
+
+              // Re-run stage 8: Recruiter Review
+              const repairStage8 = await runStage(`Stage 8: Recruiter Review (repair ${repairLoop})`, async () => {
+                return runRecruiterReview({
+                  claimsLedger: ledger,
+                  mandateProfile: mandate,
+                  truthAuditReport: finalReport!,
+                  layoutReport: repairStage6.success ? repairStage6.data : {},
+                  jdText,
+                  plaintextResume: plaintextResume!,
+                  resume: finalResume,
+                  coverLetter: finalCoverLetter,
+                  priorSummaries,
+                });
+              }, logger);
+
+              stageResults[`stage8_repair${repairLoop}`] = repairStage8;
+
+              if (repairStage8.success) {
+                recruiterReview = repairStage8.data.report;
+                recruiterReviewPassed = recruiterReview.status === "PASS";
+
+                logger?.info(`🎓 [Pipeline] Repair ${repairLoop} Recruiter Review: ${recruiterReview.status} (truthfulness=${recruiterReview.scores.truthfulness}, readability=${recruiterReview.scores.readability})`);
+
+                if (recruiterReviewPassed) {
+                  logger?.info(`🎉 [Pipeline] Recruiter Review PASSED after repair loop ${repairLoop}!`);
+                  break;
+                }
+
+                // If not safe to rewrite further, stop
+                if (!recruiterReview.safe_rewrite_allowed) {
+                  logger?.warn(`⚠️ [Pipeline] Recruiter review says safe_rewrite_allowed=false — stopping repairs`);
+                  break;
+                }
+              } else {
+                logger?.warn(`⚠️ [Pipeline] Repair stage 8 failed — stopping repairs`);
+                break;
+              }
+            } catch (err: any) {
+              logger?.error(`💥 [Pipeline] Repair loop ${repairLoop} error: ${err.message}`);
+              break;
+            }
+          }
+        } else if (!recruiterReviewPassed) {
+          logger?.warn(`⚠️ [Pipeline] Recruiter review FAIL but safe_rewrite_allowed=false — requires human review`);
+        }
+      }
+    } catch (err: any) {
+      logger?.warn(`⚠️ [Pipeline] Stage 8 Recruiter Review failed: ${err.message}`);
+    }
+  } else if (!passed) {
+    logger?.info(`⏭️ [Pipeline] Skipping Stage 8 — truth audit did not pass`);
   }
 
   // ── Build clarification questions ──────────────────────────────
@@ -475,10 +656,11 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
       [input.job_id, JSON.stringify({
         generated_at: new Date().toISOString(),
         pass: passed,
+        recruiter_review_pass: recruiterReviewPassed,
         attempts_used: attemptHistory.length,
         max_attempts: maxAttempts,
         best_attempt: bestAttemptIndex,
-        pipeline_version: "7-stage-v2",
+        pipeline_version: "8-stage-v1",
         stages_run: Object.keys(stageResults),
       })],
     );
@@ -536,23 +718,42 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     }
   }
 
+  // Check for Stage 8 Recruiter Review issues
+  if (recruiterReview && !recruiterReviewPassed) {
+    humanReviewNotes.push(
+      `[RECRUITER REVIEW] Stage 8 FAIL — ${recruiterReview.critical_issues.length} critical, ${recruiterReview.major_issues.length} major issues remain.`,
+    );
+    for (const issue of recruiterReview.critical_issues) {
+      humanReviewNotes.push(`[REVIEW CRITICAL] ${issue.type} at ${issue.location}: ${issue.fix}`);
+    }
+    for (const issue of recruiterReview.major_issues) {
+      humanReviewNotes.push(`[REVIEW MAJOR] ${issue.type} at ${issue.location}: ${issue.fix}`);
+    }
+  }
+
+  // Determine final human_review_required
+  const humanReviewRequired = !passed ||
+    (recruiterReview !== undefined && !recruiterReviewPassed);
+
   // ── Summary ────────────────────────────────────────────────────
 
   logger?.info(`\n${"═".repeat(60)}`);
   logger?.info(`📊 [Pipeline] === FINAL SUMMARY ===`);
   logger?.info(`📊 [Pipeline] Job: ${company} — ${title}`);
-  logger?.info(`📊 [Pipeline] Pass: ${passed}`);
+  logger?.info(`📊 [Pipeline] Truth Audit Pass: ${passed}`);
+  logger?.info(`📊 [Pipeline] Recruiter Review: ${recruiterReview ? recruiterReview.status : "SKIPPED"}`);
   logger?.info(`📊 [Pipeline] Attempts: ${attemptHistory.length}/${maxAttempts}`);
   logger?.info(`📊 [Pipeline] Clarification questions: ${clarificationQuestions.length}`);
   logger?.info(`📊 [Pipeline] Ownership warnings: ${ownershipWarnings.length}`);
   logger?.info(`📊 [Pipeline] Plaintext rendered: ${!!plaintextResume}`);
   logger?.info(`📊 [Pipeline] QA Gate: ${qaResult?.passed ? "PASS" : qaResult ? "FAIL" : "SKIPPED"}`);
+  logger?.info(`📊 [Pipeline] Human review required: ${humanReviewRequired}`);
   logger?.info(`${"═".repeat(60)}\n`);
 
   return {
     success: true,
     job_id: input.job_id,
-    pass: passed,
+    pass: passed && recruiterReviewPassed,
     attempts_used: attemptHistory.length,
     max_attempts: maxAttempts,
     resume: finalResume,
@@ -561,8 +762,9 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     clarification_questions: clarificationQuestions,
     ownership_warnings: ownershipWarnings,
     final_report: finalReport,
+    recruiter_review: recruiterReview,
     attempt_history: attemptHistory,
-    human_review_required: !passed,
+    human_review_required: humanReviewRequired,
     human_review_notes: humanReviewNotes,
     stage_results: stageResults,
   };

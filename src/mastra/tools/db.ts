@@ -70,6 +70,7 @@ export async function initDatabase(): Promise<void> {
       ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS cover_docx BYTEA;
       ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS evidence_map_json TEXT;
       ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS verifier_json TEXT;
+      ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS reviewer_json TEXT;
 
       CREATE TABLE IF NOT EXISTS evidence_map (
         id SERIAL PRIMARY KEY,

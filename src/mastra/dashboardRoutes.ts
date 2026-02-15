@@ -325,6 +325,10 @@ export function getDashboardRoutes() {
               filePath = row.verifier_json_path;
               label = "Verifier Report";
               break;
+            case "reviewer":
+              filePath = "";
+              label = "Recruiter Review";
+              break;
             default:
               return c.json({ error: "Invalid type" }, 400);
           }
@@ -344,7 +348,7 @@ export function getDashboardRoutes() {
 
           if (diskExists) {
             // Serve from disk (fast path)
-            if (type === "evidence" || type === "verifier") {
+            if (type === "evidence" || type === "verifier" || type === "reviewer") {
               const jsonContent = JSON.parse(fs.readFileSync(resolvedPath, "utf-8"));
               contentHtml = `<pre style="white-space:pre-wrap;word-wrap:break-word;font-family:monospace;font-size:13px;line-height:1.6;">${escapeHtml(JSON.stringify(jsonContent, null, 2))}</pre>`;
             } else {
@@ -353,13 +357,20 @@ export function getDashboardRoutes() {
             }
           } else {
             // Serve from DB blob
-            const blobCol = type === "resume" ? "resume_docx" : type === "cover" ? "cover_docx" : type === "evidence" ? "evidence_map_json" : "verifier_json";
+            const blobColMap: Record<string, string> = {
+              resume: "resume_docx",
+              cover: "cover_docx",
+              evidence: "evidence_map_json",
+              verifier: "verifier_json",
+              reviewer: "reviewer_json",
+            };
+            const blobCol = blobColMap[type] || "verifier_json";
             const blobRow = await query(`SELECT ${blobCol} FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1`, [jobId]);
             const blob = blobRow.rows[0]?.[blobCol];
             if (!blob) {
               return c.json({ error: `No ${type} data available. Try regenerating the packet.` }, 404);
             }
-            if (type === "evidence" || type === "verifier") {
+            if (type === "evidence" || type === "verifier" || type === "reviewer") {
               const jsonContent = typeof blob === "string" ? JSON.parse(blob) : blob;
               contentHtml = `<pre style="white-space:pre-wrap;word-wrap:break-word;font-family:monospace;font-size:13px;line-height:1.6;">${escapeHtml(JSON.stringify(jsonContent, null, 2))}</pre>`;
             } else {
@@ -473,6 +484,11 @@ export function getDashboardRoutes() {
               contentType = "application/json";
               filename = `verifier_${jobId}.json`;
               break;
+            case "reviewer":
+              filePath = "";
+              contentType = "application/json";
+              filename = `recruiter_review_${jobId}.json`;
+              break;
             default:
               return c.json({ error: "Invalid type" }, 400);
           }
@@ -492,7 +508,14 @@ export function getDashboardRoutes() {
             fileBuffer = fs.readFileSync(resolvedPath);
           } else {
             // Serve from DB blob
-            const blobCol = type === "resume" ? "resume_docx" : type === "cover" ? "cover_docx" : type === "evidence" ? "evidence_map_json" : "verifier_json";
+            const dlBlobMap: Record<string, string> = {
+              resume: "resume_docx",
+              cover: "cover_docx",
+              evidence: "evidence_map_json",
+              verifier: "verifier_json",
+              reviewer: "reviewer_json",
+            };
+            const blobCol = dlBlobMap[type] || "verifier_json";
             const blobRow = await query(`SELECT ${blobCol} FROM artifacts WHERE job_id = $1 ORDER BY created_ts DESC LIMIT 1`, [jobId]);
             const blob = blobRow.rows[0]?.[blobCol];
             if (!blob) {
@@ -810,6 +833,16 @@ export function getDashboardRoutes() {
                     [jobId, ev.evidence_id || "", ev.claim_text, ev.evidence_quote, ev.evidence_source_key, ev.confidence],
                   ).catch((e: any) => logger?.error(`⚠️ [generate-packet] Evidence insert error: ${e.message}`));
                 }
+                // Store recruiter review report if available
+                if (packetResult.recruiter_review) {
+                  try {
+                    await query(
+                      `UPDATE artifacts SET reviewer_json = $1 WHERE job_id = $2`,
+                      [JSON.stringify(packetResult.recruiter_review, null, 2), jobId],
+                    );
+                  } catch { /* column may not exist yet — non-fatal */ }
+                }
+
                 logger?.info(`💾 [generate-packet] Artifacts saved to DB for job_id=${jobId}`);
               } catch (dbErr: any) {
                 logger?.error(`❌ [generate-packet] DB save failed: ${dbErr.message}`);
@@ -1147,7 +1180,7 @@ export function getDashboardRoutes() {
                 }
 
                 // Phase 2: Generate verified packet
-                const packetResult = await generateVerifiedPacketTool.execute!({
+                const packetResult: any = await generateVerifiedPacketTool.execute!({
                   context: { job_id: job.job_id, company: fullJob.company, title: fullJob.title, max_attempts: 2 },
                   mastra,
                 } as any);
@@ -1188,6 +1221,16 @@ export function getDashboardRoutes() {
                     `INSERT INTO evidence_map (job_id, claim_id, claim_text, evidence_quote, evidence_source_key, confidence) VALUES ($1, $2, $3, $4, $5, $6)`,
                     [job.job_id, ev.evidence_id || "", ev.claim_text, ev.evidence_quote, ev.evidence_source_key, ev.confidence],
                   ).catch(() => {});
+                }
+
+                // Store recruiter review report if available
+                if (packetResult.recruiter_review) {
+                  try {
+                    await query(
+                      `UPDATE artifacts SET reviewer_json = $1 WHERE job_id = $2`,
+                      [JSON.stringify(packetResult.recruiter_review, null, 2), job.job_id],
+                    );
+                  } catch { /* column may not exist yet — non-fatal */ }
                 }
 
                 // Update status

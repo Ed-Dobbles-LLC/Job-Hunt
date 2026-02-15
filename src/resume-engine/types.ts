@@ -183,6 +183,7 @@ export interface PipelineResult {
   clarification_questions: ClarificationQuestion[];
   ownership_warnings: OwnershipInflationWarning[];
   final_report: any;
+  recruiter_review?: RecruiterReviewReport;
   attempt_history: AttemptRecord[];
   human_review_required: boolean;
   human_review_notes: string[];
@@ -198,6 +199,53 @@ export interface AttemptRecord {
   violation_types: string[];
   timestamp: string;
 }
+
+// ── Stage 8: Recruiter Review ────────────────────────────────────
+
+export const RecruiterReviewIssueSchema = z.object({
+  type: z.enum([
+    "UNGROUNDED_METRIC",
+    "UNGROUNDED_TOOL",
+    "UNGROUNDED_CLAIM",
+    "OWNERSHIP_INFLATION",
+    "CORRUPTED_WORD",
+    "TYPO",
+    "INCONSISTENT_TENSE",
+    "GENERIC_SUMMARY",
+    "REPEATED_PHRASE",
+    "VAGUE_CLAIM",
+    "MANDATE_MISMATCH",
+    "AESTHETIC_DENSITY",
+    "COMPETENCY_BLOAT",
+    "LENGTH_VIOLATION",
+    "COVER_LETTER_DEFECT",
+  ]).describe("Category of the issue found"),
+  evidence: z.string().describe("The exact text or phrase that triggered this issue"),
+  location: z.string().describe("Where in the document: e.g., resume.experience[0].bullets[1] or cover_letter.body[0]"),
+  fix: z.string().describe("Specific, actionable fix the candidate or system should apply"),
+});
+export type RecruiterReviewIssue = z.infer<typeof RecruiterReviewIssueSchema>;
+
+export const RecruiterReviewScoresSchema = z.object({
+  truthfulness: z.number().min(0).max(100).describe("How well every claim traces to the Claims Ledger / FactRegistry (100 = all grounded)"),
+  ownership_inflation: z.number().min(0).max(100).describe("Freedom from inflated ownership language (100 = no inflation detected)"),
+  mandate_alignment: z.number().min(0).max(100).describe("How well summary + top bullets match the job's top mandates (100 = perfect alignment)"),
+  differentiation: z.number().min(0).max(100).describe("How unique this resume feels vs a generic template (100 = highly differentiated)"),
+  readability: z.number().min(0).max(100).describe("Clarity, concision, tense consistency, and absence of corrupted words (100 = flawless)"),
+  aesthetics: z.number().min(0).max(100).describe("Visual scannability, section rhythm, density balance (100 = polished)"),
+});
+export type RecruiterReviewScores = z.infer<typeof RecruiterReviewScoresSchema>;
+
+export const RecruiterReviewReportSchema = z.object({
+  status: z.enum(["PASS", "FAIL"]).describe("Overall verdict: PASS if no critical or major issues remain"),
+  critical_issues: z.array(RecruiterReviewIssueSchema).describe("Must-fix issues that block the resume from being sent"),
+  major_issues: z.array(RecruiterReviewIssueSchema).describe("Important issues that significantly weaken the application"),
+  minor_issues: z.array(RecruiterReviewIssueSchema).describe("Nice-to-fix polish items"),
+  scores: RecruiterReviewScoresSchema,
+  recommended_actions: z.array(z.string()).describe("Ordered list of the most impactful actions to improve this packet"),
+  safe_rewrite_allowed: z.boolean().describe("True if the issues can be fixed by an automated constrained rewrite without human intervention"),
+});
+export type RecruiterReviewReport = z.infer<typeof RecruiterReviewReportSchema>;
 
 // ── Embedding Scoring Config ─────────────────────────────────────
 

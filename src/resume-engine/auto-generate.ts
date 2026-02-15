@@ -191,6 +191,16 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
           } catch { /* column may not exist yet — non-fatal */ }
         }
 
+        // Store recruiter review report if available
+        if (pipelineResult.recruiter_review) {
+          try {
+            await query(
+              `UPDATE artifacts SET reviewer_json = $1 WHERE job_id = $2`,
+              [JSON.stringify(pipelineResult.recruiter_review, null, 2), job.job_id],
+            );
+          } catch { /* column may not exist yet — non-fatal */ }
+        }
+
         // Store clarification questions if any
         if (pipelineResult.clarification_questions?.length > 0) {
           try {
