@@ -188,6 +188,7 @@ export interface PipelineResult {
   human_review_required: boolean;
   human_review_notes: string[];
   stage_results: Record<string, StageResult<any>>;
+  cost_summary?: import("./cost-tracker").CostSummary;
 }
 
 export interface AttemptRecord {

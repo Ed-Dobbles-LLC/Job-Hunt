@@ -38,9 +38,11 @@ import { initDivergenceTracking, checkDifferentiation, storeDivergenceSnapshot }
 import { governLayout } from "./stage6-layout-governor/governor";
 import { runTruthAudit, detectOwnershipInflation } from "./stage7-truth-audit/auditor";
 import { runRecruiterReview, buildRepairContext } from "./stage8-recruiter-review/reviewer";
+import { runVerbIntegrityGuard } from "./qa/verbIntegrityGuard";
 import { renderPlaintext } from "./output/plaintext-renderer";
 import { buildClarificationQuestions } from "./output/clarification-builder";
 import { runQAGate, type QAGateResult } from "./qa-gate";
+import { CostAccumulator, setGlobalCostAccumulator, formatCostSummary, type CostSummary } from "./cost-tracker";
 
 import type {
   PipelineResult,
@@ -121,6 +123,11 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
   logger?.info(`🚀 [Pipeline] Starting 8-stage resume tailoring pipeline`);
   logger?.info(`🚀 [Pipeline] Job ID: ${input.job_id}, Max attempts: ${maxAttempts}`);
   logger?.info(`${"═".repeat(60)}\n`);
+
+  // ── Set up cost tracking ────────────────────────────────────────
+
+  const costAccumulator = new CostAccumulator({ jobId: input.job_id, logger });
+  setGlobalCostAccumulator(costAccumulator);
 
   // ── Load job data ──────────────────────────────────────────────
 
@@ -251,6 +258,17 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
       stageResults[`stage4_attempt${attempt}`] = stage4;
       currentResume = stage4.data.resume;
       currentCoverLetter = stage4.data.coverLetter;
+
+      // ── VERB INTEGRITY GUARD (post-Stage 4, pre-Stage 5) ──────────
+
+      const verbGuard = await runStage(`Verb Integrity Guard (attempt ${attempt})`, () => {
+        return runVerbIntegrityGuard(currentResume!, { logger });
+      }, logger);
+
+      stageResults[`verbGuard_attempt${attempt}`] = verbGuard;
+      if (verbGuard.success && verbGuard.data.auto_fixed_count > 0) {
+        logger?.info(`🔤 [Pipeline] Verb guard: ${verbGuard.data.auto_fixed_count} auto-fixed, ${verbGuard.data.remaining_count} remaining`);
+      }
 
       // ── STAGE 5: Differentiation Gate ──────────────────────────────
 
@@ -753,6 +771,26 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
   logger?.info(`📊 [Pipeline] Plaintext rendered: ${!!plaintextResume}`);
   logger?.info(`📊 [Pipeline] QA Gate: ${qaResult?.passed ? "PASS" : qaResult ? "FAIL" : "SKIPPED"}`);
   logger?.info(`📊 [Pipeline] Human review required: ${humanReviewRequired}`);
+
+  // ── Cost Summary ──────────────────────────────────────────────
+
+  let costSummary: CostSummary | undefined;
+  try {
+    costSummary = costAccumulator.getSummary();
+    if (costSummary.call_count > 0) {
+      logger?.info(formatCostSummary(costSummary));
+    }
+
+    // Flush to DB (non-fatal)
+    const insert = costAccumulator.buildInsertSQL();
+    if (insert) {
+      await query(insert.sql, insert.params).catch(() => { /* table may not exist yet */ });
+    }
+  } catch { /* cost tracking is non-fatal */ }
+  finally {
+    setGlobalCostAccumulator(null);
+  }
+
   logger?.info(`${"═".repeat(60)}\n`);
 
   return {
@@ -772,5 +810,6 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     human_review_required: humanReviewRequired,
     human_review_notes: humanReviewNotes,
     stage_results: stageResults,
+    cost_summary: costSummary,
   };
 }

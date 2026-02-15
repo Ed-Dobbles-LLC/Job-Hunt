@@ -177,6 +177,22 @@ export async function initDatabase(): Promise<void> {
         matched_job_id BIGINT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS llm_usage (
+        id SERIAL PRIMARY KEY,
+        request_id TEXT,
+        job_id BIGINT REFERENCES jobs(job_id),
+        label TEXT NOT NULL,
+        model TEXT NOT NULL,
+        prompt_tokens INTEGER NOT NULL DEFAULT 0,
+        completion_tokens INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        estimated BOOLEAN NOT NULL DEFAULT false,
+        cost_usd DECIMAL(10, 6) NOT NULL DEFAULT 0,
+        duration_ms INTEGER,
+        status TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
     `);
   } finally {
     client.release();

@@ -16,6 +16,7 @@ import { z } from "zod";
 import { generateObject } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { getGlobalLimiter, type LaneName } from "./llm-concurrency-limiter";
+import { getGlobalCostAccumulator } from "./cost-tracker";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -69,11 +70,19 @@ export interface AttemptTelemetry {
   timestamp: string;
 }
 
+export interface LLMUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 export interface LLMCallResult<T> {
   object: T;
   attempts: number;
   total_duration_ms: number;
   telemetry: AttemptTelemetry[];
+  /** Actual token usage from the API (if available) */
+  usage?: LLMUsage;
 }
 
 // ── Default Config ──────────────────────────────────────────────
@@ -243,8 +252,17 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
           generateOpts.maxTokens = opts.maxTokens;
         }
 
-        const { object } = await generateObject(generateOpts);
+        const result = await generateObject(generateOpts);
         clearTimeout(timer);
+
+        // Extract actual token usage from API response (if available)
+        const apiUsage: LLMUsage | undefined = result.usage
+          ? {
+              promptTokens: (result.usage as any).promptTokens ?? 0,
+              completionTokens: (result.usage as any).completionTokens ?? 0,
+              totalTokens: (result.usage as any).totalTokens ?? 0,
+            }
+          : undefined;
 
         telemetry.push({
           request_id: requestId,
@@ -259,13 +277,21 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
           timestamp: new Date().toISOString(),
         });
 
-        opts.logger?.info(`[llm-retry] ${opts.label} succeeded on attempt ${attempt + 1} (${Date.now() - attemptStart}ms)`);
+        opts.logger?.info(`[llm-retry] ${opts.label} succeeded on attempt ${attempt + 1} (${Date.now() - attemptStart}ms)${apiUsage ? ` [${apiUsage.promptTokens}+${apiUsage.completionTokens}=${apiUsage.totalTokens} tokens]` : ""}`);
+
+        // Auto-record to global cost accumulator if one is set
+        const costAcc = getGlobalCostAccumulator();
+        if (costAcc) {
+          const lastTelemetry = telemetry[telemetry.length - 1];
+          costAcc.recordCall(lastTelemetry, apiUsage);
+        }
 
         return {
-          object,
+          object: result.object,
           attempts: attempt + 1,
           total_duration_ms: Date.now() - overallStart,
           telemetry,
+          usage: apiUsage,
         };
       } catch (err: any) {
         // timer is cleared on success path; on error path it will fire harmlessly
