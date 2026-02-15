@@ -121,7 +121,7 @@ src/triggers/                   # Event-driven workflow invocation
 experience_inventory.json       # Single source of truth for all candidate facts
 output/YYYY-MM-DD/Company/Role/ # Generated artifacts (DOCX, PDF, JSON)
 fixtures/emails/                # Test email fixtures (Indeed, LinkedIn)
-tests/                          # 27 Vitest test files
+tests/                          # 26 Vitest test files
 scripts/                        # Build + dev helper scripts
 spec/                           # Technical specifications
 .github/workflows/              # CI/CD (auto-merge for claude/* branches)
@@ -281,17 +281,17 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
 | `runs` | Workflow execution tracking | `run_id` (TEXT PK), `status`, `start_ts`, `end_ts`, `errors_json` (JSONB) |
-| `jobs` | Ingested job listings | `job_id` (BIGSERIAL PK), `company`, `title`, `location`, `remote_hybrid`, `level`, `posting_url`, `jd_raw_text`, `jd_hash` (unique index), `simhash`, `keywords` (JSONB), `jd_requirements` (JSONB), `status`, `source`, `user_action`, `compensation` |
+| `jobs` | Ingested job listings | `job_id` (BIGSERIAL PK), `source`, `source_message_id`, `company`, `title`, `location`, `remote_hybrid`, `level`, `posting_url`, `date_posted`, `date_ingested`, `jd_raw_text`, `jd_hash` (unique index), `simhash`, `keywords` (JSONB), `url_canonical`, `jd_requirements` (JSONB), `status`, `compensation`, `user_action` |
 | `scores` | Match scores per job | `job_id` (BIGINT PK, FK→jobs), `total_score` (REAL), `breakdown_json` (JSONB), `match_report` (JSONB) |
-| `artifacts` | Generated document paths + blobs | `id` (SERIAL PK), `job_id` (BIGINT FK→jobs), `resume_docx_path`, `cover_docx_path`, `evidence_map_path`, `verifier_json_path`, `truth_pass` (BOOLEAN), `prompt_version`, `model_used`, `resume_docx` (BYTEA), `cover_docx` (BYTEA), `evidence_map_json` (TEXT), `verifier_json` (TEXT) |
+| `artifacts` | Generated document paths + blobs | `id` (SERIAL PK), `job_id` (BIGINT FK→jobs), `resume_docx_path`, `cover_docx_path`, `evidence_map_path`, `verifier_json_path`, `truth_pass` (BOOLEAN), `prompt_version`, `model_used`, `created_ts`, `resume_docx` (BYTEA), `cover_docx` (BYTEA), `evidence_map_json` (TEXT), `verifier_json` (TEXT) |
 | `evidence_map` | Claim-to-source mappings | `id` (SERIAL PK), `job_id` (BIGINT FK→jobs), `claim_id`, `claim_text`, `evidence_quote`, `evidence_source_key`, `confidence` (REAL) |
-| `contacts` | Outreach targets per job | `id` (SERIAL PK), `job_id` (BIGINT FK→jobs), `person_name`, `title`, `linkedin_url`, `email`, `rank`, `rationale`, `message_draft` |
-| `profile_sessions` | Profile builder sessions | `session_id` (TEXT PK), `status`, `raw_resume_text`, `resume_filename`, `target_role`, `interview_focus`, `current_draft` (JSONB), `gaps` (JSONB), `qa_history` (JSONB), `interview_round` |
-| `imported_emails` | Manually imported email bodies | `id` (SERIAL PK), `subject`, `from_address`, `body`, `processed` (BOOLEAN) |
-| `digests` | Daily digest send records | `digest_id` (SERIAL PK), `run_date` (DATE), `jobs_fetched`, `jobs_scored`, `jobs_shortlisted`, `packets_generated`, `truth_pass_count`, `truth_fail_count`, `email_sent` (BOOLEAN), `recipient_email` |
-| `resume_history` | Prior resume snapshots for divergence tracking | `id` (SERIAL PK), `job_id` (BIGINT FK→jobs), `target_company`, `target_role`, `summary_text`, `competencies` (JSONB), `top_bullets_by_role` (JSONB), `archetype_primary`, `key_phrases` (JSONB) |
+| `contacts` | Outreach targets per job | `id` (SERIAL PK), `job_id` (BIGINT FK→jobs), `person_name`, `title`, `linkedin_url`, `email`, `rank` (INTEGER), `rationale`, `message_draft` |
+| `profile_sessions` | Profile builder sessions | `session_id` (TEXT PK), `status`, `raw_resume_text`, `resume_filename`, `resume_format`, `target_role`, `interview_focus`, `current_draft` (JSONB), `gaps` (JSONB), `qa_history` (JSONB), `interview_round` (INTEGER), `created_at`, `updated_at`, `finalized_at` |
+| `imported_emails` | Manually imported email bodies | `id` (SERIAL PK), `subject`, `from_address`, `date_received`, `body`, `processed` (BOOLEAN), `created_at` |
+| `digests` | Daily digest send records | `digest_id` (SERIAL PK), `run_date` (DATE), `jobs_fetched`, `jobs_scored`, `jobs_shortlisted`, `packets_generated`, `truth_pass_count`, `truth_fail_count`, `email_sent` (BOOLEAN), `sent_at`, `recipient_email` |
+| `resume_history` | Prior resume snapshots for divergence tracking | `id` (SERIAL PK), `job_id` (BIGINT FK→jobs), `target_company`, `target_role`, `summary_text`, `competencies` (JSONB), `top_bullets_by_role` (JSONB), `archetype_primary`, `key_phrases` (JSONB), `created_at` |
 | `processed_gmail_ids` | Gmail message dedup tracking | `gmail_id` (TEXT PK), `processed_at`, `jobs_found` (INTEGER) |
-| `dedup_log` | Deduplication audit trail | `id` (SERIAL PK), `company`, `title`, `location`, `posting_url`, `reason`, `matched_job_id` (BIGINT) |
+| `dedup_log` | Deduplication audit trail | `id` (SERIAL PK), `company`, `title`, `location`, `posting_url`, `reason`, `matched_job_id` (BIGINT), `created_at` |
 | `app_settings` | Configuration key-value store | `key` (TEXT PK), `value` (TEXT), `updated_at` (TIMESTAMPTZ) |
 
 **pgvector**: Not installed or used. Vector references in code are JD keyword matching terms, not database extensions.
@@ -309,7 +309,7 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 - `GET /api/dashboard/preview/:jobId/:type` — Preview resume/cover/evidence/verifier
 - `GET /api/dashboard/download/:jobId/:type` — Download DOCX/PDF
 - `GET /api/dashboard/download/:jobId/:type/pdf` — Download as PDF (LibreOffice conversion)
-- `GET /api/dashboard/generate-packet/:jobId` — Async single-job packet generation
+- `POST /api/dashboard/generate-packet/:jobId` — Async single-job packet generation
 - `GET /api/dashboard/generate-packet/:jobId/status` — Check single-job generation status
 - `GET /api/dashboard/generation-log` — Last 100 generation log entries
 - `POST /api/dashboard/purge-stale-artifacts` — Remove artifacts for jobs with no JD
@@ -326,30 +326,38 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 
 ### Profile Builder (`profileBuilderRoutes.ts`)
 - `GET /profile` — Serves profile builder HTML
+- `GET /api/profile/debug-paths` — Debug workspace path resolution
 - `POST /api/profile/upload` — Resume upload + background parsing (DOCX, PDF, TXT; 10MB max)
-- `GET /api/profile/status/:sessionId` — Session status + draft inventory
-- `POST /api/profile/interview` — Generate interview questions (max 4 rounds, focus: leadership/technical/growth)
-- `POST /api/profile/answer` — Process user answers
-- `GET /api/profile/export` — Export finalized inventory JSON
+- `GET /api/profile/session/:id` — Session status + draft inventory
+- `POST /api/profile/interview/:id` — Generate interview questions (max 4 rounds, focus: leadership/technical/growth)
+- `POST /api/profile/skip-interview/:id` — Skip interview and finalize with current draft
+- `POST /api/profile/finalize/:id` — Finalize session and export inventory
+- `GET /api/profile/current` — Get most recent active session
+- `DELETE /api/profile/session/:id` — Delete a profile session
+- `GET /api/profile/recent` — List recent profile sessions
 
 ### Job Sources (`jobSourceRoutes.ts`)
 - `POST /api/sources/apollo/search` — Manual Apollo.io job search
 - `POST /api/sources/clay/webhook` — Receive Clay enriched leads
-- `POST /api/sources/clay/status` — Clay webhook delivery status
 - `GET /api/sources/status` — Integration status dashboard
+- `POST /api/sources/email/scan` — Scan Gmail for job alert emails
 
 ### Settings (`settingsRoutes.ts`)
 - `GET /api/settings` — All settings (secrets masked)
+- `GET /api/settings/list` — List all setting definitions with groups
 - `POST /api/settings` — Update settings (persisted to DB)
-- `GET /api/settings/:key` — Get single setting
 
 ### Setup Wizard (`setupRoutes.ts`)
+- `GET /setup` — Serves setup wizard HTML
 - `GET /api/setup/status` — Setup progress (database, OpenAI, Gmail)
 - `POST /api/setup/save` — Save setting from setup wizard (allowlist enforced)
 - `POST /api/setup/gmail/auth-url` — Generate Google OAuth URL
 - `POST /api/setup/gmail/exchange-code` — Exchange auth code for refresh token
+- `POST /api/setup/gmail/test` — Test Gmail connection with current credentials
 
-### Import (`index.ts`)
+### Core (`index.ts`)
+- `GET /` — Root redirect (→ /dashboard or /setup)
+- `GET /api/health` — Health check endpoint
 - `POST /api/import-emails` — Import email bodies (auth via `IMPORT_API_KEY`)
 - `GET /api/import-emails` — List imported emails
 
@@ -384,6 +392,17 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 - `USE_FIXTURES` — Use fixture emails instead of Gmail (default: false)
 - `SCORING_MODE` — `precision` (strict) or `recall` (wider net)
 - `AI_INTEGRATIONS_OPENAI_BASE_URL` — Override OpenAI base URL (e.g., Azure)
+- `PORT` — HTTP server port (default: 5000)
+- `NODE_ENV` — `production` or `development`
+- `USER_EMAIL` — Fallback email if `DIGEST_EMAIL` not set
+
+**Optional (Debug / Feature Flags):**
+- `DEBUG_GENERATION` — Enable verbose logging during packet generation
+- `USE_LEGACY_PIPELINE` — Use legacy agent-driven pipeline instead of resume engine (default: false)
+- `AUTO_GENERATE_AFTER_SCORE` — Auto-generate packets after scoring (default: true)
+
+**Optional (Messaging):**
+- `TELEGRAM_BOT_TOKEN` — Telegram bot token for workflow triggers
 
 ## Known Issues / TODOs
 
@@ -433,6 +452,7 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 - `npm run build` → Mastra bundles to `.mastra/output/index.mjs` (4GB max-old-space-size)
 - `npm run dev` → `mastra dev` for local development
 - `npm run check` → `tsc` type checking
+- `npm run check:format` → Prettier format check (CI-friendly, no writes)
 - `npm run format` → Prettier formatting
 - Railway: Dockerfile builds on `node:22-slim` + LibreOffice + Poppler, deploys `node /app/.mastra/output/index.mjs`
 - Production URL: `https://job-hunt-production-f825.up.railway.app`
