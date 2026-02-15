@@ -334,6 +334,16 @@ function checkSpelling(resume: TailoredResume): SpellcheckResult {
       if (lower.endsWith("inging") && lower.length > 8) {
         suspicious.push({ location, token: raw, reason: "doubled -ing suffix" });
       }
+
+      // Check for doubled terminal consonant (e.g., "Strengthenedd" from verb corruption)
+      if (word.length > 6 && /([bcdfghjkmnpqrtvwxyz])\1$/i.test(word)) {
+        const ending = word.slice(-2).toLowerCase();
+        // Exclude common English doubled-consonant endings
+        const commonDoubles = new Set(["ll", "ss", "ff", "zz", "rr", "tt", "nn"]);
+        if (!commonDoubles.has(ending)) {
+          suspicious.push({ location, token: raw, reason: "doubled terminal consonant" });
+        }
+      }
     }
   }
 
