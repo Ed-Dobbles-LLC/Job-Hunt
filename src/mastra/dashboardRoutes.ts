@@ -779,39 +779,67 @@ export function getDashboardRoutes() {
                 } as any);
                 logger?.info(`✅ [generate-packet] Phase 2 complete: pass=${packetResult.pass}, attempts=${packetResult.attempts_used}`);
               } catch (phase2Err: any) {
-                logger?.error(`❌ [generate-packet] Phase 2 failed: ${phase2Err.message}`);
-                logGen({ jobId, company: job.company, title: job.title, status: "error", message: phase2Err.message, phase: "generate-packet" });
+                const errMsg = phase2Err?.message || (phase2Err ? String(phase2Err) : "") || `Pipeline error (${phase2Err?.name || "unknown"})`;
+                logger?.error(`❌ [generate-packet] Phase 2 failed: ${errMsg}`);
+                logGen({ jobId, company: job.company, title: job.title, status: "error", message: errMsg, phase: "generate-packet" });
                 updateGenStatus(jobId, {
                   status: "error",
                   phase: "generate-packet",
-                  error: `Failed to generate resume/cover letter: ${phase2Err.message}`,
-                  hint: phase2Err.message.includes("API key") || phase2Err.message.includes("401")
+                  error: `Failed to generate resume/cover letter: ${errMsg}`,
+                  hint: errMsg.includes("API key") || errMsg.includes("401")
                     ? "Check your OpenAI API key in Railway environment variables."
-                    : phase2Err.message.includes("rate") || phase2Err.message.includes("429")
+                    : errMsg.includes("rate") || errMsg.includes("429")
                     ? "OpenAI rate limit hit. Wait a moment and try again."
-                    : phase2Err.message.includes("All") && phase2Err.message.includes("attempts failed")
+                    : errMsg.includes("All") && errMsg.includes("attempts failed")
                     ? "The AI couldn't generate a verified resume after multiple attempts. Try again — results vary between runs."
+                    : errMsg.includes("MissingBaseline")
+                    ? "Experience inventory could not be loaded. Check Profile Builder."
+                    : errMsg.includes("identity") || errMsg.includes("Identity")
+                    ? "Candidate identity verification failed. Check your experience inventory."
                     : undefined,
                 });
                 return;
               }
 
-              // Phase 3: Combine evidence pointers
-              const resumePointers = (packetResult.resume?.evidence_pointers || []).map((p: any) => ({
-                claim_text: p.claim_text,
-                evidence_id: p.source_hash,
-                evidence_quote: p.evidence_quote,
-                evidence_source_key: p.source_hash,
-                confidence: p.confidence,
-              }));
-              const clPointers = (packetResult.cover_letter?.evidence_pointers || []).map((p: any) => ({
-                claim_text: p.claim_text,
-                evidence_id: p.source_hash,
-                evidence_quote: p.evidence_quote,
-                evidence_source_key: p.source_hash,
-                confidence: p.confidence,
-              }));
-              const combinedEvidence = [...resumePointers, ...clPointers];
+              // Validate pipeline result has required data
+              if (!packetResult || !packetResult.resume) {
+                const msg = "Pipeline returned incomplete result — no resume data";
+                logger?.error(`❌ [generate-packet] ${msg}`);
+                logGen({ jobId, company: job.company, title: job.title, status: "error", message: msg, phase: "generate-packet" });
+                updateGenStatus(jobId, {
+                  status: "error",
+                  phase: "generate-packet",
+                  error: msg,
+                  hint: "The resume generation pipeline completed but didn't produce a resume. Try again.",
+                });
+                return;
+              }
+
+              // Phase 3: Combine evidence pointers (safe mapping — LLM output may have gaps)
+              let combinedEvidence: any[] = [];
+              try {
+                const resumePointers = (packetResult.resume?.evidence_pointers || [])
+                  .filter((p: any) => p != null)
+                  .map((p: any) => ({
+                    claim_text: p.claim_text || "",
+                    evidence_id: p.source_hash || "",
+                    evidence_quote: p.evidence_quote || "",
+                    evidence_source_key: p.source_hash || "",
+                    confidence: p.confidence ?? 0,
+                  }));
+                const clPointers = (packetResult.cover_letter?.evidence_pointers || [])
+                  .filter((p: any) => p != null)
+                  .map((p: any) => ({
+                    claim_text: p.claim_text || "",
+                    evidence_id: p.source_hash || "",
+                    evidence_quote: p.evidence_quote || "",
+                    evidence_source_key: p.source_hash || "",
+                    confidence: p.confidence ?? 0,
+                  }));
+                combinedEvidence = [...resumePointers, ...clPointers];
+              } catch (evErr: any) {
+                logger?.warn(`⚠️ [generate-packet] Evidence pointer extraction failed: ${evErr.message}`);
+              }
 
               // Check for abort before Phase 4
               if (genAbort.signal.aborted) {
@@ -825,7 +853,7 @@ export function getDashboardRoutes() {
               logger?.info(`📁 [generate-packet] Phase 4: Rendering DOCX and saving to DB...`);
               const truthPass = Boolean(packetResult.pass);
               const evidenceJson = JSON.stringify(combinedEvidence, null, 2);
-              const verifierJson = JSON.stringify(packetResult.final_report, null, 2);
+              const verifierJson = JSON.stringify(packetResult.final_report ?? null, null, 2);
               let resumeBuffer: Buffer | null = null;
               let coverBuffer: Buffer | null = null;
               let diskFiles = 0;
@@ -933,13 +961,18 @@ export function getDashboardRoutes() {
               });
             } catch (err: any) {
               clearTimeout(genTimeout);
-              const errMsg = err?.message || String(err);
-              logger?.error(`❌ [generate-packet] Unhandled error: ${errMsg}`);
+              const errMsg = err?.message || (err ? String(err) : "") || `Unexpected ${err?.name || "error"} (no message)`;
+              const errStack = err?.stack?.split("\n").slice(0, 6).join("\n") || "";
+              logger?.error(`❌ [generate-packet] Unhandled error: ${errMsg}\n${errStack}`);
               logGen({ jobId, company: job.company || "?", title: job.title || "?", status: "error", message: errMsg, phase: "unknown" });
               updateGenStatus(jobId, {
                 status: "error",
                 phase: "unknown",
                 error: errMsg,
+                hint: errMsg.includes("MissingBaseline") ? "Experience inventory could not be loaded. Go to Profile Builder to upload your resume."
+                  : errMsg.includes("identity") || errMsg.includes("Identity") ? "Candidate identity verification failed. Check your experience inventory."
+                  : errMsg.includes("Rate limit") || errMsg.includes("rate") || errMsg.includes("429") ? "OpenAI rate limit hit. Wait a moment and try again."
+                  : undefined,
               });
             }
           })();
