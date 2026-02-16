@@ -583,62 +583,42 @@ Anchor the opener to THIS job's specific mandate: ${input.mandate.primary_mandat
       logger: input.logger,
     })).object;
 
-    // ── Post-LLM Cover Letter Validation: Word Count ──
+    // ── Post-LLM Cover Letter Validation (combined single-pass correction) ──
+    // Detect ALL issues first, then issue ONE combined correction call (saves 15-30s per extra issue).
     const actualWordCount = countCoverLetterWords(coverLetter);
     coverLetter.word_count = actualWordCount; // Correct LLM's self-reported count
 
+    const clCorrectionSections: string[] = [];
+
+    // Word count check
     if (actualWordCount < 300 || actualWordCount > 400) {
       const wcDirection = actualWordCount < 300 ? "TOO SHORT" : "TOO LONG";
       const wcTarget = actualWordCount < 300 ? "expand to 320-350 words" : "compress to 320-350 words";
-      const wcCorrectionPrompt = `${clUserPrompt}\n\n## WORD COUNT CORRECTION
+      clCorrectionSections.push(`## WORD COUNT CORRECTION
 The cover letter is ${wcDirection} at ${actualWordCount} words. MUST be 300-400 words.
 ${wcTarget}. Aim for ~350 words. Keep all value claims and evidence pointers.
-${actualWordCount < 300 ? "Add more specific detail to body paragraphs — connect achievements to company needs." : "Remove redundant phrases and tighten language. Cut filler, not substance."}`;
-
-      coverLetter = (await resilientGenerateObject({
-        schema: TailoredCoverLetterSchema,
-        system: clSystemPrompt,
-        prompt: wcCorrectionPrompt,
-        temperature: 0.2,
-        label: "Stage 4: coverLetter-wordcount-correction",
-        lane: "medium",
-        logger: input.logger,
-      })).object;
-      coverLetter.word_count = countCoverLetterWords(coverLetter);
+${actualWordCount < 300 ? "Add more specific detail to body paragraphs — connect achievements to company needs." : "Remove redundant phrases and tighten language. Cut filler, not substance."}`);
     }
 
-    // ── Post-LLM Cover Letter Validation: Resume Repetition Ban ──
+    // Resume repetition check
     const resumeRepetitions = detectResumeRepetition(resume, coverLetter);
     if (resumeRepetitions.length > 0) {
       const repList = resumeRepetitions
         .map((r, i) => `  ${i + 1}. CL phrase: "${r.cl_phrase}" ← resume bullet: "${r.resume_bullet}"`)
         .join("\n");
-
-      const repCorrectionPrompt = `${clUserPrompt}\n\n## RESUME REPETITION CORRECTION
+      clCorrectionSections.push(`## RESUME REPETITION CORRECTION
 The cover letter copies or closely paraphrases ${resumeRepetitions.length} resume bullet(s). The cover letter must provide NARRATIVE context, not parrot resume text.
 
 REPEATED PHRASES DETECTED:
 ${repList}
 
 Rewrite the body_paragraphs to use DIFFERENT angles on the same achievements. The cover letter should AMPLIFY resume signals, not repeat them verbatim.
-Pattern: instead of restating the achievement, explain the STRATEGIC CONTEXT — why you did it, what you learned, how it serves this company.`;
-
-      coverLetter = (await resilientGenerateObject({
-        schema: TailoredCoverLetterSchema,
-        system: clSystemPrompt,
-        prompt: repCorrectionPrompt,
-        temperature: 0.3,
-        label: "Stage 4: coverLetter-repetition-correction",
-        lane: "medium",
-        logger: input.logger,
-      })).object;
-      coverLetter.word_count = countCoverLetterWords(coverLetter);
+Pattern: instead of restating the achievement, explain the STRATEGIC CONTEXT — why you did it, what you learned, how it serves this company.`);
     }
 
-    // ── Post-LLM Cover Letter Validation: Generic Enthusiasm Ban ──
+    // Generic enthusiasm / structure check
     const enthusiasmMatches = detectGenericEnthusiasm(coverLetter);
     const structureViolations = validateCoverLetterStructure(coverLetter);
-
     if (enthusiasmMatches.length > 0 || structureViolations.length > 0) {
       const issues: string[] = [];
       if (enthusiasmMatches.length > 0) {
@@ -647,8 +627,7 @@ Pattern: instead of restating the achievement, explain the STRATEGIC CONTEXT —
       for (const sv of structureViolations) {
         issues.push(`STRUCTURE: ${sv}`);
       }
-
-      const structureCorrectionPrompt = `${clUserPrompt}\n\n## TONE & STRUCTURE CORRECTION
+      clCorrectionSections.push(`## TONE & STRUCTURE CORRECTION
 ${issues.join("\n")}
 
 RULES:
@@ -657,14 +636,19 @@ RULES:
 - Paragraph 3 (closing): Forward-looking value proposition. NOT "Thank you for considering." State what strategic conversation you want to have.
 - NO generic enthusiasm ("excited", "passionate", "thrilled")
 - NO defensive hedging ("I am confident that", "I hope to")
-- Tone: strategic peer, not eager applicant.`;
+- Tone: strategic peer, not eager applicant.`);
+    }
 
+    // Issue ONE combined correction call if any issues found (instead of up to 3 sequential calls)
+    if (clCorrectionSections.length > 0) {
+      input.logger?.info(`🔧 [Stage 4] CL combined correction: ${clCorrectionSections.length} issue(s) in single call`);
+      const combinedCorrectionPrompt = `${clUserPrompt}\n\n${clCorrectionSections.join("\n\n")}`;
       coverLetter = (await resilientGenerateObject({
         schema: TailoredCoverLetterSchema,
         system: clSystemPrompt,
-        prompt: structureCorrectionPrompt,
+        prompt: combinedCorrectionPrompt,
         temperature: 0.2,
-        label: "Stage 4: coverLetter-structure-correction",
+        label: `Stage 4: coverLetter-combined-correction (${clCorrectionSections.length} issues)`,
         lane: "medium",
         logger: input.logger,
       })).object;

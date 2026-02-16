@@ -68,7 +68,8 @@ import type {
 
 // ── Config ───────────────────────────────────────────────────────
 
-const DEFAULT_MAX_ATTEMPTS = 3;
+// 2 attempts = initial + 1 correction. A third rarely improves results but adds 40-120s.
+const DEFAULT_MAX_ATTEMPTS = 2;
 
 // ── Inventory Loader (delegates to centralized loader) ──────────
 // The old loadInventory() had no candidate identity validation.
@@ -641,7 +642,9 @@ async function runPipelineV1Inner(input: PipelineInput): Promise<PipelineResult>
 
   // ── STAGE 8: Recruiter Review ─────────────────────────────────
 
-  const MAX_REPAIR_LOOPS = 2;
+  // Repair loops are expensive: each re-runs full Stage 4 (2-6 LLM calls) + Stage 8 (1 call).
+  // Default to 0 (detection-only, matching v2 behavior) unless explicitly enabled.
+  const MAX_REPAIR_LOOPS = parseInt(process.env.PIPELINE_MAX_REPAIR_LOOPS || "0", 10);
   let recruiterReview: RecruiterReviewReport | undefined;
   let recruiterReviewPassed = false;
 
@@ -1017,6 +1020,13 @@ async function runPipelineV1Inner(input: PipelineInput): Promise<PipelineResult>
     human_review_required: humanReviewRequired,
     human_review_notes: humanReviewNotes,
     stage_results: stageResults,
+    stage_timings: Object.fromEntries(
+      Object.entries(stageResults)
+        .filter(([, v]) => v.duration_ms != null)
+        .map(([k, v]) => [k, v.duration_ms]),
+    ),
+    total_duration_ms: Object.values(stageResults)
+      .reduce((sum, v) => sum + (v.duration_ms ?? 0), 0),
     cost_summary: costSummary,
   };
 }

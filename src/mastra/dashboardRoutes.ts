@@ -776,7 +776,7 @@ export function getDashboardRoutes() {
                     job_id: jobId,
                     company: job.company,
                     title: job.title,
-                    max_attempts: 3,
+                    max_attempts: 2,
                   },
                   mastra,
                 } as any);
@@ -960,6 +960,8 @@ export function getDashboardRoutes() {
                   ats_keywords: packetResult.resume?.ats_keywords_used || [],
                   gap_notes: packetResult.resume?.gap_notes || [],
                   cover_letter_words: packetResult.cover_letter?.word_count || 0,
+                  stage_timings: packetResult.stage_timings,
+                  total_pipeline_ms: packetResult.total_duration_ms,
                 },
               });
             } catch (err: any) {

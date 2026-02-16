@@ -198,6 +198,10 @@ export interface PipelineResult {
   human_review_required: boolean;
   human_review_notes: string[];
   stage_results: Record<string, StageResult<any>>;
+  /** Per-stage timing breakdown for dashboard display */
+  stage_timings?: Record<string, number>;
+  /** Total pipeline duration in ms */
+  total_duration_ms?: number;
   cost_summary?: import("./cost-tracker").CostSummary;
 }
 
