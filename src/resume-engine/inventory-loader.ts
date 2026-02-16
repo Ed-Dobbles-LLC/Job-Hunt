@@ -15,7 +15,7 @@
  */
 
 import * as fs from "fs";
-import { query } from "../mastra/tools/db";
+import { queryWithTimeout } from "../mastra/tools/db";
 import { workspacePath } from "../mastra/tools/paths";
 import {
   MissingBaselineError,
@@ -52,8 +52,10 @@ export async function loadInventoryWithIdentity(
 
   // Attempt 1: Database
   try {
-    const dbResult = await query(
+    const dbResult = await queryWithTimeout(
       "SELECT value FROM app_settings WHERE key = 'experience_inventory'",
+      [],
+      30000, // 30s timeout — inventory load is critical path
     );
     if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
       const inventory = JSON.parse(dbResult.rows[0].value);

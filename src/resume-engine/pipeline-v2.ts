@@ -31,7 +31,7 @@
  *   Total LLM calls capped at budget.max_llm_calls (default: 12).
  */
 
-import { query } from "../mastra/tools/db";
+import { query, queryWithTimeout } from "../mastra/tools/db";
 import { buildEntityAllowlist } from "../mastra/tools/entityAllowlist";
 import { extractClaimsLedger } from "../mastra/tools/claimsLedger";
 import { loadInventoryWithIdentity } from "./inventory-loader";
@@ -158,9 +158,10 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
   if (input.requirements) {
     requirements = input.requirements as JDRequirements;
   } else {
-    const result = await query(
+    const result = await queryWithTimeout(
       "SELECT company, title, jd_requirements, jd_raw_text FROM jobs WHERE job_id = $1",
       [input.job_id],
+      30000,
     );
     if (result.rows.length === 0) throw new Error(`Job ID ${input.job_id} not found`);
     if (!result.rows[0].jd_requirements) throw new Error(`Job ID ${input.job_id} has no extracted requirements`);
@@ -172,7 +173,7 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
 
   if (!jdText) {
     try {
-      const jdResult = await query("SELECT jd_raw_text FROM jobs WHERE job_id = $1", [input.job_id]);
+      const jdResult = await queryWithTimeout("SELECT jd_raw_text FROM jobs WHERE job_id = $1", [input.job_id], 15000);
       jdText = jdResult.rows[0]?.jd_raw_text || "";
     } catch { /* non-fatal */ }
   }
@@ -524,20 +525,22 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
   // Fetch prior summaries for differentiation context (scoped by candidate_id)
   let priorSummaries: string[] = [];
   try {
-    const histResult = await query(
+    const histResult = await queryWithTimeout(
       `SELECT summary_text FROM resume_history
        WHERE job_id != $1 AND archetype_primary = $2 AND (candidate_id = $3 OR candidate_id IS NULL)
        ORDER BY created_at DESC LIMIT 3`,
       [input.job_id, mandate.primary_mandate, identity.candidate_id],
+      10000,
     );
     priorSummaries = histResult.rows
       .map((r: any) => r.summary_text)
       .filter(Boolean);
     // If no mandate-scoped results, fall back to any recent (still scoped by candidate)
     if (priorSummaries.length === 0) {
-      const fallback = await query(
+      const fallback = await queryWithTimeout(
         `SELECT summary_text FROM resume_history WHERE job_id != $1 AND (candidate_id = $2 OR candidate_id IS NULL) ORDER BY created_at DESC LIMIT 3`,
         [input.job_id, identity.candidate_id],
+        10000,
       );
       priorSummaries = fallback.rows.map((r: any) => r.summary_text).filter(Boolean);
     }
@@ -599,11 +602,12 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
     let priorSums: string[] = [];
     let priorComps: string[][] = [];
     try {
-      const histResult = await query(
+      const histResult = await queryWithTimeout(
         `SELECT summary_text, competencies FROM resume_history
          WHERE job_id != $1 AND archetype_primary = $2 AND (candidate_id = $3 OR candidate_id IS NULL)
          ORDER BY created_at DESC LIMIT 3`,
         [input.job_id, mandate.primary_mandate, identity.candidate_id],
+        10000,
       );
       priorSums = histResult.rows.map((r: any) => r.summary_text).filter(Boolean);
       priorComps = histResult.rows.map((r: any) => {

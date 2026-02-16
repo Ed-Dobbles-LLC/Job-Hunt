@@ -114,14 +114,35 @@ export interface PipelineInput {
 
 // ── Main Pipeline ────────────────────────────────────────────────
 
+// Global pipeline timeout (5 minutes). Individual LLM calls have their own 120s timeouts,
+// but a full run with retries, repairs, and DB queries should never exceed this.
+const PIPELINE_GLOBAL_TIMEOUT_MS = parseInt(process.env.PIPELINE_TIMEOUT_MS || "300000", 10);
+
 export async function runPipelineV1(input: PipelineInput): Promise<PipelineResult> {
+  const logger = input.logger;
+
+  // Wrap the entire pipeline in a global timeout to prevent indefinite hangs
+  return Promise.race([
+    runPipelineV1Inner(input),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Pipeline global timeout: exceeded ${Math.round(PIPELINE_GLOBAL_TIMEOUT_MS / 1000)}s. The generation was taking too long (possible DB or LLM hang). Try again.`));
+      }, PIPELINE_GLOBAL_TIMEOUT_MS);
+    }),
+  ]).finally(() => {
+    // Ensure cost accumulator is always cleaned up
+    setGlobalCostAccumulator(null);
+  });
+}
+
+async function runPipelineV1Inner(input: PipelineInput): Promise<PipelineResult> {
   const logger = input.logger;
   const maxAttempts = input.max_attempts || DEFAULT_MAX_ATTEMPTS;
   const stageResults: Record<string, StageResult<any>> = {};
 
   logger?.info(`\n${"═".repeat(60)}`);
   logger?.info(`🚀 [Pipeline] Starting 8-stage resume tailoring pipeline`);
-  logger?.info(`🚀 [Pipeline] Job ID: ${input.job_id}, Max attempts: ${maxAttempts}`);
+  logger?.info(`🚀 [Pipeline] Job ID: ${input.job_id}, Max attempts: ${maxAttempts}, Global timeout: ${Math.round(PIPELINE_GLOBAL_TIMEOUT_MS / 1000)}s`);
   logger?.info(`${"═".repeat(60)}\n`);
 
   // ── Set up cost tracking ────────────────────────────────────────
@@ -139,9 +160,10 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
   if (input.requirements) {
     requirements = input.requirements as JDRequirements;
   } else {
-    const result = await query(
+    const result = await queryWithTimeout(
       "SELECT company, title, jd_requirements, jd_raw_text FROM jobs WHERE job_id = $1",
       [input.job_id],
+      30000, // 30s timeout — simple SELECT should be instant
     );
     if (result.rows.length === 0) throw new Error(`Job ID ${input.job_id} not found`);
     if (!result.rows[0].jd_requirements) throw new Error(`Job ID ${input.job_id} has no extracted requirements`);
@@ -153,7 +175,7 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
 
   if (!jdText) {
     try {
-      const jdResult = await query("SELECT jd_raw_text FROM jobs WHERE job_id = $1", [input.job_id]);
+      const jdResult = await queryWithTimeout("SELECT jd_raw_text FROM jobs WHERE job_id = $1", [input.job_id], 15000);
       jdText = jdResult.rows[0]?.jd_raw_text || "";
     } catch { /* non-fatal */ }
   }
@@ -819,7 +841,7 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
   // ── Save metadata to DB ────────────────────────────────────────
 
   try {
-    await query(
+    await queryWithTimeout(
       `UPDATE scores SET breakdown_json = jsonb_set(
          COALESCE(breakdown_json, '{}'::jsonb),
          '{verified_packet}',
@@ -835,6 +857,7 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
         pipeline_version: "8-stage-v1",
         stages_run: Object.keys(stageResults),
       })],
+      15000, // 15s timeout — non-critical metadata save
     );
   } catch { /* non-fatal */ }
 
@@ -965,7 +988,7 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
     // Flush to DB (non-fatal)
     const insert = costAccumulator.buildInsertSQL();
     if (insert) {
-      await query(insert.sql, insert.params).catch(() => { /* table may not exist yet */ });
+      await queryWithTimeout(insert.sql, insert.params, 15000).catch(() => { /* table may not exist yet */ });
     }
   } catch { /* cost tracking is non-fatal */ }
   finally {
