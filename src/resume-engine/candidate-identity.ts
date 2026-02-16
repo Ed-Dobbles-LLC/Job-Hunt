@@ -189,11 +189,12 @@ export function validateResumeIdentity(
 ): { valid: boolean; issues: string[] } {
   const issues: string[] = [];
 
-  // Check candidate name in resume header
+  // Check candidate name in resume header — only if the resume carries one.
+  // The TailoredResume schema does NOT include candidate_name (the name is
+  // injected during DOCX rendering from the inventory profile), so a missing
+  // field is expected and NOT an error.
   const resumeName = resume?.candidate_name || resume?.name || "";
-  if (!resumeName) {
-    issues.push("Resume has no candidate_name field");
-  } else if (normalizeName(resumeName) !== normalizeName(identity.candidate_name)) {
+  if (resumeName && normalizeName(resumeName) !== normalizeName(identity.candidate_name)) {
     issues.push(
       `Resume name "${resumeName}" does not match candidate "${identity.candidate_name}"`,
     );

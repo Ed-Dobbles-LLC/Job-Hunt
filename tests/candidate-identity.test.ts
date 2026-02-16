@@ -195,13 +195,13 @@ describe("Output Identity Guards", () => {
       expect(result.issues).toContain('Resume employer "Fabricated Inc" not found in claims ledger');
     });
 
-    it("fails when resume has no candidate_name", () => {
+    it("passes when resume has no candidate_name (expected — name injected at render time)", () => {
       const resume = {
         experience: [{ employer: "Acme Corp", bullets: [] }],
       };
       const result = validateResumeIdentity(resume, VALID_IDENTITY, ["Acme Corp"]);
-      expect(result.valid).toBe(false);
-      expect(result.issues).toContain("Resume has no candidate_name field");
+      expect(result.valid).toBe(true);
+      expect(result.issues).toHaveLength(0);
     });
 
     it("fails when resume name does not match identity", () => {
