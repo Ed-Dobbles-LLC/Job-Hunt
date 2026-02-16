@@ -579,6 +579,26 @@ const CL_SUPPLICANT_PATTERNS: RegExp[] = [
 /** Resume recap signals in cover letter body. */
 const CL_RESUME_RECAP_PATTERNS: RegExp[] = [
   /\b(?:i |at |during |while ).*(?:implemented|architected|built|launched|established|deployed|created)\b.*\d+/i,
+  /\b(?:i (?:also |additionally ))(?:led|built|created|launched|developed|established)\b/i,
+];
+
+/** Extract 3-word phrases from text for overlap detection. */
+function extractThreeWordPhrases(text: string): string[] {
+  const words = text.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(w => w.length > 2);
+  const phrases: string[] = [];
+  for (let i = 0; i <= words.length - 3; i++) {
+    phrases.push(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
+  }
+  return phrases;
+}
+
+/** Template-driven alignment phrasing that appears across every cover letter. */
+const CL_ALIGNMENT_TEMPLATE_PATTERNS: RegExp[] = [
+  /\baligns?\s+(?:with|directly\s+with)\s+\w+'s\s+need\s+for\b/i,
+  /\bdirectly\s+address(?:es|ing)\s+\w+'s\s+need\s+for\b/i,
+  /\bthis\s+(?:aligns|connects|maps)\s+(?:with|to|directly)\b/i,
+  /\bwhich\s+aligns?\s+(?:directly\s+)?with\b/i,
+  /\baddressing\s+\w+'s\s+(?:need|requirement|priority)\b/i,
 ];
 
 export function checkCoverLetterPositioning(
@@ -627,13 +647,22 @@ export function checkCoverLetterPositioning(
     }
   }
 
-  // Check body paragraph count (must be 1-2)
-  if (coverLetter.body_paragraphs.length > 2) {
+  // Check body paragraph count (must be 2-3: P2 transformation + P3 scale + optional P4)
+  if (coverLetter.body_paragraphs.length < 2) {
+    score -= 15;
+    issues.push({
+      dimension: "cover_letter",
+      location: "body_paragraphs",
+      issue: `Only ${coverLetter.body_paragraphs.length} body paragraph(s) — need at least 2 (transformation + enterprise scale)`,
+      severity: "blocking",
+      auto_fixed: false,
+    });
+  } else if (coverLetter.body_paragraphs.length > 3) {
     score -= 10;
     issues.push({
       dimension: "cover_letter",
       location: "body_paragraphs",
-      issue: `${coverLetter.body_paragraphs.length} body paragraphs — max 2 for focused impact`,
+      issue: `${coverLetter.body_paragraphs.length} body paragraphs — max 3 for focused impact`,
       severity: "warning",
       auto_fixed: false,
     });
@@ -653,6 +682,49 @@ export function checkCoverLetterPositioning(
           auto_fixed: false,
         });
         break;
+      }
+    }
+  }
+
+  // Check for template-driven "aligns with X's need" phrasing
+  const allParagraphs = [coverLetter.opening_paragraph, ...coverLetter.body_paragraphs, coverLetter.closing_paragraph];
+  let alignmentPatternCount = 0;
+  for (const para of allParagraphs) {
+    for (const pattern of CL_ALIGNMENT_TEMPLATE_PATTERNS) {
+      if (pattern.test(para)) {
+        alignmentPatternCount++;
+        break; // One match per paragraph is enough
+      }
+    }
+  }
+  if (alignmentPatternCount > 0) {
+    score -= alignmentPatternCount * 10;
+    issues.push({
+      dimension: "cover_letter",
+      location: "body",
+      issue: `Template-driven alignment phrasing detected ${alignmentPatternCount}x ("aligns with X's need for...") — weave alignment implicitly instead`,
+      severity: alignmentPatternCount >= 2 ? "blocking" : "warning",
+      auto_fixed: false,
+    });
+  }
+
+  // Check for repeated phrasing across paragraphs
+  const paraTexts = [coverLetter.opening_paragraph, ...coverLetter.body_paragraphs];
+  for (let i = 0; i < paraTexts.length; i++) {
+    for (let k = i + 1; k < paraTexts.length; k++) {
+      // Extract 3-word phrases and check for overlap
+      const phrases_i = extractThreeWordPhrases(paraTexts[i]);
+      const phrases_k = extractThreeWordPhrases(paraTexts[k]);
+      const overlap = phrases_i.filter(p => phrases_k.includes(p));
+      if (overlap.length >= 3) {
+        score -= 5;
+        issues.push({
+          dimension: "cover_letter",
+          location: `paragraphs ${i} vs ${k}`,
+          issue: `Repeated phrasing across paragraphs: "${overlap.slice(0, 2).join('", "')}"`,
+          severity: "warning",
+          auto_fixed: false,
+        });
       }
     }
   }

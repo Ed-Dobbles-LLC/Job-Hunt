@@ -631,7 +631,7 @@ describe("Outcome Integrity Verification", () => {
     expect(resume.experience[0].bullets[0].text).not.toMatch(/resulting in$/);
   });
 
-  it("should detect outcome losses when evidence has metrics but bullet does not", async () => {
+  it("should restore outcomes from evidence when bullet lost its metric", async () => {
     const { verifyOutcomeIntegrity } = await import(
       "../src/resume-engine/stage6-layout-governor/governor"
     );
@@ -640,7 +640,9 @@ describe("Outcome Integrity Verification", () => {
     resume.experience[0].bullets[0].text = "Architected enterprise governance framework across all business units";
     resume.experience[0].bullets[0].evidence_quote = "Built governance framework, reducing compliance gaps by 40%";
     const result = verifyOutcomeIntegrity(resume);
-    expect(result.outcome_losses_detected).toBeGreaterThanOrEqual(1);
+    // Should restore the metric from evidence instead of just flagging loss
+    expect(result.outcomes_restored).toBeGreaterThanOrEqual(1);
+    expect(resume.experience[0].bullets[0].text).toContain("40%");
   });
 
   it("should not flag bullets that retain their outcomes", async () => {

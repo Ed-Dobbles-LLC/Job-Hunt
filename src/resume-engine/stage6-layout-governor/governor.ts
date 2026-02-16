@@ -319,9 +319,13 @@ function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
 
 /**
  * Enforce word limits. IMPACT RESTORATION RULE:
- * When truncating bullets over 22 words, attempt to preserve the
+ * When truncating bullets, attempt to preserve the
  * outcome clause (Action → Context → Outcome). Truncate context
  * detail rather than removing the outcome at the end.
+ *
+ * Impact bullets (with quantified outcomes) get a higher word budget (25)
+ * to avoid stripping the very metrics that make the bullet valuable.
+ * Non-impact bullets use the standard 22-word budget.
  */
 function enforceWordLimits(resume: TailoredResume): string[] {
   const truncated: string[] = [];
@@ -329,36 +333,50 @@ function enforceWordLimits(resume: TailoredResume): string[] {
   for (const exp of resume.experience) {
     for (const bullet of exp.bullets) {
       const words = bullet.text.split(/\s+/);
-      if (words.length > 22) {
+      const hasOutcome = bulletHasOutcome(bullet.text);
+      // Impact bullets get a higher budget — outcomes are the highest-value content
+      const maxWords = hasOutcome ? 25 : 22;
+
+      if (words.length > maxWords) {
         // Check if the bullet has an outcome clause (typically after "—" or "resulting in")
         const dashIdx = bullet.text.indexOf(" — ");
         const resultIdx = bullet.text.search(/,?\s*(?:resulting in|generating|producing|delivering|achieving|saving|recovering)\s/i);
 
         if (dashIdx > 0 || resultIdx > 0) {
-          // Outcome clause detected — try to preserve it by trimming the middle
+          // Outcome clause detected — preserve it by trimming the middle (context part)
           const splitPoint = dashIdx > 0 ? dashIdx : resultIdx;
           const action = bullet.text.substring(0, splitPoint).trim();
           const outcome = bullet.text.substring(splitPoint).trim();
           const actionWords = action.split(/\s+/);
           const outcomeWords = outcome.split(/\s+/);
-          const budget = 22 - outcomeWords.length;
+          const budget = maxWords - outcomeWords.length;
 
-          if (budget >= 4 && outcomeWords.length <= 10) {
+          if (budget >= 4) {
             // Trim action part to fit budget, keeping outcome intact
             bullet.text = actionWords.slice(0, Math.max(4, budget)).join(" ") + " " + outcome;
+          } else if (outcomeWords.length <= maxWords - 3) {
+            // Outcome is large but fits if we keep minimal action prefix (3 words)
+            bullet.text = actionWords.slice(0, 3).join(" ") + " " + outcome;
           } else {
-            // Outcome too long; simple truncation
-            bullet.text = words.slice(0, 22).join(" ");
+            // Both parts too long — keep first part + try to preserve trailing metric
+            const metricMatch = bullet.text.match(/(\$[\d,.]+\s*[KMBTkmbt]?\b|\d+\.?\d*%|\d+[xX]\s+\w+)(?:\s|$)/);
+            if (metricMatch) {
+              // Preserve the metric by building: action words + "—" + metric
+              const trimmedAction = words.slice(0, maxWords - 3).join(" ");
+              bullet.text = `${trimmedAction} — ${metricMatch[1]}`;
+            } else {
+              bullet.text = words.slice(0, maxWords).join(" ");
+            }
           }
         } else {
-          bullet.text = words.slice(0, 22).join(" ");
+          bullet.text = words.slice(0, maxWords).join(" ");
         }
 
         // Ensure it ends cleanly
         if (!bullet.text.match(/[.!?]$/)) {
           bullet.text = bullet.text.replace(/[,;:\s]+$/, "");
         }
-        truncated.push(`${exp.employer}: "${bullet.text.substring(0, 50)}..." (was ${words.length} words)`);
+        truncated.push(`${exp.employer}: "${bullet.text.substring(0, 50)}..." (was ${words.length} words, budget ${maxWords})`);
       }
     }
   }
@@ -464,8 +482,11 @@ function refineBulletTone(resume: TailoredResume): ToneViolation[] {
       }
 
       // Check stacked clauses (3+ commas indicate over-complexity) — AUTO-FIX
+      // IMPACT PRESERVATION: Skip this fix for bullets with quantified outcomes
+      // to avoid destroying multi-clause impact bullets like:
+      // "Architected data platform on Snowflake, migrated 200TB from on-prem, and reduced query latency by 38%"
       const commaCount = (bullet.text.match(/,/g) || []).length;
-      if (commaCount >= 3) {
+      if (commaCount >= 3 && !bulletHasOutcome(bullet.text)) {
         // Auto-fix: simplify by truncating at the 2nd comma boundary
         const parts = bullet.text.split(/,\s*/);
         if (parts.length >= 3) {
@@ -483,6 +504,12 @@ function refineBulletTone(resume: TailoredResume): ToneViolation[] {
         violations.push({
           location: loc,
           issue: `stacked_clauses: ${commaCount} commas → auto-simplified`,
+          original: text.substring(0, 60),
+        });
+      } else if (commaCount >= 3) {
+        violations.push({
+          location: loc,
+          issue: `stacked_clauses: ${commaCount} commas (skipped auto-fix — impact bullet preserved)`,
           original: text.substring(0, 60),
         });
       }
@@ -570,6 +597,7 @@ function verbStrengthPass(resume: TailoredResume, mandate: MandateProfile): Verb
 export interface OutcomeIntegrityResult {
   bullets_checked: number;
   outcome_losses_detected: number;
+  outcomes_restored: number;
   cleanups_applied: number;
   details: string[];
 }
@@ -579,13 +607,16 @@ export interface OutcomeIntegrityResult {
  * Detects bullets that appear to have been truncated mid-sentence
  * and cleans up ragged endings (trailing commas, prepositions).
  *
- * Does NOT add new content — only cleans up truncation artifacts
- * and flags bullets that lost their outcome clause.
+ * OUTCOME RESTORATION: When a major-role bullet lost its quantified
+ * outcome but the evidence_quote still has it, appends the metric
+ * back as a safe deterministic restoration (e.g., "— $12M impact").
+ * This is safe because evidence_quote is a verified source.
  */
 export function verifyOutcomeIntegrity(resume: TailoredResume): OutcomeIntegrityResult {
   const details: string[] = [];
   let bulletsChecked = 0;
   let outcomeLosses = 0;
+  let outcomesRestored = 0;
   let cleanupsApplied = 0;
 
   // Trailing preposition/conjunction patterns (truncation artifacts)
@@ -621,13 +652,24 @@ export function verifyOutcomeIntegrity(resume: TailoredResume): OutcomeIntegrity
       // Detect if this is a major-role bullet (top 3 roles, first 2 bullets) that lost its outcome
       if (i < 3 && j < 2 && !bulletHasOutcome(bullet.text)) {
         // Check if the evidence_quote (original source) had a quantified outcome
-        const evidenceHasOutcome = bullet.evidence_quote &&
-          (/\$[\d,.]+\s*[KMBTkmbt]?\b/.test(bullet.evidence_quote) ||
-           /\d+\.?\d*%/.test(bullet.evidence_quote));
+        const evidenceText = bullet.evidence_quote || "";
+        const dollarMatch = evidenceText.match(/\$[\d,.]+\s*[KMBTkmbt]?\b/);
+        const pctMatch = evidenceText.match(/\d+\.?\d*%/);
 
-        if (evidenceHasOutcome) {
-          outcomeLosses++;
-          details.push(`Outcome loss: experience[${i}].bullets[${j}] (${exp.employer}) — evidence has metrics but bullet does not`);
+        if (dollarMatch || pctMatch) {
+          // OUTCOME RESTORATION: Append metric from evidence_quote
+          const metric = dollarMatch ? dollarMatch[0] : pctMatch![0];
+          const bulletWords = bullet.text.split(/\s+/);
+
+          if (bulletWords.length <= 22) {
+            // Safe to append — won't exceed word budget
+            bullet.text = `${bullet.text} — ${metric} impact`;
+            outcomesRestored++;
+            details.push(`Outcome RESTORED: experience[${i}].bullets[${j}] (${exp.employer}) — appended "${metric} impact" from evidence`);
+          } else {
+            outcomeLosses++;
+            details.push(`Outcome loss: experience[${i}].bullets[${j}] (${exp.employer}) — evidence has ${metric} but bullet too long to restore`);
+          }
         }
       }
     }
@@ -636,6 +678,7 @@ export function verifyOutcomeIntegrity(resume: TailoredResume): OutcomeIntegrity
   return {
     bullets_checked: bulletsChecked,
     outcome_losses_detected: outcomeLosses,
+    outcomes_restored: outcomesRestored,
     cleanups_applied: cleanupsApplied,
     details,
   };
@@ -946,11 +989,16 @@ function compressToPageBudget(resume: TailoredResume): { compressed: boolean; bl
     estimate = estimatePages(resume);
   }
 
-  // Step 3: Reduce most recent role to 3 bullets (impact-preserved)
-  if (estimate.exceeds_2_pages && resume.experience[0]?.bullets.length > 3) {
-    resume.experience[0].bullets = sortByImpact(resume.experience[0].bullets).slice(0, 3);
-    actions.push(`Reduced most recent role to 3 bullets (impact-preserved)`);
-    estimate = estimatePages(resume);
+  // Step 3: Trim summary BEFORE touching the most recent role.
+  // The most recent role carries the highest impact signals — trim
+  // lower-value sections first. Summary > 2 paragraphs is expendable.
+  if (estimate.exceeds_2_pages) {
+    const paragraphs = resume.professional_summary.split(/\n\n/);
+    if (paragraphs.length > 2) {
+      resume.professional_summary = paragraphs.slice(0, 2).join("\n\n");
+      actions.push(`Trimmed summary to 2 paragraphs (before reducing recent role)`);
+      estimate = estimatePages(resume);
+    }
   }
 
   // Step 3b: More aggressive competency trim to 8
@@ -960,14 +1008,23 @@ function compressToPageBudget(resume: TailoredResume): { compressed: boolean; bl
     estimate = estimatePages(resume);
   }
 
-  // Step 4: Trim summary
-  if (estimate.exceeds_2_pages) {
-    const paragraphs = resume.professional_summary.split(/\n\n/);
-    if (paragraphs.length > 2) {
-      resume.professional_summary = paragraphs.slice(0, 2).join("\n\n");
-      actions.push(`Trimmed summary to 2 paragraphs`);
+  // Step 4: Drop NON-IMPACT bullets from the 2nd role before touching the most recent role
+  if (estimate.exceeds_2_pages && resume.experience[1]?.bullets.length > 2) {
+    const exp1 = resume.experience[1];
+    exp1.bullets = sortByImpact(exp1.bullets);
+    while (exp1.bullets.length > 2 && estimate.exceeds_2_pages) {
+      const removed = exp1.bullets.pop()!;
+      const hadImpact = bulletHasOutcome(removed.text);
+      actions.push(`Dropped ${hadImpact ? "IMPACT " : ""}bullet from 2nd role ${exp1.employer}`);
       estimate = estimatePages(resume);
     }
+  }
+
+  // Step 5: LAST RESORT for most recent role — reduce to 3 bullets (impact-preserved)
+  if (estimate.exceeds_2_pages && resume.experience[0]?.bullets.length > 3) {
+    resume.experience[0].bullets = sortByImpact(resume.experience[0].bullets).slice(0, 3);
+    actions.push(`Reduced most recent role to 3 bullets (last resort, impact-preserved)`);
+    estimate = estimatePages(resume);
   }
 
   // Step 5: Drop oldest roles — CAREER ARC RULE:
