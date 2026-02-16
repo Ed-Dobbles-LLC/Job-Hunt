@@ -21,6 +21,9 @@ import { jobMatchAgent } from "./agents/jobMatchAgent";
 import { isSetupComplete } from "./setupRoutes";
 import { loadInventoryStrict } from "../resume-engine/inventory-loader";
 
+/** Default candidate email when not specified in inventory profile */
+const DEFAULT_CANDIDATE_EMAIL = "Ed@Dobbles.AI";
+
 let dbReady = false;
 
 // In-memory generation log — survives within a single deploy
@@ -861,7 +864,7 @@ export function getDashboardRoutes() {
               // Render DOCX from JSON
               try {
                 const inventory = await loadInventoryProfile();
-                const profile = inventory.profile || {};
+                const profile = { ...(inventory.profile || {}), email: inventory.profile?.email || DEFAULT_CANDIDATE_EMAIL };
                 resumeBuffer = await renderResumeDocx(packetResult.resume, profile);
                 coverBuffer = await renderCoverLetterDocx(packetResult.cover_letter, profile);
                 logger?.info(`✅ [generate-packet] DOCX rendered: resume=${resumeBuffer.length}B, cover=${coverBuffer.length}B`);
@@ -1299,8 +1302,9 @@ export function getDashboardRoutes() {
                 let coverBuf: Buffer | null = null;
                 try {
                   const inv = await loadInventoryProfile();
-                  resumeBuf = await renderResumeDocx(packetResult.resume, inv.profile || {});
-                  coverBuf = await renderCoverLetterDocx(packetResult.cover_letter, inv.profile || {});
+                  const prof = { ...(inv.profile || {}), email: inv.profile?.email || DEFAULT_CANDIDATE_EMAIL };
+                  resumeBuf = await renderResumeDocx(packetResult.resume, prof);
+                  coverBuf = await renderCoverLetterDocx(packetResult.cover_letter, prof);
                 } catch (e: any) {
                   logger?.warn(`⚠️ [auto-generate] DOCX render failed: ${e.message}`);
                 }

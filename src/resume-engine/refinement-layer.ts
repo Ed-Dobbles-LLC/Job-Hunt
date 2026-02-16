@@ -282,15 +282,15 @@ export function checkVerbAlignment(verb: string, bulletText: string): {
 
 const MANDATE_FIRST_SENTENCE_KEYWORDS: Record<string, string[]> = {
   governance_standardization: ["governance", "compliance", "standardiz", "audit", "control", "framework", "metric discipline", "data quality", "reporting rigor"],
-  bi_platform_modernization: ["platform", "architect", "moderniz", "migrat", "cloud", "infrastructure", "pipeline", "data lake", "warehouse", "replatform"],
-  insight_delivery_automation: ["insight", "self-service", "reporting", "dashboard", "stakeholder", "decision", "automat", "clarity"],
-  founder_adjacent_builder: ["built from", "zero-to-one", "stood up", "founder", "ceo partner", "startup", "first hire", "from scratch"],
+  bi_modernization: ["platform", "architect", "moderniz", "migrat", "cloud", "infrastructure", "pipeline", "data lake", "warehouse", "replatform"],
+  insight_delivery_modernization: ["insight", "self-service", "reporting", "dashboard", "stakeholder", "decision", "automat", "clarity"],
+  executive_okr_reporting: ["okr", "kpi", "scorecard", "executive reporting", "board reporting", "qbr", "performance management", "annual operating plan"],
   revenue_ops_forecasting: ["revenue", "forecast", "pricing", "demand", "p&l", "margin", "commercial", "financial"],
   operating_model_transformation: ["operating model", "transform", "embed", "democratiz", "reorganiz", "change management", "redesign"],
-  product_gtm_analytics: ["product", "go-to-market", "gtm", "feature", "adoption", "user journey", "engagement"],
+  ai_integration_llm: ["ai", "ml", "llm", "genai", "model", "mlops", "prompt engineering", "rag", "embeddings"],
   growth_monetization: ["growth", "experiment", "a/b test", "conversion", "monetiz", "funnel"],
-  executive_storytelling: ["board", "c-suite", "advisory", "storytelling", "strategic", "influence", "decision"],
-  team_leadership_scale: ["team", "hired", "scaled", "organizational design", "talent", "people", "culture"],
+  cross_functional_influence: ["board", "c-suite", "advisory", "storytelling", "strategic", "influence", "decision"],
+  team_scale_org_design: ["team", "hired", "scaled", "organizational design", "talent", "people", "culture"],
 };
 
 const GENERIC_SUMMARY_PATTERNS: RegExp[] = [

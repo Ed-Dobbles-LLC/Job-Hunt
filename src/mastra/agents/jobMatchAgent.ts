@@ -125,7 +125,7 @@ After parsing, you will be asked to enrich jobs that lack full descriptions. For
 ## WHEN GENERATING A COVER LETTER (TAILOR PHASE)
 - Address specific requirements from the job description
 - Reference EXACT achievements and numbers from the inventory
-- 250-350 words, professional but personable
+- 300-400 words, professional but personable
 - Show genuine understanding of the company's needs
 - For EACH factual claim (mention of a metric, achievement, tool, etc.), create an evidence pointer
 - If you don't know something about the company, say so — never fabricate company-specific claims

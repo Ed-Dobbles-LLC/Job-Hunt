@@ -234,15 +234,15 @@ function enforceMandateSummary(
   if (mandate) {
     const MANDATE_ANCHORS: Record<string, string[]> = {
       governance_standardization: ["governance", "control", "rigor", "standardiz", "compliance", "framework", "discipline"],
-      bi_platform_modernization: ["architect", "platform", "moderniz", "migrat", "scalab", "infrastructure", "cloud"],
-      insight_delivery_automation: ["insight", "clarity", "self-service", "reporting", "stakeholder", "real-time", "decision"],
-      founder_adjacent_builder: ["built", "created", "zero-to-one", "stood up", "first", "greenfield"],
+      bi_modernization: ["architect", "platform", "moderniz", "migrat", "scalab", "infrastructure", "cloud"],
+      insight_delivery_modernization: ["insight", "clarity", "self-service", "reporting", "stakeholder", "real-time", "decision"],
+      executive_okr_reporting: ["okr", "kpi", "reporting", "scorecard", "board", "executive", "performance"],
       revenue_ops_forecasting: ["revenue", "forecast", "pricing", "margin", "financial", "p&l", "commercial"],
       operating_model_transformation: ["operating model", "transform", "embed", "redesign", "democratiz"],
-      product_gtm_analytics: ["product", "user", "adoption", "feature", "engagement", "go-to-market"],
+      ai_integration_llm: ["ai", "ml", "llm", "genai", "model", "automat", "intelligen"],
       growth_monetization: ["growth", "experiment", "conversion", "monetiz", "funnel", "a/b"],
-      executive_storytelling: ["board", "influence", "advisory", "strategic", "decision", "c-suite"],
-      team_leadership_scale: ["team", "org", "hired", "scaled", "organizational", "talent"],
+      cross_functional_influence: ["board", "influence", "advisory", "strategic", "decision", "c-suite"],
+      team_scale_org_design: ["team", "org", "hired", "scaled", "organizational", "talent"],
     };
 
     const anchors = MANDATE_ANCHORS[mandate.primary_mandate] || [];

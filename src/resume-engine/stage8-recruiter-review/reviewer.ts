@@ -100,7 +100,7 @@ Every claim in the resume MUST trace to the Claims Ledger provided. You will rec
 17. **Section rhythm** — Most recent role should have 3-4 bullets, older roles 2-3. Single-bullet roles look thin.
 
 ## COVER LETTER CHECKS
-18. **Word count** — Must be 250-350 words. Outside this range is a defect.
+18. **Word count** — Must be 300-400 words. Outside this range is a defect.
 19. **Generic enthusiasm** — Phrases like "excited to apply", "passionate about", "I would be honored" are FAIL signals.
 20. **Resume contradiction** — Cover letter value claims must align with resume bullets, not introduce new achievements.
 

@@ -212,7 +212,7 @@ describe("E2E: Full Packet Pipeline", () => {
 
     it("cover letter system prompt includes word count rule", () => {
       const prompt = buildCoverLetterSystemPrompt();
-      expect(prompt).toContain("250-350");
+      expect(prompt).toContain("300-400");
       expect(prompt).toContain("EXACTLY 1-3 VALUE CLAIMS");
     });
   });

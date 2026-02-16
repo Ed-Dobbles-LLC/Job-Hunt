@@ -95,17 +95,17 @@ const MANDATE_STRATEGIC_DIMENSIONS: Record<string, {
     banned_openers: [/^(?:data|analytics)\s+(?:leader|executive)/i, /^(?:\$[\d,.]+[KMBTkmbt]?\s+)?revenue/i, /^built\s/i],
     anchor_template: "governance, compliance, or control-oriented framing",
   },
-  bi_platform_modernization: {
+  bi_modernization: {
     required_signals: ["platform", "architect", "moderniz", "migrat", "infrastructure", "replatform", "cloud", "warehouse", "pipeline", "scalab"],
     banned_openers: [/^governance/i, /^revenue/i],
     anchor_template: "platform architecture, modernization, or infrastructure framing",
   },
-  insight_delivery_automation: {
+  insight_delivery_modernization: {
     required_signals: ["insight", "self-service", "reporting", "dashboard", "stakeholder", "decision", "automat", "clarity", "democratiz"],
     banned_openers: [/^platform/i, /^revenue/i],
     anchor_template: "insight delivery, stakeholder enablement, or analytics clarity framing",
   },
-  founder_adjacent_builder: {
+  executive_okr_reporting: {
     required_signals: ["built from", "zero-to-one", "stood up", "founder", "startup", "first hire", "from scratch", "established", "incubat"],
     banned_openers: [/^enterprise/i, /^governance/i],
     anchor_template: "zero-to-one building or function creation framing",
@@ -120,7 +120,7 @@ const MANDATE_STRATEGIC_DIMENSIONS: Record<string, {
     banned_openers: [/^revenue\s+(?:growth|leader)/i],
     anchor_template: "operating model transformation or organizational redesign framing",
   },
-  product_gtm_analytics: {
+  ai_integration_llm: {
     required_signals: ["product", "go-to-market", "gtm", "feature", "adoption", "user journey", "engagement", "conversion"],
     banned_openers: [/^governance/i, /^infrastructure/i],
     anchor_template: "product analytics, GTM, or user engagement framing",
@@ -130,12 +130,12 @@ const MANDATE_STRATEGIC_DIMENSIONS: Record<string, {
     banned_openers: [/^governance/i, /^operating model/i],
     anchor_template: "growth experimentation or monetization framing",
   },
-  executive_storytelling: {
+  cross_functional_influence: {
     required_signals: ["board", "c-suite", "advisory", "storytelling", "strategic", "influence", "decision", "counsel"],
     banned_openers: [/^platform/i, /^revenue\s+growth/i],
     anchor_template: "executive advisory, board storytelling, or strategic influence framing",
   },
-  team_leadership_scale: {
+  team_scale_org_design: {
     required_signals: ["team", "hired", "scaled", "organizational design", "talent", "people", "culture", "recruiting", "coaching"],
     banned_openers: [/^platform/i, /^governance/i],
     anchor_template: "team building, organizational scaling, or talent leadership framing",
@@ -673,7 +673,7 @@ export function checkCoverLetterPositioning(
     }
   }
 
-  // Check word count (250-350 target)
+  // Check word count (300-400 target)
   const fullText = [
     coverLetter.salutation,
     coverLetter.opening_paragraph,
@@ -683,12 +683,12 @@ export function checkCoverLetterPositioning(
   ].join(" ");
   const wordCount = fullText.split(/\s+/).filter(w => w.length > 0).length;
 
-  if (wordCount < 250 || wordCount > 350) {
+  if (wordCount < 300 || wordCount > 400) {
     score -= 10;
     issues.push({
       dimension: "cover_letter",
       location: "word_count",
-      issue: `Word count ${wordCount} outside 250-350 range`,
+      issue: `Word count ${wordCount} outside 300-400 range`,
       severity: "warning",
       auto_fixed: false,
     });
@@ -741,15 +741,15 @@ function setOverlap(a: string[], b: string[]): number {
 /** Mandate keyword relevance for competency sorting. */
 const MANDATE_COMP_KEYWORDS: Record<string, string[]> = {
   governance_standardization: ["governance", "compliance", "audit", "control", "framework", "quality", "risk", "standard"],
-  bi_platform_modernization: ["platform", "cloud", "architecture", "pipeline", "infrastructure", "migration", "warehouse", "lake"],
-  insight_delivery_automation: ["reporting", "dashboard", "self-service", "analytics", "insight", "automation", "visualization"],
-  founder_adjacent_builder: ["startup", "zero-to-one", "product", "mvp", "agile", "lean", "build"],
+  bi_modernization: ["platform", "cloud", "architecture", "pipeline", "infrastructure", "migration", "warehouse", "lake"],
+  insight_delivery_modernization: ["reporting", "dashboard", "self-service", "analytics", "insight", "automation", "visualization"],
+  executive_okr_reporting: ["startup", "zero-to-one", "product", "mvp", "agile", "lean", "build"],
   revenue_ops_forecasting: ["revenue", "forecast", "pricing", "financial", "p&l", "margin", "demand"],
   operating_model_transformation: ["operating model", "transformation", "change management", "process", "optimization", "redesign"],
-  product_gtm_analytics: ["product", "go-to-market", "user", "adoption", "engagement", "feature", "journey"],
+  ai_integration_llm: ["product", "go-to-market", "user", "adoption", "engagement", "feature", "journey"],
   growth_monetization: ["growth", "experiment", "a/b", "conversion", "funnel", "monetization", "testing"],
-  executive_storytelling: ["storytelling", "board", "executive", "strategy", "advisory", "influence", "communication"],
-  team_leadership_scale: ["leadership", "team", "talent", "organizational", "hiring", "mentoring", "scaling"],
+  cross_functional_influence: ["storytelling", "board", "executive", "strategy", "advisory", "influence", "communication"],
+  team_scale_org_design: ["leadership", "team", "talent", "organizational", "hiring", "mentoring", "scaling"],
 };
 
 export function checkDifferentiation(

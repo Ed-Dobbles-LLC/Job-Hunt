@@ -83,12 +83,12 @@ function makeTestLedger(): ClaimsLedger {
 function makeTestMandate(): MandateProfile {
   return {
     dimensions: [],
-    primary_mandate: "bi_platform_modernization",
+    primary_mandate: "bi_modernization",
     secondary_mandates: ["governance_standardization"],
     top_3_archetypes: [
-      { id: "bi_platform_modernization", label: "BI Platform Modernization", score: 4.2 },
+      { id: "bi_modernization", label: "BI Platform Modernization", score: 4.2 },
       { id: "governance_standardization", label: "Governance Standardization", score: 3.1 },
-      { id: "team_leadership_scale", label: "Team Leadership & Scale", score: 2.8 },
+      { id: "team_scale_org_design", label: "Team Leadership & Scale", score: 2.8 },
     ],
     seniority_level: "VP",
     calibrated_headline: "VP, Data & Analytics",

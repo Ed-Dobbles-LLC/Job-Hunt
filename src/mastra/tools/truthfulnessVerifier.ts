@@ -594,14 +594,14 @@ export function verifyStyleRules(
 
   checksRun++;
   const wordCount = coverLetter.word_count;
-  if (wordCount < 250 || wordCount > 350) {
+  if (wordCount < 300 || wordCount > 400) {
     violations.push({
       type: "STYLE_RULE_BROKEN",
       severity: "warning",
       location: `cover_letter.word_count`,
       found_value: `${wordCount} words`,
-      expected: "250-350 words",
-      explanation: `Cover letter word count (${wordCount}) is outside the 250-350 word range.`,
+      expected: "300-400 words",
+      explanation: `Cover letter word count (${wordCount}) is outside the 300-400 word range.`,
     });
   }
 

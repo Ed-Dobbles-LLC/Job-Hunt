@@ -18,11 +18,11 @@ import type { TailoredCoverLetter } from "../src/mastra/tools/tailoredCoverLette
 function makeMandate(primary: string): MandateProfile {
   return {
     primary_mandate: primary,
-    secondary_mandates: ["team_leadership_scale"],
+    secondary_mandates: ["team_scale_org_design"],
     top_3_archetypes: [
       { id: primary, label: primary.replace(/_/g, " "), score: 4.5 },
-      { id: "team_leadership_scale", label: "Team Leadership & Scale", score: 3.0 },
-      { id: "executive_storytelling", label: "Executive Storytelling", score: 2.0 },
+      { id: "team_scale_org_design", label: "Team Leadership & Scale", score: 3.0 },
+      { id: "cross_functional_influence", label: "Executive Storytelling", score: 2.0 },
     ],
     seniority_level: "VP",
     calibrated_headline: "VP, Data & Analytics",
@@ -244,7 +244,7 @@ describe("Summary Mandate Anchoring", () => {
   });
 
   it("should detect known-for opener", () => {
-    const mandate = makeMandate("bi_platform_modernization");
+    const mandate = makeMandate("bi_modernization");
     const result = checkSummaryMandateAnchoring(
       "Known for building modern analytics platforms and cloud migrations.",
       mandate,
@@ -253,7 +253,7 @@ describe("Summary Mandate Anchoring", () => {
   });
 
   it("should accept platform mandate signals", () => {
-    const mandate = makeMandate("bi_platform_modernization");
+    const mandate = makeMandate("bi_modernization");
     const result = checkSummaryMandateAnchoring(
       "Platform architect who modernized enterprise data infrastructure across 3 cloud environments.",
       mandate,
@@ -458,7 +458,7 @@ describe("Differentiation Maintenance", () => {
   });
 
   it("should reorder competencies by mandate alignment", () => {
-    const mandate = makeMandate("bi_platform_modernization");
+    const mandate = makeMandate("bi_modernization");
     const resume = makeResume({
       core_competencies: [
         "Team Leadership",

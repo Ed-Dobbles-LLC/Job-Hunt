@@ -333,7 +333,7 @@ type MandateArchetype =
   | "governance_compliance_controls"
   | "reporting_rigor_okrs_cadence"
   | "operating_model_transformation"
-  | "insight_delivery_automation"
+  | "insight_delivery_modernization"
   | "revenue_ops_pipeline_forecasting"
   | "product_analytics_experimentation"
   | "platform_modernization_data_mgmt"
@@ -699,7 +699,7 @@ FUNCTION extractClaimsLedger(baseline_text) → ClaimsLedger:
 | `governance_compliance_controls` | Establishing/enforcing data governance, SOX, audit, data quality frameworks | governance, compliance, regulatory, SOX, audit, controls, data quality, lineage, catalog |
 | `reporting_rigor_okrs_cadence` | Standardizing exec reporting, OKR tracking, metric discipline | reporting cadence, OKR, KPI, executive dashboards, metric standardization, scorecards |
 | `operating_model_transformation` | Changing how the org uses data — embed analytics, democratize, restructure | operating model, transform, embed, democratize, COE, center of excellence, org design |
-| `insight_delivery_automation` | Automating insight delivery — alerts, narratives, self-service | self-service, automated reporting, alerting, narrative generation, data products |
+| `insight_delivery_modernization` | Automating insight delivery — alerts, narratives, self-service | self-service, automated reporting, alerting, narrative generation, data products |
 | `revenue_ops_pipeline_forecasting` | Revenue analytics, pipeline, pricing, demand planning, P&L | revenue, pipeline, pricing, demand planning, forecast, P&L, ARR, LTV, commercial |
 | `product_analytics_experimentation` | Product metrics, feature adoption, A/B testing, user journeys | product analytics, experimentation, A/B test, feature adoption, user journey, funnel |
 | `platform_modernization_data_mgmt` | Data platform builds, cloud migration, lakehouse, MDM | platform, architecture, migration, cloud, lakehouse, warehouse, MDM, data management |
@@ -1791,7 +1791,7 @@ const MANDATE_KEYWORDS: Record<MandateArchetype, string[]> = {
     "center of excellence", "org design", "reorganiz", "change management",
     "federated", "centralized"
   ],
-  insight_delivery_automation: [
+  insight_delivery_modernization: [
     "self-service", "automated reporting", "alerting", "insight",
     "narrative", "data product", "decision support", "real-time",
     "notification", "proactive"

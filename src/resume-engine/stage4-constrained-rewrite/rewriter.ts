@@ -587,13 +587,13 @@ Anchor the opener to THIS job's specific mandate: ${input.mandate.primary_mandat
     const actualWordCount = countCoverLetterWords(coverLetter);
     coverLetter.word_count = actualWordCount; // Correct LLM's self-reported count
 
-    if (actualWordCount < 250 || actualWordCount > 350) {
-      const wcDirection = actualWordCount < 250 ? "TOO SHORT" : "TOO LONG";
-      const wcTarget = actualWordCount < 250 ? "expand to 280-300 words" : "compress to 280-300 words";
+    if (actualWordCount < 300 || actualWordCount > 400) {
+      const wcDirection = actualWordCount < 300 ? "TOO SHORT" : "TOO LONG";
+      const wcTarget = actualWordCount < 300 ? "expand to 320-350 words" : "compress to 320-350 words";
       const wcCorrectionPrompt = `${clUserPrompt}\n\n## WORD COUNT CORRECTION
-The cover letter is ${wcDirection} at ${actualWordCount} words. MUST be 250-350 words.
-${wcTarget}. Aim for ~300 words. Keep all value claims and evidence pointers.
-${actualWordCount < 250 ? "Add more specific detail to body paragraphs — connect achievements to company needs." : "Remove redundant phrases and tighten language. Cut filler, not substance."}`;
+The cover letter is ${wcDirection} at ${actualWordCount} words. MUST be 300-400 words.
+${wcTarget}. Aim for ~350 words. Keep all value claims and evidence pointers.
+${actualWordCount < 300 ? "Add more specific detail to body paragraphs — connect achievements to company needs." : "Remove redundant phrases and tighten language. Cut filler, not substance."}`;
 
       coverLetter = (await resilientGenerateObject({
         schema: TailoredCoverLetterSchema,

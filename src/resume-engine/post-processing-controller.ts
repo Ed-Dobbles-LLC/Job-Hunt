@@ -365,15 +365,15 @@ function detectMandateAlignment(
   // First 2 bullets per role aligned (40%)
   const MANDATE_KEYWORDS: Record<string, string[]> = {
     governance_standardization: ["governance", "compliance", "standardiz", "audit", "control"],
-    bi_platform_modernization: ["platform", "architect", "moderniz", "migrat", "cloud"],
-    insight_delivery_automation: ["insight", "self-service", "reporting", "dashboard"],
-    founder_adjacent_builder: ["built from", "zero-to-one", "stood up", "founder"],
+    bi_modernization: ["platform", "architect", "moderniz", "migrat", "cloud"],
+    insight_delivery_modernization: ["insight", "self-service", "reporting", "dashboard"],
+    executive_okr_reporting: ["okr", "kpi", "scorecard", "executive reporting"],
     revenue_ops_forecasting: ["revenue", "forecast", "pricing", "demand"],
     operating_model_transformation: ["operating model", "transform", "embed", "democratiz"],
-    product_gtm_analytics: ["product", "go-to-market", "gtm", "feature"],
+    ai_integration_llm: ["ai", "ml", "llm", "genai"],
     growth_monetization: ["growth", "experiment", "a/b test", "conversion"],
-    executive_storytelling: ["board", "c-suite", "advisory", "storytelling"],
-    team_leadership_scale: ["team", "hired", "scaled", "organizational design"],
+    cross_functional_influence: ["board", "c-suite", "advisory", "storytelling"],
+    team_scale_org_design: ["team", "hired", "scaled", "organizational design"],
   };
   const mandateKeywords = MANDATE_KEYWORDS[mandate.primary_mandate] || [];
   const firstTwoBullets = resume.experience.flatMap(e => e.bullets.slice(0, 2));

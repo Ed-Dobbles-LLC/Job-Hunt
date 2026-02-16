@@ -109,12 +109,12 @@ describe("Mandate Classifier", () => {
     expect(topDimensions.length).toBeGreaterThanOrEqual(2);
 
     // Team leadership should be prominent (25+ people, pods, scale)
-    const teamDim = mandate.dimensions.find((d) => d.id === "team_leadership_scale");
+    const teamDim = mandate.dimensions.find((d) => d.id === "team_scale_org_design");
     expect(teamDim).toBeTruthy();
     expect(teamDim!.weight).toBeGreaterThan(0);
 
     // Executive storytelling should be present (Board, C-suite, present)
-    const execDim = mandate.dimensions.find((d) => d.id === "executive_storytelling");
+    const execDim = mandate.dimensions.find((d) => d.id === "cross_functional_influence");
     expect(execDim).toBeTruthy();
     expect(execDim!.weight).toBeGreaterThan(0);
   });
@@ -149,7 +149,7 @@ describe("Bullet Scoring Against Mandate", () => {
     // The board presentation bullet (exp-001-b4) should score well for exec storytelling
     const boardBullet = scored.find((b) => b.bullet_id === "exp-001-b4");
     expect(boardBullet).toBeTruthy();
-    expect(boardBullet!.mandate_scores.executive_storytelling).toBeGreaterThan(0);
+    expect(boardBullet!.mandate_scores.cross_functional_influence).toBeGreaterThan(0);
   });
 
   // ── INTEGRATION TEST 2: Mandate gaps identify missing capabilities ──
@@ -157,7 +157,7 @@ describe("Bullet Scoring Against Mandate", () => {
     const gaps = identifyMandateGaps(mandate, scored);
 
     // The PayPal JD mentions Looker, GCP, Slack integrations — if our inventory doesn't cover
-    // insight_delivery_automation well, it should appear as a gap
+    // insight_delivery_modernization well, it should appear as a gap
     // (our test inventory has no Slack/automation bullets)
 
     // At minimum, gaps should not include dimensions with good inventory coverage
@@ -212,13 +212,13 @@ describe("MandateDimension Interface — 0-5 Scoring", () => {
     expect(ids).toContain("operating_model_transformation");
     expect(ids).toContain("governance_standardization");
     expect(ids).toContain("revenue_ops_forecasting");
-    expect(ids).toContain("insight_delivery_automation");
-    expect(ids).toContain("product_gtm_analytics");
+    expect(ids).toContain("insight_delivery_modernization");
+    expect(ids).toContain("ai_integration_llm");
     expect(ids).toContain("growth_monetization");
-    expect(ids).toContain("founder_adjacent_builder");
-    expect(ids).toContain("bi_platform_modernization");
-    expect(ids).toContain("executive_storytelling");
-    expect(ids).toContain("team_leadership_scale");
+    expect(ids).toContain("executive_okr_reporting");
+    expect(ids).toContain("bi_modernization");
+    expect(ids).toContain("cross_functional_influence");
+    expect(ids).toContain("team_scale_org_design");
   });
 });
 

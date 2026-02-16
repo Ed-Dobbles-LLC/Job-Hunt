@@ -351,6 +351,7 @@ describe("TailoredCoverLetter Schema", () => {
         opening_paragraph: "I am writing to express my interest in the VP of Data position at TechCorp. My background in leading enterprise data transformations aligns closely with your requirements.",
         body_paragraphs: [
           "In my current role at Acme Financial Group, I drove $12M in annual cost savings by architecting a unified data platform on Snowflake. This experience directly applies to your need for data infrastructure leadership.",
+          "Leading a 45-person analytics organization across 6 business units, I established the operating model that connected data capabilities to P&L outcomes, demonstrating the cross-functional leadership this role requires.",
         ],
         closing_paragraph: "I welcome the opportunity to discuss how my experience can contribute to TechCorp's data strategy. Thank you for your consideration.",
         sign_off: "Sincerely,\nEd Martinez",
@@ -536,7 +537,7 @@ describe("Cover Letter Prompt Builders", () => {
       expect(prompt).toContain("NEVER INVENT METRICS");
       expect(prompt).toContain("REJECT, DON'T FABRICATE");
       expect(prompt).toContain("COMPANY RESEARCH TODO");
-      expect(prompt).toContain("250-350");
+      expect(prompt).toContain("300-400");
       expect(prompt).toContain("EXECUTIVE TONE");
       expect(prompt).toContain("source_hash");
       expect(prompt).toContain("evidence_quote");
@@ -544,7 +545,7 @@ describe("Cover Letter Prompt Builders", () => {
 
     it("specifies word count constraint", () => {
       const prompt = buildCoverLetterSystemPrompt();
-      expect(prompt).toContain("WORD COUNT: 250-350");
+      expect(prompt).toContain("WORD COUNT: 300-400");
       expect(prompt).toContain("word_count");
     });
 
@@ -642,7 +643,7 @@ describe("Schema constraint enforcement", () => {
     expect(result.success).toBe(false);
   });
 
-  it("TailoredCoverLetter requires at least 1 body paragraph", () => {
+  it("TailoredCoverLetter requires at least 2 body paragraphs", () => {
     const letter = {
       target_role: "VP",
       target_company: "Corp",

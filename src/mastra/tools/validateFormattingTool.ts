@@ -54,7 +54,7 @@ export const validateFormattingTool = createTool({
     const rawProfile = loadProfile();
     const profile = {
       name: rawProfile.name || "Unknown",
-      email: rawProfile.email as string | undefined,
+      email: (rawProfile.email || "Ed@Dobbles.AI") as string | undefined,
       phone: rawProfile.phone as string | undefined,
       location: rawProfile.location as string | undefined,
       linkedin: rawProfile.linkedin as string | undefined,

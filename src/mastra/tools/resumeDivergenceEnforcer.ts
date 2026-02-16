@@ -140,7 +140,7 @@ const ARCHETYPE_SUMMARY_FRAMING: Record<string, {
     avoid: ["platform modernization", "dashboard design", "founder alignment", "architecture"],
     banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
-  bi_platform_modernization: {
+  bi_modernization: {
     lead_with: "architecture, data platform modernization, cloud migration, infrastructure design",
     tone: "Architecture-first: emphasize platform decisions, migration outcomes, and technical leadership at scale",
     opening_pattern: "Anchor the first sentence on ARCHITECTURE and SCALABILITY — what was designed and why it had to change.",
@@ -152,7 +152,7 @@ const ARCHETYPE_SUMMARY_FRAMING: Record<string, {
     avoid: ["governance frameworks", "reporting cadence", "founder alignment", "KPI clarity"],
     banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
-  insight_delivery_automation: {
+  insight_delivery_modernization: {
     lead_with: "insight delivery, stakeholder clarity, reporting cadence, self-service analytics",
     tone: "Delivery-first: emphasize how insights reach decision-makers, reporting automation, and stakeholder satisfaction",
     opening_pattern: "Anchor the first sentence on CLARITY and STAKEHOLDER ENABLEMENT — how decisions get made faster because of this person.",
@@ -164,16 +164,16 @@ const ARCHETYPE_SUMMARY_FRAMING: Record<string, {
     avoid: ["platform architecture", "governance frameworks", "founder alignment", "pricing optimization"],
     banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
-  founder_adjacent_builder: {
-    lead_with: "dashboard design, KPI clarity, founder alignment, zero-to-one analytics",
-    tone: "Builder-first: emphasize what was created from scratch, speed of execution, and direct founder/CEO partnership",
-    opening_pattern: "Anchor the first sentence on CREATION FROM ZERO — what didn't exist before this person showed up.",
+  executive_okr_reporting: {
+    lead_with: "OKR frameworks, executive reporting, board-ready scorecards, strategic KPI tracking",
+    tone: "Reporting-first: emphasize measurement discipline, performance management, and executive visibility into business health",
+    opening_pattern: "Anchor the first sentence on MEASUREMENT DISCIPLINE — what became visible, trackable, or accountable because of this person.",
     opening_examples: [
-      "There was no analytics function, no data warehouse, and no reporting cadence — [candidate] built all three in 6 months.",
-      "First data hire in a Series B startup. Stood up the entire analytics stack, hired the team, and delivered the KPIs the board needed to greenlight Series C.",
+      "The board saw quarterly performance data for the first time because [candidate] designed the scorecard framework that made it possible.",
+      "OKRs existed on paper but drove nothing — [candidate] rebuilt the cascade, tied every metric to an owner, and turned QBRs into decision meetings.",
     ],
-    first_sentence_anchor: "The first sentence must reflect zero-to-one building, speed, or founder-level partnership — the dominant mandate of this role.",
-    avoid: ["enterprise governance", "platform migration", "reporting cadence", "board advisory"],
+    first_sentence_anchor: "The first sentence must reflect OKR frameworks, executive reporting, or performance management — the dominant mandate of this role.",
+    avoid: ["platform architecture", "AI strategy", "experimentation velocity", "data democratization"],
     banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   revenue_ops_forecasting: {
@@ -200,16 +200,16 @@ const ARCHETYPE_SUMMARY_FRAMING: Record<string, {
     avoid: ["governance compliance", "platform migration", "founder alignment", "reporting cadence"],
     banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
-  product_gtm_analytics: {
-    lead_with: "product analytics, go-to-market measurement, user journey optimization",
-    tone: "Product-first: emphasize product metrics, feature adoption, and GTM analytics",
-    opening_pattern: "Anchor the first sentence on PRODUCT SIGNAL — what user behavior revealed and how it changed the product.",
+  ai_integration_llm: {
+    lead_with: "AI/ML integration, LLM deployment, GenAI enablement, responsible AI strategy",
+    tone: "AI-first: emphasize model deployment, AI-powered automation, and enterprise AI adoption",
+    opening_pattern: "Anchor the first sentence on AI IMPACT — what became possible, automated, or intelligent because of this person's AI work.",
     opening_examples: [
-      "The feature adoption spike that justified a $20M product investment started with the instrumentation framework [candidate] built.",
-      "Identified the onboarding drop-off that was costing 15% of new users per month — redesigned the measurement system and closed the gap.",
+      "The LLM-powered workflow that cut manual review time by 70% was designed, deployed, and governed by [candidate].",
+      "Took GenAI from a proof-of-concept to a production system serving 5,000 users — with guardrails, monitoring, and a responsible AI framework.",
     ],
-    first_sentence_anchor: "The first sentence must reflect product analytics, user journey optimization, or GTM measurement — the dominant mandate of this role.",
-    avoid: ["enterprise governance", "platform migration", "reporting cadence", "founder alignment"],
+    first_sentence_anchor: "The first sentence must reflect AI/ML integration, LLM deployment, or GenAI enablement — the dominant mandate of this role.",
+    avoid: ["enterprise governance", "platform migration", "reporting cadence", "OKR frameworks"],
     banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
   growth_monetization: {
@@ -224,7 +224,7 @@ const ARCHETYPE_SUMMARY_FRAMING: Record<string, {
     avoid: ["enterprise governance", "platform architecture", "reporting cadence", "board advisory"],
     banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
-  executive_storytelling: {
+  cross_functional_influence: {
     lead_with: "board advisory, executive influence, data-driven storytelling, strategic alignment",
     tone: "Advisory-first: emphasize board-level presentations, C-suite partnership, and strategic influence",
     opening_pattern: "Anchor the first sentence on INFLUENCE and DECISION QUALITY — what decisions were made differently because of this person.",
@@ -236,7 +236,7 @@ const ARCHETYPE_SUMMARY_FRAMING: Record<string, {
     avoid: ["platform architecture", "dashboard design", "founder alignment", "experimentation"],
     banned_openers: ["Data and analytics leader who", "Executive with a track record of", "Analytics executive transforming", "Seasoned leader with"],
   },
-  team_leadership_scale: {
+  team_scale_org_design: {
     lead_with: "team building, organizational design, talent strategy, scaling analytics functions",
     tone: "Leadership-first: emphasize team growth, org design, and talent development at scale",
     opening_pattern: "Anchor the first sentence on ORGANIZATIONAL DESIGN — what the org looked like before and after this person built it.",

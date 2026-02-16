@@ -6,12 +6,12 @@
  * 1. Enterprise Operating Model Transformation
  * 2. Governance & Metric Standardization
  * 3. Revenue Operations / Pipeline Analytics
- * 4. Insight Delivery & BI Modernization
- * 5. Product / GTM Analytics
- * 6. Growth & Monetization
- * 7. Founder-Adjacent Builder / DTC Operator
- * 8. Infrastructure & Data Architecture
- * 9. Executive Strategy & Board Advisory
+ * 4. Insight Delivery Modernization
+ * 5. AI Integration / LLM Enablement
+ * 6. BI Modernization
+ * 7. Executive OKR Reporting
+ * 8. Cross-Functional Executive Influence
+ * 9. Growth & Monetization
  * 10. Team Scale & Org Design
  *
  * These weights drive:
@@ -96,7 +96,7 @@ const MANDATE_SIGNALS: Record<string, { keywords: string[]; phrases: RegExp[] }>
       /(?:P&L|profit.loss|margin)\s+(?:ownership|influence|responsibility)/gi,
     ],
   },
-  insight_delivery_automation: {
+  insight_delivery_modernization: {
     keywords: [
       "Looker", "Tableau", "Power BI", "Sigma", "ThoughtSpot", "Qlik",
       "dashboard", "visualization", "reporting", "self-service analytics",
@@ -111,18 +111,21 @@ const MANDATE_SIGNALS: Record<string, { keywords: string[]; phrases: RegExp[] }>
       /real.time\s+(?:analytics|insights|monitoring|alerts)/gi,
     ],
   },
-  product_gtm_analytics: {
+  ai_integration_llm: {
     keywords: [
-      "product analytics", "GTM", "go-to-market", "product-led",
-      "user journey", "feature adoption", "engagement", "activation",
-      "onboarding", "Amplitude", "Mixpanel", "product metrics",
-      "north star metric", "DAU", "MAU", "stickiness", "retention curve",
+      "LLM", "GenAI", "generative AI", "AI integration", "machine learning",
+      "NLP", "natural language", "AI-powered", "copilot", "AI agent",
+      "prompt engineering", "RAG", "retrieval augmented", "fine-tuning",
+      "model deployment", "AI strategy", "AI governance", "responsible AI",
+      "AI/ML", "deep learning", "MLOps", "model training", "inference",
+      "embeddings", "vector", "AI enablement", "AI transformation",
     ],
     phrases: [
-      /product\s+(?:analytics|insights|metrics|data)/gi,
-      /go.to.market\s+(?:analytics|strategy|data)/gi,
-      /(?:user|customer)\s+(?:journey|funnel|lifecycle)\s+(?:analytics|data)/gi,
-      /(?:feature|product)\s+(?:adoption|engagement|activation)\s+(?:analytics|metrics)/gi,
+      /(?:AI|LLM|GenAI)\s+(?:integration|enablement|strategy|deployment|adoption)/gi,
+      /(?:deploy|implement|build|integrate)\s+(?:AI|ML|LLM|GenAI)\s+(?:solution|model|platform|capability)/gi,
+      /(?:machine\s+learning|deep\s+learning)\s+(?:platform|infrastructure|pipeline|ops)/gi,
+      /(?:responsible|ethical)\s+AI/gi,
+      /(?:AI|ML).(?:powered|driven|enabled)\s+(?:analytics|insight|decision|product)/gi,
     ],
   },
   growth_monetization: {
@@ -139,21 +142,24 @@ const MANDATE_SIGNALS: Record<string, { keywords: string[]; phrases: RegExp[] }>
       /(?:subscription|recurring)\s+(?:revenue|model|analytics)/gi,
     ],
   },
-  founder_adjacent_builder: {
+  executive_okr_reporting: {
     keywords: [
-      "DTC", "direct-to-consumer", "startup", "founder", "zero-to-one",
-      "build from scratch", "first hire", "wearing many hats", "MVP",
-      "lean", "scrappy", "end-to-end", "hands-on", "player-coach",
-      "greenfield", "stand up", "early-stage", "series A", "series B",
+      "OKR", "executive reporting", "board reporting", "quarterly business review",
+      "QBR", "scorecard", "executive dashboard", "performance reporting",
+      "strategic reporting", "CEO reporting", "CFO reporting", "board deck",
+      "board presentation", "monthly business review", "MBR", "annual operating plan",
+      "AOP", "executive alignment", "strategic KPI", "goal framework",
+      "leadership reporting", "management reporting", "performance management",
     ],
     phrases: [
-      /build\s+(?:the\s+)?(?:analytics|data)\s+(?:function|team|org)\s+from\s+(?:scratch|zero|the\s+ground)/gi,
-      /(?:first|founding)\s+(?:analytics|data)\s+(?:hire|leader|head)/gi,
-      /(?:end.to.end|full.stack)\s+(?:ownership|responsibility)/gi,
-      /(?:hands.on|player.coach|roll.up.sleeves)/gi,
+      /(?:executive|board|C.suite|leadership)\s+(?:reporting|dashboard|scorecard|review)/gi,
+      /(?:OKR|KPI)\s+(?:framework|alignment|reporting|tracking|cascade)/gi,
+      /(?:quarterly|monthly|annual)\s+(?:business\s+)?review/gi,
+      /(?:strategic|executive)\s+(?:planning|alignment|goal)/gi,
+      /(?:performance|management)\s+(?:reporting|dashboard|framework)/gi,
     ],
   },
-  bi_platform_modernization: {
+  bi_modernization: {
     keywords: [
       "Snowflake", "Databricks", "BigQuery", "Redshift", "dbt",
       "data warehouse", "lakehouse", "data lake", "ETL", "ELT",
@@ -168,7 +174,7 @@ const MANDATE_SIGNALS: Record<string, { keywords: string[]; phrases: RegExp[] }>
       /cloud\s+(?:migration|transformation|adoption)/gi,
     ],
   },
-  executive_storytelling: {
+  cross_functional_influence: {
     keywords: [
       "stakeholder", "executive", "board", "C-suite", "influence",
       "storytelling", "narrative", "presentation", "alignment",
@@ -182,7 +188,7 @@ const MANDATE_SIGNALS: Record<string, { keywords: string[]; phrases: RegExp[] }>
       /(?:strategic\s+)?(?:business\s+)?partner\w*\s+(?:to|with|across)/gi,
     ],
   },
-  team_leadership_scale: {
+  team_scale_org_design: {
     keywords: [
       "team", "hire", "recruit", "scale", "grow", "build",
       "manage", "lead", "org", "organization", "pod", "distributed",
@@ -203,13 +209,13 @@ const ARCHETYPE_LABELS: Record<string, string> = {
   operating_model_transformation: "Enterprise Operating Model Transformation",
   governance_standardization: "Governance & Metric Standardization",
   revenue_ops_forecasting: "Revenue Operations / Pipeline Analytics",
-  insight_delivery_automation: "Insight Delivery & BI Modernization",
-  product_gtm_analytics: "Product / GTM Analytics",
+  insight_delivery_modernization: "Insight Delivery Modernization",
+  ai_integration_llm: "AI Integration / LLM Enablement",
+  bi_modernization: "BI Modernization",
+  executive_okr_reporting: "Executive OKR Reporting",
+  cross_functional_influence: "Cross-Functional Executive Influence",
   growth_monetization: "Growth & Monetization",
-  founder_adjacent_builder: "Founder-Adjacent Builder / DTC Operator",
-  bi_platform_modernization: "Infrastructure & Data Architecture",
-  executive_storytelling: "Executive Strategy & Board Advisory",
-  team_leadership_scale: "Team Scale & Org Design",
+  team_scale_org_design: "Team Scale & Org Design",
 };
 
 // ── Seniority Detection ─────────────────────────────────────────
@@ -265,9 +271,6 @@ function calibrateHeadline(
 
 // ── Tone Calibration ────────────────────────────────────────────
 function getToneGuidance(seniority: MandateProfile["seniority_level"], title: string): ToneGuidance {
-  const titleLower = title.toLowerCase();
-  const isDTC = titleLower.includes("dtc") || titleLower.includes("direct-to-consumer");
-
   if (seniority === "C-Suite") {
     return {
       seniority: "C-Suite",
@@ -305,17 +308,6 @@ function getToneGuidance(seniority: MandateProfile["seniority_level"], title: st
       bullet_framing: "Frame as a strategic operator: what was designed, what was delivered, what impact was measured. Show both leadership and hands-on credibility.",
       competency_emphasis: "Analytics Strategy, Team Building, Data Governance, BI Modernization, Stakeholder Management, Cross-Functional Leadership.",
       headline_tone: "Sr Director or 'Head of' framing. Do NOT use VP, SVP, or C-suite titles.",
-    };
-  }
-
-  // Founder-adjacent / DTC — only for non-Sr Director roles (Sr Director at large companies is NOT founder-adjacent)
-  if (isDTC || titleLower.includes("founder") || (titleLower.includes("head of data") && seniority !== "Director")) {
-    return {
-      seniority: "Founder-Adjacent",
-      summary_posture: "Builder-operator who owns the full stack. Emphasize zero-to-one accomplishments, end-to-end ownership, and scrappy execution with enterprise-quality output.",
-      bullet_framing: "Lead with what was BUILT (not inherited). Show end-to-end ownership: hired team, selected stack, shipped product. Emphasize velocity and pragmatism.",
-      competency_emphasis: "Zero-to-One Analytics, Full-Stack Data Leadership, Platform Selection & Build, Rapid Team Scaling, End-to-End Data Operations.",
-      headline_tone: "Use the exact JD title or 'Head of Data' framing. Avoid corporate-sounding titles.",
     };
   }
 
@@ -399,7 +391,7 @@ export function classifyMandate(
   // Sort by weight descending
   dimensions.sort((a, b) => b.weight - a.weight);
 
-  const primary = dimensions[0]?.id || "team_leadership_scale";
+  const primary = dimensions[0]?.id || "team_scale_org_design";
   const secondary = dimensions
     .slice(1)
     .filter((d) => d.weight >= 0.2)
@@ -434,13 +426,13 @@ function getDescription(dimId: string): string {
     operating_model_transformation: "Redesigning how analytics/data operates — from centralized dashboards to embedded, self-service, or product-oriented models",
     governance_standardization: "Establishing data governance, metric definitions, quality frameworks, and compliance programs",
     revenue_ops_forecasting: "Revenue analytics, demand forecasting, pricing optimization, and commercial analytics",
-    insight_delivery_automation: "BI modernization, dashboard delivery, automated insight distribution, and self-service analytics",
-    product_gtm_analytics: "Product analytics, go-to-market measurement, feature adoption, user journey analytics",
+    insight_delivery_modernization: "Modernizing insight delivery — self-service analytics, automated reporting, stakeholder enablement",
+    ai_integration_llm: "AI/ML integration, LLM enablement, GenAI strategy, responsible AI governance, MLOps",
+    bi_modernization: "BI platform modernization, data warehouse migration, cloud infrastructure, data architecture",
+    executive_okr_reporting: "Executive OKR/KPI reporting frameworks, board-level dashboards, strategic performance management",
+    cross_functional_influence: "Cross-functional executive influence, C-suite advisory, strategic storytelling, change management",
     growth_monetization: "Growth analytics, experimentation/A/B testing, conversion optimization, and monetization strategy",
-    founder_adjacent_builder: "Building analytics from zero, DTC/startup data leadership, end-to-end ownership, player-coach roles",
-    bi_platform_modernization: "Data platform architecture, warehouse modernization, cloud migration, infrastructure design",
-    executive_storytelling: "Board-level presentations, C-suite advisory, strategic storytelling, executive influence",
-    team_leadership_scale: "Building, scaling, and managing analytics teams — hiring, mentoring, org design",
+    team_scale_org_design: "Building, scaling, and managing analytics teams — hiring, mentoring, org design",
   };
   return desc[dimId] || "";
 }

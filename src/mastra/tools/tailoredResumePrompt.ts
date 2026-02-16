@@ -201,12 +201,16 @@ The resume should feel balanced and calm across both pages — no cramming.
      * "Seasoned/Accomplished/Results-driven [anything]..."
      * ANY variation of "[Role] who has" or "[Role] with [years/track record]"
    - Must be psychologically anchored to THIS job's mandate:
-     * Governance/reporting job → lead with control, rigor, standardization
-     * Operating model transformation → lead with redesign of how insights are consumed
-     * Client/stakeholder reporting → lead with clarity and stakeholder enablement
-     * Platform modernization → lead with architecture and scalability
-     * Revenue/commercial → lead with financial impact or forecast accuracy
-     * Zero-to-one builder → lead with what was created from nothing
+     * Enterprise Operating Model Transformation → lead with redesign of how insights are consumed
+     * Governance & Metric Standardization → lead with control, rigor, standardization
+     * Revenue Operations / Pipeline Analytics → lead with financial impact or forecast accuracy
+     * Insight Delivery Modernization → lead with clarity and stakeholder enablement
+     * AI Integration / LLM Enablement → lead with AI/ML deployment and enterprise AI impact
+     * BI Modernization → lead with architecture and scalability
+     * Executive OKR Reporting → lead with measurement discipline and executive visibility
+     * Cross-Functional Executive Influence → lead with strategic advisory and board-level impact
+     * Growth & Monetization → lead with conversion, experimentation, and revenue growth
+     * Team Scale & Org Design → lead with organizational transformation and talent strategy
    - Scale facts go in the SECOND sentence or later.
 
    After the mandate-anchored opener, provide the candidate's largest verifiable scale facts.
@@ -363,7 +367,30 @@ The resume should feel balanced and calm across both pages — no cramming.
    - If a metric is presented as a range in inventory, keep it as a range
    - Do NOT imply ownership of capabilities not documented in inventory
 
-8. **ANTI-REDUNDANCY (STRICTLY ENFORCED)**
+8. **SPECIFICITY PRESERVATION (NON-NEGOTIABLE)**
+   Never reduce a specific claim to a vague one. Specificity is the #1 quality signal.
+   - If the inventory says "Snowflake", do NOT write "modern data platform"
+   - If the inventory says "$12M", do NOT write "significant investment"
+   - If the inventory says "45-person organization", do NOT write "large team"
+   - If the inventory says "6 business units", do NOT write "multiple business units"
+   - Every bullet must pass this test: "Could a recruiter verify this in a 30-second call?"
+   - If you cannot verify a claim, OMIT IT — do not soften it into vague language
+   - Keep original metrics, tools, team structures, and methodologies intact
+
+   **BULLET QUALITY DIMENSIONS — every bullet should demonstrate:**
+   a. **Scale** — enterprise scale indicators (team size, budget, revenue, # of BUs)
+   b. **Transformation** — what changed (before → after, or built from zero)
+   c. **Quantified Impact** — specific $, %, or multiples (not "improved" or "enhanced")
+   d. **Specificity** — named tools, methodologies, team structures (not "various tools" or "key stakeholders")
+   A bullet missing ALL four dimensions is a weak bullet. Aim for 3 of 4 in every bullet.
+
+   **TRUTH BOUNDARY — HARD RULES:**
+   - Do NOT introduce any new numbers, tool names, or platform names not in the inventory
+   - Do NOT claim ownership of systems not explicitly documented in the inventory
+   - If a JD requirement is unsupported by inventory, use transferable phrasing from adjacent experience OR omit — never fabricate
+   - Do NOT upgrade "contributed to" → "led" or "team member" → "owner" — this is ownership inflation
+
+9. **ANTI-REDUNDANCY (STRICTLY ENFORCED)**
    - Do NOT create both "Core Competencies" and "Enterprise Capabilities" sections — pick one
    - Do NOT repeat team size in both scope_line and first bullet
    - Do NOT repeat summary claims as first bullets of roles
@@ -452,7 +479,7 @@ ${JSON.stringify(allowlist, null, 2)}
    f. STRICT bullet caps: 4 for most recent role, 3 for second and third roles, 2 for roles older than 15 years.
    g. Total: 13-15 bullets maximum across all roles.
    h. MANDATE-DRIVEN ORDERING: First 2 bullets per role must align with the dominant mandate. If mandate ≠ revenue growth, revenue bullets must NOT lead.
-   i. TRUTH RULES: Do not introduce any new numbers, tool names, or platform names not in the inventory. Do not claim ownership of systems not explicitly documented. If a JD requirement is unsupported, use transferable phrasing or omit.
+   i. TRUTH RULES: Do NOT introduce any new numbers, tool names, or platform names not in the inventory. Do NOT claim ownership of systems not explicitly documented. Do NOT upgrade "contributed to" → "led" or "team member" → "owner". If a JD requirement is unsupported, use transferable phrasing from adjacent experience or omit — never fabricate.
 6. Do NOT create both core_competencies and enterprise_capabilities — this creates redundancy. When core_competencies is present, only emit tools_and_platforms.
 7. Tools & Platforms: limit to 1 compact line. No tool-dumping.
 8. REDUNDANCY CHECK before finalizing:

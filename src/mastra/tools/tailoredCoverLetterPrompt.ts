@@ -35,19 +35,19 @@ export const TailoredCoverLetterSchema = z.object({
   opening_paragraph: z
     .string()
     .describe(
-      "1-2 sentences: state the role, express genuine interest, and hint at your strongest alignment",
+      "P1 — Mandate Understanding: 2-3 sentences. Open with understanding of the role's mandate, then immediately demonstrate alignment with your strongest proof point. Do NOT open with generic interest.",
     ),
   body_paragraphs: z
     .array(z.string())
-    .min(1)
+    .min(2)
     .max(3)
     .describe(
-      "1-3 body paragraphs containing value claims. Total letter must be 250-350 words.",
+      "P2-P3 (or P2-P4): 2-3 body paragraphs. P2 = relevant transformation example with metric. P3 = enterprise scale and cross-functional leadership. Optional P4 = additional differentiation. Total letter must be 300-400 words.",
     ),
   closing_paragraph: z
     .string()
     .describe(
-      "1-2 sentences: forward-looking statement, call to action, gratitude",
+      "Final paragraph — Forward-Looking Value Proposition: 1-2 sentences. State what you will build/deliver, confident call to action. No supplicant language.",
     ),
   sign_off: z.string().describe("e.g., 'Sincerely,' followed by name"),
   value_claims: z
@@ -74,7 +74,7 @@ export const TailoredCoverLetterSchema = z.object({
     ),
   word_count: z
     .number()
-    .describe("Total word count of the letter (salutation through sign_off)"),
+    .describe("Total word count of the letter (salutation through sign_off). Target 300-400 words."),
 });
 export type TailoredCoverLetter = z.infer<typeof TailoredCoverLetterSchema>;
 
@@ -115,11 +115,11 @@ export function buildCoverLetterSystemPrompt(): string {
    If you lack company-specific information (mission, culture, recent news, product details), populate company_research_todo with specific items the user should research before sending.
    Do NOT fabricate company facts. Generic statements like "your innovative company" are acceptable ONLY if you have no specific info. Prefer adding a todo over making something up.
 
-6. **WORD COUNT: 250-350 (STRICTLY ENFORCED)**
-   The total letter (salutation through sign_off) MUST be 250-350 words.
-   Count words accurately and report in word_count. Aim for ~300 words.
-   If you find yourself under 250, add specificity to value claims — do NOT pad with filler.
-   If you find yourself over 350, tighten language — cut adverbs and redundant phrases first.
+6. **WORD COUNT: 300-400 (STRICTLY ENFORCED)**
+   The total letter (salutation through sign_off) MUST be 300-400 words.
+   Count words accurately and report in word_count. Aim for ~350 words.
+   If you find yourself under 300, add specificity to value claims — do NOT pad with filler.
+   If you find yourself over 400, tighten language — cut adverbs and redundant phrases first.
 
 7. **EXECUTIVE TONE**
    Write as a peer addressing a peer, not as a supplicant seeking approval.
@@ -140,25 +140,40 @@ export function buildCoverLetterSystemPrompt(): string {
    - "I am confident that..." → Delete. Let facts speak.
    - "I bring a unique combination of..." → Delete. This is resume cliché territory.
 
-8. **STRUCTURE — EXACTLY 3 PARAGRAPHS (opening + body + closing)**
-   The cover letter is structured as EXACTLY three content blocks. Do NOT pad with extra paragraphs.
+8. **STRUCTURE — 4-5 PARAGRAPHS (opening + 2-3 body + closing)**
+   The cover letter is structured as 4-5 content blocks. Each paragraph has a distinct role.
 
    - **salutation**: Formal greeting (prefer "Dear Hiring Manager," if no name known)
 
-   - **opening_paragraph** = MANDATE THESIS (2-3 sentences):
-     State the role. In the FIRST sentence, declare your mandate thesis — the specific capability you bring that matches the job's primary need. Do NOT waste the opener on generic interest or filler.
-     Pattern: "[Role] at [Company] calls for [mandate X]. At [Most Recent Employer], I [your top achievement that proves mandate X]."
+   - **opening_paragraph** = P1: MANDATE UNDERSTANDING (2-3 sentences):
+     Open with understanding of the role's mandate — demonstrate you grasp what the company actually needs.
+     In the FIRST sentence, declare the mandate thesis — the specific capability this role requires.
+     Then immediately prove alignment with your strongest proof point.
+     Do NOT waste the opener on generic interest or filler ("I am excited to apply").
+     Pattern: "[Role] at [Company] calls for [mandate X]. At [Most Recent Employer], I [proof of mandate X]."
      Example: "The VP, Data & Analytics role at [Company] calls for someone who can build an enterprise analytics operating model from the ground up. At [Employer], I stood up the analytics function from zero, scaling to 45 analysts across 6 business units."
 
-   - **body_paragraphs** = 1-2 HIGH-IMPACT EVIDENCE PARAGRAPHS (array with 1-2 entries):
-     Each paragraph makes ONE value claim backed by a specific metric, then CONNECTS it to the company's need.
-     Pattern: [What you did] → [Scale/impact metric] → [Why this matters for THIS company].
-     Do NOT repeat resume bullets verbatim. Use different phrasing — the cover letter AMPLIFIES signals, it does not parrot them.
-     Do NOT list achievements bullet-style. Write in flowing narrative.
+   - **body_paragraphs[0]** = P2: RELEVANT TRANSFORMATION EXAMPLE (3-4 sentences):
+     Present your most relevant transformation achievement — what you changed, at what scale, with what result.
+     ONE value claim backed by a specific metric from the inventory.
+     Pattern: [Context of the challenge] → [What you built/changed] → [Quantified impact].
+     This paragraph proves you have DONE what they need — not that you COULD do it.
+     Do NOT repeat resume bullets verbatim. Provide narrative context the resume cannot.
 
-   - **closing_paragraph** = FORWARD-LOOKING CONTRIBUTION (1-2 sentences):
-     Forward-looking, confident. State what you bring to the table and what you want to discuss.
-     Frame what you will BUILD or DELIVER in the first 90 days — not what you hope.
+   - **body_paragraphs[1]** = P3: ENTERPRISE SCALE & CROSS-FUNCTIONAL LEADERSHIP (3-4 sentences):
+     Demonstrate enterprise-scale impact and cross-functional leadership.
+     Focus on: team size, organizational scope, stakeholder breadth, budget responsibility.
+     ONE additional value claim backed by a different metric from the inventory.
+     This paragraph proves you operate at the right LEVEL — not just the right domain.
+     Pattern: [Scale of responsibility] → [Cross-functional impact] → [Why this translates to their need].
+
+   - **body_paragraphs[2]** = P4 (OPTIONAL): ADDITIONAL DIFFERENTIATION:
+     Only include if there is a third strong differentiator that addresses a distinct JD requirement.
+     Do NOT include just to add length. Better to have 4 tight paragraphs than 5 padded ones.
+
+   - **closing_paragraph** = FORWARD-LOOKING VALUE PROPOSITION (1-2 sentences):
+     Forward-looking, confident. State what you will BUILD or DELIVER — not what you hope.
+     Frame the first 90 days or the strategic initiative you want to discuss.
      Do NOT use: "Thank you for considering", "I look forward to the opportunity", "I am excited to apply".
      Do use: "I'd welcome a conversation about [specific strategic topic relevant to the role]."
 
@@ -249,18 +264,20 @@ ${JSON.stringify(allowlist, null, 2)}
 
 ## INSTRUCTIONS
 1. Read the JD requirements. Identify the top 2-3 MUST-HAVE priorities the company cares about most.
-2. Select 1-3 of the strongest achievements from the inventory that DIRECTLY address those top priorities.
+2. Select 2-3 of the strongest achievements from the inventory that DIRECTLY address those top priorities.
    - If a RESUME BULLET ALIGNMENT section is provided below, select value claims from those top bullets.
    - Each value claim should address a DIFFERENT JD requirement.
    - Prefer achievements from the most recent role.
-3. Write 250-350 words in executive tone — specific, confident, forward-looking. Target ~300 words.
-4. Opening paragraph: State the role, then immediately signal your strongest mandate alignment. Do NOT waste the opener on generic interest.
-5. Body paragraphs: For each value claim, follow the pattern: [What you did] → [The scale/impact] → [How it serves this company's needs]. Weave company context naturally.
-6. Closing paragraph: Confident forward-looking statement. What you want to discuss, not what you hope.
-7. For each value claim, record source_hash + evidence_quote in value_claims array.
-8. For EVERY factual mention (tools, metrics, titles), add an evidence_pointers entry.
-9. For requirements you CANNOT address, add a gap_note — do NOT fabricate.
-10. If company context is missing, populate company_research_todo with SPECIFIC items (not generic).
-11. Count words carefully. The word_count field must match the actual word count of salutation through sign_off.
-12. Return ONLY the TailoredCoverLetter JSON.`;
+3. Write 300-400 words in executive tone — specific, confident, forward-looking. Target ~350 words.
+4. P1 (opening_paragraph): Open with understanding of the mandate. State the role, then immediately prove alignment with your strongest proof point. No generic interest openers.
+5. P2 (body_paragraphs[0]): Present your most relevant TRANSFORMATION example — what you changed, at what scale, with what quantified result. Provide narrative context, not resume bullet repetition.
+6. P3 (body_paragraphs[1]): Demonstrate ENTERPRISE SCALE and cross-functional leadership — team size, organizational scope, stakeholder breadth. Different metric from P2.
+7. P4 (closing_paragraph): Forward-looking value proposition. What you will BUILD in the first 90 days. Confident call to action — no supplicant language.
+8. Optionally include body_paragraphs[2] ONLY if there is a third strong differentiator addressing a distinct JD requirement.
+9. For each value claim, record source_hash + evidence_quote in value_claims array.
+10. For EVERY factual mention (tools, metrics, titles), add an evidence_pointers entry.
+11. For requirements you CANNOT address, add a gap_note — do NOT fabricate.
+12. If company context is missing, populate company_research_todo with SPECIFIC items (not generic).
+13. Count words carefully. The word_count field must match the actual word count of salutation through sign_off.
+14. Return ONLY the TailoredCoverLetter JSON.`;
 }

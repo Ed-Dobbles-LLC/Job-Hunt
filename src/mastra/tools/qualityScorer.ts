@@ -193,15 +193,15 @@ const BANNED_PHRASES = [
 
 const MANDATE_KEYWORDS: Record<string, string[]> = {
   governance_standardization: ["governance", "compliance", "standardiz", "audit", "control", "framework", "metric discipline", "data quality", "reporting rigor"],
-  bi_platform_modernization: ["platform", "architect", "moderniz", "migrat", "cloud", "infrastructure", "pipeline", "data lake", "warehouse"],
-  insight_delivery_automation: ["insight", "self-service", "reporting", "dashboard", "stakeholder", "decision-maker", "automat"],
-  founder_adjacent_builder: ["built from", "zero-to-one", "stood up", "founder", "ceo partner", "startup"],
+  bi_modernization: ["platform", "architect", "moderniz", "migrat", "cloud", "infrastructure", "pipeline", "data lake", "warehouse"],
+  insight_delivery_modernization: ["insight", "self-service", "reporting", "dashboard", "stakeholder", "decision-maker", "automat"],
+  executive_okr_reporting: ["okr", "kpi", "scorecard", "executive reporting", "board reporting", "qbr", "performance management", "annual operating plan"],
   revenue_ops_forecasting: ["revenue", "forecast", "pricing", "demand planning", "p&l", "margin", "commercial"],
   operating_model_transformation: ["operating model", "transform", "embed", "democratiz", "reorganiz", "change management"],
-  product_gtm_analytics: ["product", "go-to-market", "gtm", "feature", "adoption", "user journey"],
+  ai_integration_llm: ["ai", "ml", "llm", "genai", "model", "mlops", "prompt engineering", "rag", "embeddings"],
   growth_monetization: ["growth", "experiment", "a/b test", "conversion", "monetiz", "funnel"],
-  executive_storytelling: ["board", "c-suite", "advisory", "storytelling", "strategic", "influence"],
-  team_leadership_scale: ["team", "hired", "scaled", "organizational design", "talent", "mentored"],
+  cross_functional_influence: ["board", "c-suite", "advisory", "storytelling", "strategic", "influence"],
+  team_scale_org_design: ["team", "hired", "scaled", "organizational design", "talent", "mentored"],
 };
 
 // ── Scoring Functions ────────────────────────────────────────────
@@ -733,15 +733,15 @@ export function scoreVerbStrength(
 ): VerbStrengthScore {
   const MANDATE_VERB_POOL: Record<string, Set<string>> = {
     governance_standardization: new Set(["instituted", "codified", "standardized", "embedded", "enforced", "formalized", "governed"]),
-    bi_platform_modernization: new Set(["architected", "migrated", "replatformed", "engineered", "unified", "modernized", "scaled"]),
-    insight_delivery_automation: new Set(["operationalized", "automated", "democratized", "surfaced", "instrumented", "accelerated"]),
-    founder_adjacent_builder: new Set(["launched", "bootstrapped", "founded", "pioneered", "incubated", "originated"]),
+    bi_modernization: new Set(["architected", "migrated", "replatformed", "engineered", "unified", "modernized", "scaled"]),
+    insight_delivery_modernization: new Set(["operationalized", "automated", "democratized", "surfaced", "instrumented", "accelerated"]),
+    executive_okr_reporting: new Set(["established", "reported", "aligned", "cascaded", "tracked", "formalized"]),
     revenue_ops_forecasting: new Set(["recaptured", "forecasted", "recovered", "monetized", "optimized", "repriced", "modeled"]),
     operating_model_transformation: new Set(["redesigned", "restructured", "overhauled", "reengineered", "consolidated", "realigned", "repositioned"]),
-    product_gtm_analytics: new Set(["instrumented", "segmented", "personalized", "activated", "converted", "tracked"]),
+    ai_integration_llm: new Set(["deployed", "integrated", "automated", "engineered", "implemented", "enabled"]),
     growth_monetization: new Set(["converted", "experimented", "optimized", "monetized", "funneled", "tested", "iterated"]),
-    executive_storytelling: new Set(["influenced", "briefed", "positioned", "advised", "counseled", "steered", "shaped"]),
-    team_leadership_scale: new Set(["recruited", "mentored", "scaled", "organized", "elevated", "coached"]),
+    cross_functional_influence: new Set(["influenced", "briefed", "positioned", "advised", "counseled", "steered", "shaped"]),
+    team_scale_org_design: new Set(["recruited", "mentored", "scaled", "organized", "elevated", "coached"]),
   };
 
   const mandateVerbSet = mandate ? MANDATE_VERB_POOL[mandate.primary_mandate] || new Set() : new Set();

@@ -217,7 +217,7 @@ describe("checkMandateAnchoredSummary", () => {
   });
 
   it("detects generic opener: 'Seasoned executive'", () => {
-    const mandate = makeMandate("bi_platform_modernization");
+    const mandate = makeMandate("bi_modernization");
     const result = checkMandateAnchoredSummary(
       "Seasoned executive with 20 years of platform modernization experience.",
       mandate,
@@ -235,7 +235,7 @@ describe("checkMandateAnchoredSummary", () => {
   });
 
   it("revenue-first flagged for team leadership mandate", () => {
-    const mandate = makeMandate("team_leadership_scale");
+    const mandate = makeMandate("team_scale_org_design");
     const result = checkMandateAnchoredSummary(
       "Generated $12M ARR through analytics-driven pricing models.",
       mandate,
@@ -406,7 +406,7 @@ describe("QA Stability Pass", () => {
         },
       ],
     });
-    const mandate = makeMandate("bi_platform_modernization");
+    const mandate = makeMandate("bi_modernization");
     const result = runRefinementLayer({ resume, mandate });
     expect(result.qa_issues.some(i => i.type === "mandate_gap")).toBe(true);
   });
@@ -541,7 +541,7 @@ describe("Verb Integrity: no blind mutation", () => {
         ],
       }],
     });
-    const mandate = makeMandate("bi_platform_modernization");
+    const mandate = makeMandate("bi_modernization");
     const result = runRefinementLayer({ resume, mandate });
 
     // Should flag the misalignment
@@ -570,7 +570,7 @@ describe("Mandate-specific scoring integration", () => {
     const resume = makeResume({
       summary: "Architected a cloud-native data platform serving 2,000 analysts, migrating from legacy infrastructure to Snowflake with zero downtime.",
     });
-    const mandate = makeMandate("bi_platform_modernization");
+    const mandate = makeMandate("bi_modernization");
     const result = runRefinementLayer({ resume, mandate });
     expect(result.scores.mandate_alignment).toBeGreaterThanOrEqual(50);
   });
@@ -579,7 +579,7 @@ describe("Mandate-specific scoring integration", () => {
     const resume = makeResume({
       summary: "Recruited and mentored a team of 30 analysts, building a culture of continuous learning.",
     });
-    const mandate = makeMandate("bi_platform_modernization");
+    const mandate = makeMandate("bi_modernization");
     const result = runRefinementLayer({ resume, mandate });
     // Team leadership summary for a platform mandate should score lower
     expect(result.scores.mandate_alignment).toBeLessThan(50);

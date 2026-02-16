@@ -32,7 +32,7 @@ function getOpenAI() {
 export const generateCoverLetterTool = createTool({
   id: "generate-cover-letter",
   description:
-    "Generates a tailored cover letter JSON (250-350 words) for a specific job posting using LLM. Executive tone with exactly 1-3 specific value claims, each backed by evidence pointers. Never invents metrics. Includes company_research_todo when company context is missing. Uses the experience inventory as the sole source of truth.",
+    "Generates a tailored cover letter JSON (300-400 words) for a specific job posting using LLM. Executive tone with exactly 1-3 specific value claims, each backed by evidence pointers. Never invents metrics. Includes company_research_todo when company context is missing. Uses the experience inventory as the sole source of truth.",
   inputSchema: z.object({
     job_id: z.number().describe("Database job ID to generate cover letter for"),
     company: z.string().optional().describe("Company name (loaded from DB if omitted)"),
@@ -133,13 +133,13 @@ export const generateCoverLetterTool = createTool({
     const actualWordCount = fullText.split(/\s+/).filter(w => w.length > 0).length;
     coverLetter.word_count = actualWordCount; // Correct LLM's self-reported count
 
-    if (actualWordCount < 250 || actualWordCount > 350) {
-      logger?.warn(`⚠️ [generateCoverLetter] Word count ${actualWordCount} outside 250-350 — regenerating`);
-      const wcDirection = actualWordCount < 250 ? "TOO SHORT" : "TOO LONG";
-      const wcTarget = actualWordCount < 250 ? "expand to 280-300 words" : "compress to 280-300 words";
+    if (actualWordCount < 300 || actualWordCount > 400) {
+      logger?.warn(`⚠️ [generateCoverLetter] Word count ${actualWordCount} outside 300-400 — regenerating`);
+      const wcDirection = actualWordCount < 300 ? "TOO SHORT" : "TOO LONG";
+      const wcTarget = actualWordCount < 300 ? "expand to 320-350 words" : "compress to 320-350 words";
       const wcPrompt = `${userPrompt}\n\n## WORD COUNT CORRECTION
-The cover letter is ${wcDirection} at ${actualWordCount} words. MUST be 250-350 words.
-${wcTarget}. Aim for ~300 words. Keep all value claims and evidence pointers.`;
+The cover letter is ${wcDirection} at ${actualWordCount} words. MUST be 300-400 words.
+${wcTarget}. Aim for ~350 words. Keep all value claims and evidence pointers.`;
 
       const corrected = await generateObject({
         model: getOpenAI()("gpt-4o"),
@@ -168,8 +168,8 @@ ${wcTarget}. Aim for ~300 words. Keep all value claims and evidence pointers.`;
     if (coverLetter.value_claims.length > 3) {
       logger?.warn(`⚠️ [generateCoverLetter] WARNING: ${coverLetter.value_claims.length} value claims exceeds max of 3`);
     }
-    if (coverLetter.word_count < 250 || coverLetter.word_count > 350) {
-      logger?.warn(`⚠️ [generateCoverLetter] WARNING: Word count ${coverLetter.word_count} still outside 250-350 after correction`);
+    if (coverLetter.word_count < 300 || coverLetter.word_count > 400) {
+      logger?.warn(`⚠️ [generateCoverLetter] WARNING: Word count ${coverLetter.word_count} still outside 300-400 after correction`);
     }
 
     const stats = {

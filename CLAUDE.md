@@ -483,7 +483,7 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 2. **No transaction safety (v1 only)**: v1 pipeline uses individual queries, not transactions. v2 pipeline wraps finalize DB writes in a single transaction (`pipeline-transaction.ts`).
 3. **Dashboard trigger is fire-and-forget**: `POST /api/dashboard/trigger` starts the workflow but returns immediately with no run tracking handle.
 4. **LibreOffice dependency**: PDF conversion requires LibreOffice headless. Works in Docker but not in all local dev environments.
-5. **Cover letter word count**: Schema enforces 250-350 words but the LLM sometimes drifts. The verifier catches this but correction doesn't always converge.
+5. **Cover letter word count**: Schema enforces 300-400 words but the LLM sometimes drifts. The verifier catches this but correction doesn't always converge.
 6. **~~Duplicate `loadInventory()`~~**: RESOLVED — All 11 duplicate `loadInventory()` functions now delegate to the centralized `inventory-loader.ts`. Silent stub fallbacks (returning `{ profile: { name: "Candidate" } }`) have been eliminated. All paths throw `MissingBaselineError` on failure.
 7. **Dual verification tools**: Both `verifyTruthTool.ts` and `verifyTruthfulnessTool.ts` exist with overlapping purpose. Should be consolidated.
 8. **Enrichment is fire-and-forget**: Background enrichment has no persistent progress tracking. If the server restarts mid-enrichment, partially processed batches are lost. A DB-based job queue would be more resilient.

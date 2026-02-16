@@ -92,16 +92,16 @@ function createFixtureCoverLetter(): any {
 
 function createFixtureMandate(): any {
   return {
-    primary_mandate: "bi_platform_modernization",
-    secondary_mandates: ["team_leadership_scale", "governance_standardization"],
+    primary_mandate: "bi_modernization",
+    secondary_mandates: ["team_scale_org_design", "governance_standardization"],
     seniority_level: "VP",
     tone_guidance: "Architecture-first, emphasize platform decisions and migration outcomes",
     mandate_keywords: ["platform", "architecture", "cloud", "migration", "modernization"],
     archetype_weights: {
-      bi_platform_modernization: 0.4,
-      team_leadership_scale: 0.3,
+      bi_modernization: 0.4,
+      team_scale_org_design: 0.3,
       governance_standardization: 0.2,
-      insight_delivery_automation: 0.1,
+      insight_delivery_modernization: 0.1,
     },
   };
 }

@@ -70,15 +70,15 @@ const GENERIC_STRONG_VERBS = ["led", "built", "managed", "transformed", "drove",
  * that convey the right KIND of authority for that archetype. */
 const MANDATE_VERB_POOL: Record<string, string[]> = {
   governance_standardization: ["Instituted", "Codified", "Standardized", "Embedded", "Enforced", "Formalized", "Governed"],
-  bi_platform_modernization: ["Architected", "Migrated", "Replatformed", "Engineered", "Unified", "Modernized", "Scaled"],
-  insight_delivery_automation: ["Operationalized", "Automated", "Democratized", "Surfaced", "Instrumented", "Embedded", "Accelerated"],
-  founder_adjacent_builder: ["Established", "Launched", "Bootstrapped", "Founded", "Pioneered", "Incubated", "Originated"],
+  bi_modernization: ["Architected", "Migrated", "Replatformed", "Engineered", "Unified", "Modernized", "Scaled"],
+  insight_delivery_modernization: ["Operationalized", "Automated", "Democratized", "Surfaced", "Instrumented", "Embedded", "Accelerated"],
+  executive_okr_reporting: ["Established", "Reported", "Aligned", "Cascaded", "Tracked", "Formalized", "Standardized"],
   revenue_ops_forecasting: ["Recaptured", "Forecasted", "Recovered", "Monetized", "Optimized", "Repriced", "Modeled"],
   operating_model_transformation: ["Redesigned", "Restructured", "Overhauled", "Reengineered", "Consolidated", "Realigned", "Repositioned"],
-  product_gtm_analytics: ["Instrumented", "Segmented", "Personalized", "Activated", "Converted", "Optimized", "Tracked"],
+  ai_integration_llm: ["Deployed", "Integrated", "Automated", "Engineered", "Implemented", "Enabled", "Operationalized"],
   growth_monetization: ["Converted", "Experimented", "Optimized", "Monetized", "Funneled", "Tested", "Iterated"],
-  executive_storytelling: ["Influenced", "Briefed", "Positioned", "Advised", "Counseled", "Steered", "Shaped"],
-  team_leadership_scale: ["Recruited", "Mentored", "Scaled", "Organized", "Elevated", "Coached", "Developed"],
+  cross_functional_influence: ["Influenced", "Briefed", "Positioned", "Advised", "Counseled", "Steered", "Shaped"],
+  team_scale_org_design: ["Recruited", "Mentored", "Scaled", "Organized", "Elevated", "Coached", "Developed"],
 };
 
 /** Safe managerial phrasing that sounds impressive but says nothing. */
@@ -646,15 +646,15 @@ export function verifyOutcomeIntegrity(resume: TailoredResume): OutcomeIntegrity
 /** Mandate keyword relevance for competency sorting. */
 const MANDATE_COMP_KEYWORDS: Record<string, string[]> = {
   governance_standardization: ["governance", "compliance", "audit", "control", "framework", "quality", "risk", "standard"],
-  bi_platform_modernization: ["platform", "cloud", "architecture", "pipeline", "infrastructure", "migration", "warehouse", "lake"],
-  insight_delivery_automation: ["reporting", "dashboard", "self-service", "analytics", "insight", "automation", "visualization"],
-  founder_adjacent_builder: ["startup", "zero-to-one", "product", "mvp", "agile", "lean", "build"],
+  bi_modernization: ["platform", "cloud", "architecture", "pipeline", "infrastructure", "migration", "warehouse", "lake"],
+  insight_delivery_modernization: ["reporting", "dashboard", "self-service", "analytics", "insight", "automation", "visualization"],
+  executive_okr_reporting: ["okr", "kpi", "executive reporting", "scorecard", "board", "performance", "quarterly review"],
   revenue_ops_forecasting: ["revenue", "forecast", "pricing", "financial", "p&l", "margin", "demand"],
   operating_model_transformation: ["operating model", "transformation", "change management", "process", "optimization", "redesign"],
-  product_gtm_analytics: ["product", "go-to-market", "user", "adoption", "engagement", "feature", "journey"],
+  ai_integration_llm: ["ai", "ml", "llm", "genai", "machine learning", "model", "automation", "nlp"],
   growth_monetization: ["growth", "experiment", "a/b", "conversion", "funnel", "monetization", "testing"],
-  executive_storytelling: ["storytelling", "board", "executive", "strategy", "advisory", "influence", "communication"],
-  team_leadership_scale: ["leadership", "team", "talent", "organizational", "hiring", "mentoring", "scaling"],
+  cross_functional_influence: ["storytelling", "board", "executive", "strategy", "advisory", "influence", "communication"],
+  team_scale_org_design: ["leadership", "team", "talent", "organizational", "hiring", "mentoring", "scaling"],
 };
 
 /**

@@ -83,7 +83,7 @@ export const buildOutputTool = createTool({
     fs.mkdirSync(outputDir, { recursive: true });
 
     const inventory = await loadInventory();
-    const profile = inventory.profile || {};
+    const profile = { ...(inventory.profile || {}), email: inventory.profile?.email || "Ed@Dobbles.AI" };
     const files: string[] = [];
     const vr = context.verifierResult as Record<string, unknown>;
     const truthPass = Boolean(vr?.pass ?? vr?.overallPass ?? false);
