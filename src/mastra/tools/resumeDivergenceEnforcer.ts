@@ -261,6 +261,7 @@ export async function ensureResumeHistoryTable(): Promise<void> {
       CREATE TABLE IF NOT EXISTS resume_history (
         id SERIAL PRIMARY KEY,
         job_id BIGINT REFERENCES jobs(job_id),
+        candidate_id TEXT,
         target_company TEXT,
         target_role TEXT,
         summary_text TEXT,
@@ -271,8 +272,9 @@ export async function ensureResumeHistoryTable(): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    // Add key_phrases column if table already exists without it
+    // Add columns if table already exists without them
     await query(`ALTER TABLE resume_history ADD COLUMN IF NOT EXISTS key_phrases JSONB DEFAULT '[]'::jsonb`);
+    await query(`ALTER TABLE resume_history ADD COLUMN IF NOT EXISTS candidate_id TEXT`);
   } catch {
     // Table might already exist or DB might be unavailable — non-fatal
   }
@@ -285,6 +287,7 @@ export async function storeResumeSnapshot(
   resume: TailoredResume,
   jobId: number,
   archetypePrimary: string,
+  candidateId?: string,
 ): Promise<void> {
   const topBulletsByRole = resume.experience.map(exp =>
     exp.bullets.slice(0, 3).map(b => typeof b === "string" ? b : b.text),
@@ -295,10 +298,11 @@ export async function storeResumeSnapshot(
 
   try {
     await queryWithTimeout(
-      `INSERT INTO resume_history (job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO resume_history (job_id, candidate_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         jobId,
+        candidateId || null,
         resume.target_company,
         resume.target_role,
         resume.professional_summary,
@@ -326,37 +330,47 @@ export async function loadRecentSnapshots(
   currentJobId: number,
   limit: number = 3,
   mandateCluster?: string,
+  candidateId?: string,
 ): Promise<ResumeSnapshot[]> {
   try {
     let result;
     const DB_TIMEOUT_MS = 10000; // 10s timeout — resume history is non-critical
+    // Scope by candidate_id when provided to prevent cross-candidate divergence comparisons
+    const candidateFilter = candidateId ? " AND candidate_id = $4" : "";
 
     if (mandateCluster) {
+      const params = candidateId
+        ? [currentJobId, limit, mandateCluster, candidateId]
+        : [currentJobId, limit, mandateCluster];
       // Mandate-scoped: prioritize same-mandate snapshots
       result = await queryWithTimeout(
         `(SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
           FROM resume_history
-          WHERE job_id != $1 AND archetype_primary = $3
+          WHERE job_id != $1 AND archetype_primary = $3${candidateFilter}
           ORDER BY created_at DESC
           LIMIT $2)
          UNION ALL
          (SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
           FROM resume_history
-          WHERE job_id != $1 AND (archetype_primary IS NULL OR archetype_primary != $3)
+          WHERE job_id != $1 AND (archetype_primary IS NULL OR archetype_primary != $3)${candidateFilter}
           ORDER BY created_at DESC
           LIMIT $2)
          LIMIT $2`,
-        [currentJobId, limit, mandateCluster],
+        params,
         DB_TIMEOUT_MS,
       );
     } else {
+      const params = candidateId
+        ? [currentJobId, limit, candidateId]
+        : [currentJobId, limit];
+      const candidateFilterNoMandate = candidateId ? " AND candidate_id = $3" : "";
       result = await queryWithTimeout(
         `SELECT job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases, created_at
          FROM resume_history
-         WHERE job_id != $1
+         WHERE job_id != $1${candidateFilterNoMandate}
          ORDER BY created_at DESC
          LIMIT $2`,
-        [currentJobId, limit],
+        params,
         DB_TIMEOUT_MS,
       );
     }

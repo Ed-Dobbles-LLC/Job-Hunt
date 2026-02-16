@@ -19,6 +19,7 @@ import {
 import { autoGenerateInBackground } from "../resume-engine/auto-generate";
 import { jobMatchAgent } from "./agents/jobMatchAgent";
 import { isSetupComplete } from "./setupRoutes";
+import { loadInventoryStrict } from "../resume-engine/inventory-loader";
 
 let dbReady = false;
 
@@ -64,19 +65,9 @@ function buildDownloadFilename(profileName: string, company: string, type: strin
   return `${safeName} ${label} - ${safeCompany}.${ext}`;
 }
 
-/** Load experience inventory — checks DB first, then filesystem */
+/** Load experience inventory via centralized loader — throws MissingBaselineError, never returns stubs */
 async function loadInventoryProfile(): Promise<Record<string, any>> {
-  try {
-    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
-    if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
-      return JSON.parse(dbResult.rows[0].value);
-    }
-  } catch { /* fall through to filesystem */ }
-  try {
-    return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8"));
-  } catch {
-    return { profile: { name: "Candidate" } };
-  }
+  return loadInventoryStrict();
 }
 
 export function getDashboardRoutes() {
@@ -658,14 +649,14 @@ export function getDashboardRoutes() {
 
           // Preflight: check inventory exists (DB or filesystem)
           try {
-            const inv = await loadInventoryProfile();
-            if (!inv.profile || inv.profile.name === "Candidate") {
-              return c.json({
-                error: "Experience inventory not found. Go to Profile Builder to upload and finalize your resume first.",
-                phase: "preflight",
-              }, 400);
-            }
-          } catch { /* check is best-effort */ }
+            await loadInventoryProfile();
+          } catch (prefErr: any) {
+            return c.json({
+              error: "Experience inventory not found. Go to Profile Builder to upload and finalize your resume first.",
+              phase: "preflight",
+              detail: prefErr.message,
+            }, 400);
+          }
 
           // Load job (synchronous preflight — fast DB query)
           const jobResult = await query(

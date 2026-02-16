@@ -12,28 +12,15 @@ import {
   convertDocxToPdf,
   checkPagination,
 } from "./docxRenderer";
+import { loadInventoryStrict } from "../../resume-engine/inventory-loader";
 
 function sanitizeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9\s-]/g, "").replace(/\s+/g, "_");
 }
 
+/** Load inventory via centralized loader — throws MissingBaselineError, never returns stubs */
 async function loadInventory(): Promise<Record<string, any>> {
-  // Check DB first (survives Railway redeploys)
-  try {
-    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
-    if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
-      return JSON.parse(dbResult.rows[0].value);
-    }
-  } catch { /* fall through to filesystem */ }
-
-  // Fallback to filesystem
-  try {
-    const inventoryPath = workspacePath("experience_inventory.json");
-    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
-  } catch (err: any) {
-    console.error(`[buildOutput] Failed to load inventory: ${err.message}`);
-    return { profile: { name: "Candidate" }, experience: [], education: [], skills: {}, certifications: [] };
-  }
+  return loadInventoryStrict();
 }
 
 export const buildOutputTool = createTool({

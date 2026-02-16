@@ -10,6 +10,7 @@ import { z } from "zod";
 
 export type ClaimType =
   | "role"
+  | "employer"
   | "metric"
   | "scope"
   | "tool"
@@ -51,6 +52,7 @@ export interface Claim {
 export interface ClaimsLedger {
   claims: Claim[];
   roles: Claim[];
+  employers: Claim[];
   metrics: Claim[];
   scopes: Claim[];
   tools: Claim[];
@@ -59,6 +61,11 @@ export interface ClaimsLedger {
   education: Claim[];
   bullet_texts: Claim[];
   total_claims: number;
+
+  // ── Candidate Identity Binding ──
+  candidate_id?: string;
+  candidate_name?: string;
+  inventory_hash?: string;
 }
 
 // ── Mandate Types ────────────────────────────────────────────────
@@ -174,6 +181,7 @@ export interface StageResult<T> {
 export interface PipelineResult {
   success: boolean;
   job_id: number;
+  candidate_identity?: import("./candidate-identity").CandidateIdentity;
   pass: boolean;
   attempts_used: number;
   max_attempts: number;

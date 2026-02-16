@@ -34,8 +34,15 @@
 import { query } from "../mastra/tools/db";
 import { buildEntityAllowlist } from "../mastra/tools/entityAllowlist";
 import { extractClaimsLedger } from "../mastra/tools/claimsLedger";
-import { workspacePath } from "../mastra/tools/paths";
-import * as fs from "fs";
+import { loadInventoryWithIdentity } from "./inventory-loader";
+import {
+  MissingBaselineError,
+  CandidateIdentityMismatchError,
+  assertLedgerIdentity,
+  validateResumeIdentity,
+  validateCoverLetterIdentity,
+  type CandidateIdentity,
+} from "./candidate-identity";
 import type { TailoredResume } from "../mastra/tools/tailoredResumePrompt";
 import type { TailoredCoverLetter } from "../mastra/tools/tailoredCoverLetterPrompt";
 import type { VerifierReport } from "../mastra/tools/truthfulnessVerifier";
@@ -77,22 +84,8 @@ import type {
 const DEFAULT_MAX_ATTEMPTS = 3;
 
 // ── Inventory Loader ─────────────────────────────────────────────
-
-async function loadInventory(): Promise<Record<string, any>> {
-  try {
-    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
-    if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
-      return JSON.parse(dbResult.rows[0].value);
-    }
-  } catch { /* fall through */ }
-
-  try {
-    const inventoryPath = workspacePath("experience_inventory.json");
-    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
-  } catch (err: any) {
-    throw new Error(`Cannot load experience_inventory.json: ${err.message}`);
-  }
-}
+// Removed: duplicate loadInventory(). Now uses centralized loadInventoryWithIdentity()
+// from inventory-loader.ts. Pipeline-v2 loads inventory in Stage 0 below.
 
 // ── Stage Runner ─────────────────────────────────────────────────
 
@@ -184,21 +177,48 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
     } catch { /* non-fatal */ }
   }
 
-  // ── Load inventory ─────────────────────────────────────────────
+  // ── STAGE 0: Identity Validation ─────────────────────────────
+  // Load inventory with candidate identity binding.
+  // HARD FAIL if inventory is missing — no fallback to fixtures or defaults.
 
-  const inventory = await loadInventory();
+  const stage0 = await runStage("Stage 0: Identity Validation", async () => {
+    const loaded = await loadInventoryWithIdentity(input.run_id, logger);
+    return loaded;
+  }, logger);
+  stageResults["stage0"] = stage0;
+  if (!stage0.success) {
+    throw new MissingBaselineError(
+      "unknown",
+      [],
+      "Stage 0 Identity Validation failed — cannot load inventory",
+    );
+  }
+
+  const { inventory, identity } = stage0.data as { inventory: Record<string, any>; identity: CandidateIdentity };
+  logger?.info(`🔐 [Pipeline] Candidate identity: name="${identity.candidate_name}", id="${identity.candidate_id}", hash=${identity.inventory_hash.substring(0, 12)}…`);
+
   const allowlist = buildEntityAllowlist(inventory);
 
   // ── STAGE 1: Claims Ledger Extraction ──────────────────────────
 
   const stage1 = await runStage("Stage 1: Claims Ledger", () => {
-    return extractClaimsFromInventory(inventory);
+    return extractClaimsFromInventory(inventory, {
+      candidate_id: identity.candidate_id,
+      candidate_name: identity.candidate_name,
+      inventory_hash: identity.inventory_hash,
+    });
   }, logger);
   stageResults["stage1"] = stage1;
   if (!stage1.success) throw new Error("Stage 1 failed: " + stage1.errors?.join(", "));
 
   const ledger = stage1.data;
   logger?.info(`📋 [Pipeline] Claims ledger: ${ledger.total_claims} claims`);
+
+  // Verify ledger identity matches pipeline identity
+  assertLedgerIdentity(
+    { candidate_id: ledger.candidate_id, candidate_name: ledger.candidate_name, inventory_hash: ledger.inventory_hash },
+    identity,
+  );
 
   // ── STAGE 2: Mandate Classification ────────────────────────────
 
@@ -460,12 +480,38 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
   let finalReport = currentReport?.pass ? currentReport : bestReport || currentReport!;
   let passed = finalReport?.pass ?? false;
 
+  // ── Output Identity Guard ──────────────────────────────────────
+  // Verify that the generated resume and cover letter belong to the
+  // correct candidate BEFORE we render or persist anything.
+
+  try {
+    const ledgerEmployers = ledger.employers.map((e: any) => e.value);
+    const resumeCheck = validateResumeIdentity(finalResume, identity, ledgerEmployers);
+    if (!resumeCheck.valid) {
+      const issueList = resumeCheck.issues.join("; ");
+      logger?.error(`🚨 [Pipeline v2] OUTPUT IDENTITY MISMATCH (resume): ${issueList}`);
+      throw new CandidateIdentityMismatchError(
+        "output_resume",
+        identity,
+        { candidate_name: "(see issues: " + issueList + ")" } as any,
+      );
+    }
+    logger?.info(`🔐 [Pipeline v2] Resume identity verified for "${identity.candidate_name}"`);
+
+    const clCheck = validateCoverLetterIdentity(finalCoverLetter, identity);
+    if (!clCheck.valid) {
+      logger?.warn(`⚠️ [Pipeline v2] Cover letter identity warning: ${clCheck.issues.join("; ")}`);
+    }
+  } catch (err: any) {
+    if (err instanceof CandidateIdentityMismatchError) throw err;
+    logger?.warn(`⚠️ [Pipeline v2] Output identity check failed: ${err.message}`);
+  }
+
   // ── Plaintext ATS render ───────────────────────────────────────
 
   let plaintextResume: string | undefined;
   try {
-    const candidateName = inventory?.profile?.name;
-    plaintextResume = renderPlaintext(finalResume, candidateName);
+    plaintextResume = renderPlaintext(finalResume, identity.candidate_name);
   } catch (err: any) {
     logger?.warn(`⚠️ [Pipeline v2] Plaintext render failed: ${err.message}`);
   }
@@ -475,23 +521,23 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
   let recruiterReview: RecruiterReviewReport | undefined;
   let recruiterReviewPassed = false;
 
-  // Fetch prior summaries for differentiation context
+  // Fetch prior summaries for differentiation context (scoped by candidate_id)
   let priorSummaries: string[] = [];
   try {
     const histResult = await query(
       `SELECT summary_text FROM resume_history
-       WHERE job_id != $1 AND archetype_primary = $2
+       WHERE job_id != $1 AND archetype_primary = $2 AND (candidate_id = $3 OR candidate_id IS NULL)
        ORDER BY created_at DESC LIMIT 3`,
-      [input.job_id, mandate.primary_mandate],
+      [input.job_id, mandate.primary_mandate, identity.candidate_id],
     );
     priorSummaries = histResult.rows
       .map((r: any) => r.summary_text)
       .filter(Boolean);
-    // If no mandate-scoped results, fall back to any recent
+    // If no mandate-scoped results, fall back to any recent (still scoped by candidate)
     if (priorSummaries.length === 0) {
       const fallback = await query(
-        `SELECT summary_text FROM resume_history WHERE job_id != $1 ORDER BY created_at DESC LIMIT 3`,
-        [input.job_id],
+        `SELECT summary_text FROM resume_history WHERE job_id != $1 AND (candidate_id = $2 OR candidate_id IS NULL) ORDER BY created_at DESC LIMIT 3`,
+        [input.job_id, identity.candidate_id],
       );
       priorSummaries = fallback.rows.map((r: any) => r.summary_text).filter(Boolean);
     }
@@ -555,9 +601,9 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
     try {
       const histResult = await query(
         `SELECT summary_text, competencies FROM resume_history
-         WHERE job_id != $1 AND archetype_primary = $2
+         WHERE job_id != $1 AND archetype_primary = $2 AND (candidate_id = $3 OR candidate_id IS NULL)
          ORDER BY created_at DESC LIMIT 3`,
-        [input.job_id, mandate.primary_mandate],
+        [input.job_id, mandate.primary_mandate, identity.candidate_id],
       );
       priorSums = histResult.rows.map((r: any) => r.summary_text).filter(Boolean);
       priorComps = histResult.rows.map((r: any) => {
@@ -626,12 +672,13 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
   try {
     txn = await beginPipelineTransaction();
 
-    // Store resume snapshot for future divergence checks
+    // Store resume snapshot for future divergence checks (scoped by candidate_id)
     await txn.client.query(
-      `INSERT INTO resume_history (job_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO resume_history (job_id, candidate_id, target_company, target_role, summary_text, competencies, top_bullets_by_role, archetype_primary, key_phrases)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         input.job_id,
+        identity.candidate_id,
         finalResume.target_company,
         finalResume.target_role,
         finalResume.professional_summary,
@@ -791,6 +838,7 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
   return {
     success: true,
     job_id: input.job_id,
+    candidate_identity: identity,
     pass: passed && recruiterReviewPassed,
     attempts_used: attemptHistory.length,
     max_attempts: maxAttempts,

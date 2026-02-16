@@ -24,6 +24,15 @@ import { buildEntityAllowlist } from "../mastra/tools/entityAllowlist";
 import { extractClaimsLedger } from "../mastra/tools/claimsLedger";
 import { workspacePath } from "../mastra/tools/paths";
 import * as fs from "fs";
+import { loadInventoryWithIdentity } from "./inventory-loader";
+import {
+  MissingBaselineError,
+  CandidateIdentityMismatchError,
+  assertLedgerIdentity,
+  validateResumeIdentity,
+  validateCoverLetterIdentity,
+  type CandidateIdentity,
+} from "./candidate-identity";
 import type { TailoredResume } from "../mastra/tools/tailoredResumePrompt";
 import type { TailoredCoverLetter } from "../mastra/tools/tailoredCoverLetterPrompt";
 import type { VerifierReport } from "../mastra/tools/truthfulnessVerifier";
@@ -61,23 +70,10 @@ import type {
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
-// ── Inventory Loader ─────────────────────────────────────────────
-
-async function loadInventory(): Promise<Record<string, any>> {
-  try {
-    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
-    if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
-      return JSON.parse(dbResult.rows[0].value);
-    }
-  } catch { /* fall through */ }
-
-  try {
-    const inventoryPath = workspacePath("experience_inventory.json");
-    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
-  } catch (err: any) {
-    throw new Error(`Cannot load experience_inventory.json: ${err.message}`);
-  }
-}
+// ── Inventory Loader (delegates to centralized loader) ──────────
+// The old loadInventory() had no candidate identity validation.
+// All inventory loading now goes through loadInventoryWithIdentity()
+// which throws MissingBaselineError if inventory is missing (no fallback).
 
 // ── Stage Runner ─────────────────────────────────────────────────
 
@@ -162,21 +158,48 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
     } catch { /* non-fatal */ }
   }
 
-  // ── Load inventory ─────────────────────────────────────────────
+  // ── STAGE 0: Identity Validation ─────────────────────────────
+  // Load inventory with candidate identity binding.
+  // HARD FAIL if inventory is missing — no fallback to fixtures or defaults.
 
-  const inventory = await loadInventory();
+  const stage0 = await runStage("Stage 0: Identity Validation", async () => {
+    const loaded = await loadInventoryWithIdentity(input.run_id, logger);
+    return loaded;
+  }, logger);
+  stageResults["stage0"] = stage0;
+  if (!stage0.success) {
+    throw new MissingBaselineError(
+      "unknown",
+      [],
+      "Stage 0 Identity Validation failed — cannot load inventory",
+    );
+  }
+
+  const { inventory, identity } = stage0.data as { inventory: Record<string, any>; identity: CandidateIdentity };
+  logger?.info(`🔐 [Pipeline] Candidate identity: name="${identity.candidate_name}", id="${identity.candidate_id}", hash=${identity.inventory_hash.substring(0, 12)}…`);
+
   const allowlist = buildEntityAllowlist(inventory);
 
   // ── STAGE 1: Claims Ledger Extraction ──────────────────────────
 
   const stage1 = await runStage("Stage 1: Claims Ledger", () => {
-    return extractClaimsFromInventory(inventory);
+    return extractClaimsFromInventory(inventory, {
+      candidate_id: identity.candidate_id,
+      candidate_name: identity.candidate_name,
+      inventory_hash: identity.inventory_hash,
+    });
   }, logger);
   stageResults["stage1"] = stage1;
   if (!stage1.success) throw new Error("Stage 1 failed: " + stage1.errors?.join(", "));
 
   const ledger = stage1.data;
   logger?.info(`📋 [Pipeline] Claims ledger: ${ledger.total_claims} claims`);
+
+  // Verify ledger identity matches pipeline identity
+  assertLedgerIdentity(
+    { candidate_id: ledger.candidate_id, candidate_name: ledger.candidate_name, inventory_hash: ledger.inventory_hash },
+    identity,
+  );
 
   // ── STAGE 2: Mandate Classification ────────────────────────────
 
@@ -484,9 +507,9 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
   try {
     const histResult = await queryWithTimeout(
       `SELECT summary_text, competencies FROM resume_history
-       WHERE job_id != $1
+       WHERE job_id != $1 AND (candidate_id = $2 OR candidate_id IS NULL)
        ORDER BY created_at DESC LIMIT 3`,
-      [input.job_id],
+      [input.job_id, identity.candidate_id],
       10000, // 10s timeout — resume history is non-critical
     );
     priorSums = histResult.rows.map((r: any) => r.summary_text).filter(Boolean);
@@ -555,11 +578,40 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
     logger?.warn(`⚠️ [Pipeline] Positioning pass failed: ${err.message}`);
   }
 
+  // ── Output Identity Guard ──────────────────────────────────────
+  // Verify that the generated resume and cover letter belong to the
+  // correct candidate BEFORE we render or persist anything.
+
+  try {
+    const ledgerEmployers = ledger.employers.map((e: any) => e.value);
+    const resumeCheck = validateResumeIdentity(finalResume, identity, ledgerEmployers);
+    if (!resumeCheck.valid) {
+      const issueList = resumeCheck.issues.join("; ");
+      logger?.error(`🚨 [Pipeline] OUTPUT IDENTITY MISMATCH (resume): ${issueList}`);
+      throw new CandidateIdentityMismatchError(
+        "output_resume",
+        identity,
+        { candidate_name: "(see issues: " + issueList + ")" } as any,
+      );
+    }
+    logger?.info(`🔐 [Pipeline] Resume identity verified for "${identity.candidate_name}"`);
+
+    const clCheck = validateCoverLetterIdentity(finalCoverLetter, identity);
+    if (!clCheck.valid) {
+      // Cover letter sign-off mismatch is a warning, not a hard block,
+      // because the LLM sometimes formats sign-offs differently
+      logger?.warn(`⚠️ [Pipeline] Cover letter identity warning: ${clCheck.issues.join("; ")}`);
+    }
+  } catch (err: any) {
+    if (err instanceof CandidateIdentityMismatchError) throw err;
+    logger?.warn(`⚠️ [Pipeline] Output identity check failed: ${err.message}`);
+  }
+
   // ── Plaintext ATS render ───────────────────────────────────────
 
   let plaintextResume: string | undefined;
   try {
-    const candidateName = inventory?.profile?.name;
+    const candidateName = identity.candidate_name;
     plaintextResume = renderPlaintext(finalResume, candidateName);
   } catch (err: any) {
     logger?.warn(`⚠️ [Pipeline] Plaintext render failed: ${err.message}`);
@@ -576,9 +628,9 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
   try {
     const histResult = await queryWithTimeout(
       `SELECT summary_text FROM resume_history
-       WHERE job_id != $1
+       WHERE job_id != $1 AND (candidate_id = $2 OR candidate_id IS NULL)
        ORDER BY created_at DESC LIMIT 3`,
-      [input.job_id],
+      [input.job_id, identity.candidate_id],
       10000, // 10s timeout — resume history is non-critical
     );
     priorSummaries = histResult.rows
@@ -686,8 +738,7 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
 
               // Re-render plaintext for the new review
               try {
-                const candidateName = inventory?.profile?.name;
-                plaintextResume = renderPlaintext(finalResume, candidateName);
+                plaintextResume = renderPlaintext(finalResume, identity.candidate_name);
               } catch { /* non-fatal */ }
 
               // Re-run stage 8: Recruiter Review
@@ -760,7 +811,7 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
   // ── Store resume snapshot for future divergence checks ─────────
 
   try {
-    await storeDivergenceSnapshot(finalResume, input.job_id, mandate.primary_mandate);
+    await storeDivergenceSnapshot(finalResume, input.job_id, mandate.primary_mandate, identity.candidate_id);
   } catch (err: any) {
     logger?.warn(`⚠️ [Pipeline] Failed to store resume snapshot: ${err.message}`);
   }
@@ -926,6 +977,7 @@ export async function runPipelineV1(input: PipelineInput): Promise<PipelineResul
   return {
     success: true,
     job_id: input.job_id,
+    candidate_identity: identity,
     pass: passed && recruiterReviewPassed,
     attempts_used: attemptHistory.length,
     max_attempts: maxAttempts,

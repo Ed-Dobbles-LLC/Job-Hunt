@@ -35,25 +35,13 @@ import {
   getArchetypeSummaryFraming,
 } from "./resumeDivergenceEnforcer";
 import { runPipeline } from "../../resume-engine/pipeline";
+import { loadInventoryStrict } from "../../resume-engine/inventory-loader";
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
+/** Load inventory via centralized loader — throws MissingBaselineError, never returns stubs */
 async function loadInventory(): Promise<Record<string, any>> {
-  // Check DB first (survives Railway redeploys)
-  try {
-    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
-    if (dbResult.rows.length > 0 && dbResult.rows[0].value) {
-      return JSON.parse(dbResult.rows[0].value);
-    }
-  } catch { /* fall through to filesystem */ }
-
-  // Fallback to filesystem
-  try {
-    const inventoryPath = workspacePath("experience_inventory.json");
-    return JSON.parse(fs.readFileSync(inventoryPath, "utf-8"));
-  } catch (err: any) {
-    throw new Error(`Cannot load experience_inventory.json: ${err.message}. Run the Profile Builder first.`);
-  }
+  return loadInventoryStrict();
 }
 
 /** Lazy OpenAI client — reads API key at call time, not import time */

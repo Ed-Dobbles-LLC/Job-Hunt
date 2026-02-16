@@ -91,6 +91,8 @@ src/mastra/
     └── settings.html           # Settings UI
 
 src/resume-engine/              # 8-stage + post-processing deterministic-first resume pipeline
+├── candidate-identity.ts       # CandidateIdentity type, MissingBaselineError, identity resolution + output validation guards
+├── inventory-loader.ts         # Centralized inventory loader (replaces 11 duplicates). Throws MissingBaselineError, never stubs.
 ├── types.ts                    # TypeScript interfaces + Zod schemas (Claim, ClaimsLedger, MandateProfile, etc.)
 ├── pipeline.ts                 # Feature-flag router: dispatches to v1, v2, or dry-run based on PIPELINE_ARCH
 ├── pipeline-v1.ts              # v1 (legacy) orchestrator — original 7-stage pipeline preserved
@@ -240,6 +242,7 @@ Each stage declares what it may and may not mutate, enforced by `stage-contracts
 
 | Stage | Name | Type | Allowed Mutations | Failure Mode |
 |-------|------|------|-------------------|--------------|
+| 0 | Identity Validation | **Deterministic** | `inventory`, `identity` | abort (MissingBaselineError) |
 | 1 | Claims Ledger | **Deterministic** | `claims_ledger` | abort |
 | 2 | Mandate Classifier | **LLM** | `mandate_profile` | abort |
 | 3 | Bullet Scoring | **Deterministic** | `bullet_plan` | abort |
@@ -310,6 +313,7 @@ Budget exceeded → `BudgetExceededError` with structured violation, graceful de
 
 ## Key Design Decisions
 
+- **Candidate Identity Locking**: Every pipeline run is bound to a single verified candidate via `CandidateIdentity` (candidate_id, candidate_name, inventory_hash, source). Stage 0 validates identity before any generation. Output guards verify the resume's employers match the claims ledger and the cover letter signature matches the candidate name. `MissingBaselineError` throws hard on missing inventory — no fallback to test fixtures or stub objects. All 11 duplicate `loadInventory()` functions now delegate to the centralized `inventory-loader.ts`. The `resume_history` table is scoped by `candidate_id` to prevent cross-candidate divergence comparisons.
 - **Zero-fabrication architecture**: FactRegistry + EntityAllowlist + ClaimsLedger + 6-layer verifier ensures no hallucinated content. Every bullet requires `source_hash` + `evidence_quote` + `claim_ids[]` traceable to inventory.
 - **Deterministic scoring**: `matchScorer.ts` uses token overlap, phrase matching, and tech keyword lookup — no LLM in the scoring loop. Reproducible results.
 - **Structured output**: All LLM calls use `generateObject` with Zod schemas (not free-form text). Schema constraints enforce structure.
@@ -480,7 +484,7 @@ All tables created in `src/mastra/tools/db.ts:initDatabase()` + `settingsRoutes.
 3. **Dashboard trigger is fire-and-forget**: `POST /api/dashboard/trigger` starts the workflow but returns immediately with no run tracking handle.
 4. **LibreOffice dependency**: PDF conversion requires LibreOffice headless. Works in Docker but not in all local dev environments.
 5. **Cover letter word count**: Schema enforces 250-350 words but the LLM sometimes drifts. The verifier catches this but correction doesn't always converge.
-6. **Duplicate `loadInventory()`**: Multiple files define their own `loadInventory()` function reading `experience_inventory.json`. Should be centralized.
+6. **~~Duplicate `loadInventory()`~~**: RESOLVED — All 11 duplicate `loadInventory()` functions now delegate to the centralized `inventory-loader.ts`. Silent stub fallbacks (returning `{ profile: { name: "Candidate" } }`) have been eliminated. All paths throw `MissingBaselineError` on failure.
 7. **Dual verification tools**: Both `verifyTruthTool.ts` and `verifyTruthfulnessTool.ts` exist with overlapping purpose. Should be consolidated.
 8. **Enrichment is fire-and-forget**: Background enrichment has no persistent progress tracking. If the server restarts mid-enrichment, partially processed batches are lost. A DB-based job queue would be more resilient.
 

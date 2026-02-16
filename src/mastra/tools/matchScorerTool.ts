@@ -1,17 +1,13 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { query } from "./db";
-import * as fs from "fs";
-import { workspacePath } from "./paths";
 import { computeMatchReport, prettyPrintMatchReport, type ExperienceInventory, type MatchReport } from "./matchScorer";
 import { JDRequirementsSchema, type JDRequirements } from "./extractJDRequirementsTool";
+import { loadInventoryStrict } from "../../resume-engine/inventory-loader";
 
+/** Load inventory via centralized loader — throws MissingBaselineError, never returns stubs */
 async function loadInventory(): Promise<ExperienceInventory> {
-  try {
-    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
-    if (dbResult.rows.length > 0 && dbResult.rows[0].value) return JSON.parse(dbResult.rows[0].value);
-  } catch { /* fall through */ }
-  return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8"));
+  return loadInventoryStrict() as Promise<ExperienceInventory>;
 }
 
 const MatchedReqSchema = z.object({

@@ -20,18 +20,25 @@ import { linkedInMessageTool } from "../tools/linkedInMessageTool";
 import { assembleDailyBriefTool } from "../tools/dailyBriefTool";
 import * as fs from "fs";
 import { workspacePath } from "../tools/paths";
+import { query } from "../tools/db";
 
 const openai = createOpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
 
-const inventoryPath = workspacePath("experience_inventory.json");
+// Load inventory text for system prompt — tries DB first, then filesystem.
+// If both fail, sets empty JSON with a warning marker so the agent can detect it.
+// NOTE: The agent's tools now use the centralized loadInventoryStrict() loader which
+// throws MissingBaselineError. This global text is only for the system prompt context.
 let inventoryText = "";
 try {
+  const inventoryPath = workspacePath("experience_inventory.json");
   inventoryText = fs.readFileSync(inventoryPath, "utf-8");
 } catch {
-  inventoryText = "{}";
+  // Filesystem failed — mark as unresolved. The agent tools will fail fast
+  // via MissingBaselineError if they try to load inventory without it being available.
+  inventoryText = '{"_warning": "INVENTORY NOT LOADED — tools will fail if inventory is missing from DB and filesystem"}';
 }
 
 export const jobMatchAgent = new Agent({

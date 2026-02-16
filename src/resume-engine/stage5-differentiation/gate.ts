@@ -68,6 +68,7 @@ export async function storeDivergenceSnapshot(
   resume: TailoredResume,
   jobId: number,
   primaryMandate: string,
+  candidateId?: string,
 ): Promise<void> {
-  await storeResumeSnapshot(resume, jobId, primaryMandate);
+  await storeResumeSnapshot(resume, jobId, primaryMandate, candidateId);
 }

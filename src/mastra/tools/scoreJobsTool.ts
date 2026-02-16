@@ -1,9 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { query } from "./db";
-import * as fs from "fs";
 import * as path from "path";
-import { workspacePath } from "./paths";
 import {
   SPEC_INFLATION_CONFIG,
   AI_STRATEGY_TERMS,
@@ -18,17 +16,11 @@ import {
 import { evaluateRules } from "./hardFlagEngine";
 import type { GateStatus } from "./hardFlagRules";
 import { classifyRoleShape, type RoleShapeResult } from "./roleShapeClassifier";
+import { loadInventoryStrict } from "../../resume-engine/inventory-loader";
 
+/** Load inventory via centralized loader — throws MissingBaselineError, never returns stubs */
 async function loadInventory(): Promise<any> {
-  try {
-    const dbResult = await query("SELECT value FROM app_settings WHERE key = 'experience_inventory'");
-    if (dbResult.rows.length > 0 && dbResult.rows[0].value) return JSON.parse(dbResult.rows[0].value);
-  } catch { /* fall through */ }
-  try {
-    return JSON.parse(fs.readFileSync(workspacePath("experience_inventory.json"), "utf-8"));
-  } catch {
-    return { profile: {}, domains: [], skills: [], experience: [] };
-  }
+  return loadInventoryStrict();
 }
 
 const EXECUTION_MODE_NEGATIVE_SIGNALS = [

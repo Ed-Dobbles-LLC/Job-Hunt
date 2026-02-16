@@ -60,6 +60,11 @@ export interface ClaimsLedger {
   // Stats
   total_claims: number;
   extraction_timestamp: string;
+
+  // ── Candidate Identity Binding (required for generation pipelines) ──
+  candidate_id?: string;
+  candidate_name?: string;
+  inventory_hash?: string;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -123,7 +128,10 @@ function parseNumericValue(raw: string): { value: number; unit: string } | null 
 }
 
 // ── Main Extraction ─────────────────────────────────────────────
-export function extractClaimsLedger(inventory: Record<string, any>): ClaimsLedger {
+export function extractClaimsLedger(
+  inventory: Record<string, any>,
+  candidateIdentity?: { candidate_id: string; candidate_name: string; inventory_hash: string },
+): ClaimsLedger {
   const claims: Claim[] = [];
   const byId = new Map<string, Claim>();
   const byType = new Map<ClaimType, Claim[]>();
@@ -328,6 +336,10 @@ export function extractClaimsLedger(inventory: Record<string, any>): ClaimsLedge
     byType,
     total_claims: claims.length,
     extraction_timestamp: new Date().toISOString(),
+    // Embed candidate identity for downstream verification
+    candidate_id: candidateIdentity?.candidate_id,
+    candidate_name: candidateIdentity?.candidate_name,
+    inventory_hash: candidateIdentity?.inventory_hash,
   };
 }
 

@@ -1359,10 +1359,33 @@ function findRoleLabelForIndex(roleIndex: number, legacy: LegacyClaimsLedger): s
  * Extract claims from a structured JSON inventory.
  * Delegates to the existing `extractClaimsLedger()` from claimsLedger.ts
  * and bridges the result into the new ClaimsLedger format.
+ *
+ * When candidateIdentity is provided, it is embedded into the legacy ledger
+ * and propagated through the bridge so downstream stages can verify identity.
  */
-export function extractClaimsFromInventory(inventory: Record<string, any>): ClaimsLedger {
-  const legacyLedger = extractLegacyLedger(inventory);
-  return bridgeLegacyLedger(legacyLedger);
+export function extractClaimsFromInventory(
+  inventory: Record<string, any>,
+  candidateIdentity?: { candidate_id: string; candidate_name: string; inventory_hash: string },
+): ClaimsLedger {
+  const legacyLedger = extractLegacyLedger(inventory, candidateIdentity);
+  const ledger = bridgeLegacyLedger(legacyLedger);
+  // Propagate identity fields from legacy ledger to pipeline ledger
+  if (legacyLedger.candidate_id) ledger.candidate_id = legacyLedger.candidate_id;
+  if (legacyLedger.candidate_name) ledger.candidate_name = legacyLedger.candidate_name;
+  if (legacyLedger.inventory_hash) ledger.inventory_hash = legacyLedger.inventory_hash;
+  // Propagate employer claims from legacy ledger (needed for identity guard)
+  if (legacyLedger.employers.length > 0 && ledger.employers.length === 0) {
+    ledger.employers = legacyLedger.employers.map(e => ({
+      id: e.id,
+      type: "employer" as const,
+      value: e.value,
+      normalized: e.normalized,
+      role_index: 0,
+      role_label: e.value,
+      source_span: { section: "experience", original_text: e.source_context },
+    }));
+  }
+  return ledger;
 }
 
 // ── Auto-Detect Extractor ─────────────────────────────────────────
@@ -1385,6 +1408,7 @@ export function extractClaims(input: string | Record<string, any>): ClaimsLedger
 
 function buildLedgerFromClaims(claims: Claim[]): ClaimsLedger {
   const roles = claims.filter((c) => c.type === "role");
+  const employers = claims.filter((c) => c.type === "employer");
   const metrics = claims.filter((c) => c.type === "metric");
   const scopes = claims.filter((c) => c.type === "scope");
   const tools = claims.filter((c) => c.type === "tool");
@@ -1396,6 +1420,7 @@ function buildLedgerFromClaims(claims: Claim[]): ClaimsLedger {
   return {
     claims,
     roles,
+    employers,
     metrics,
     scopes,
     tools,
