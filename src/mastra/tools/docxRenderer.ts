@@ -19,8 +19,8 @@ const NAME_SIZE = 44;       // 30%+ larger than body for commanding executive pr
 const HEADLINE_SIZE = 20;   // Lighter weight under name — name:headline ratio ~2.2x (was 21)
 const CONTACT_SIZE = 18;
 const HEADING_SIZE = 22;
-const BODY_SIZE = 20;
-const SUB_HEADING_SIZE = 20;
+const BODY_SIZE = 22;          // 11pt — matches estimator assumption (was 20/10pt, causing 1-page resumes)
+const SUB_HEADING_SIZE = 22;
 const COMPETENCY_SIZE = 19;
 const BULLET_INDENT = convertInchesToTwip(0.25);
 const SECTION_SPACING_BEFORE = 220;   // Generous space before sections for calm feel
@@ -77,29 +77,6 @@ function formatDateRange(start: string, end: string): string {
     return `${months[parseInt(parts[2]) - 1] || parts[2]} ${parts[1]}`;
   };
   return `${formatDate(start)} – ${formatDate(end)}`;
-}
-
-/**
- * Determine bullet caps per role based on recency.
- * - Most recent role: 4 bullets
- * - Second and third roles: 3 bullets each
- * - Roles older than 15 years: 2 bullets
- * - All other roles: 2 bullets
- */
-function getBulletCapsForRoles(experience: { start_date: string; end_date: string }[]): number[] {
-  const currentYear = new Date().getFullYear();
-  return experience.map((exp, idx) => {
-    // Check if role is older than 15 years
-    const endDate = exp.end_date?.toLowerCase() === "present"
-      ? currentYear
-      : parseInt(exp.end_date?.substring(0, 4) || "0", 10);
-    const isOlderThan15Years = endDate > 0 && (currentYear - endDate) > 15;
-
-    if (isOlderThan15Years) return 2;
-    if (idx === 0) return 4;       // Most recent role
-    if (idx <= 2) return 3;        // Second and third roles
-    return 2;                      // Fourth+ role
-  });
 }
 
 /**
@@ -261,12 +238,8 @@ export async function renderResumeDocx(
     renderedSections.add("EXPERIENCE");
     children.push(sectionHeading("Professional Experience"));
 
-    // Determine bullet caps by role position
-    const bulletCaps = getBulletCapsForRoles(resume.experience);
-
     for (let roleIdx = 0; roleIdx < resume.experience.length; roleIdx++) {
       const exp = resume.experience[roleIdx];
-      const maxBullets = bulletCaps[roleIdx] ?? 3;
 
       // Role Title | Company (clear separation, bold)
       children.push(
@@ -330,8 +303,8 @@ export async function renderResumeDocx(
         );
       }
 
-      // Bullets — enforce caps per role position
-      const bullets = exp.bullets.slice(0, maxBullets);
+      // Bullets — render all bullets (caps enforced upstream by layout governor)
+      const bullets = exp.bullets;
       for (const bullet of bullets) {
         const bulletText =
           typeof bullet === "string"

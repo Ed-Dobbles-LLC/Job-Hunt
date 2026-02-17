@@ -135,9 +135,9 @@ function getBulletCaps(experience: { start_date: string; end_date: string }[]): 
     const isOlderThan15Years = endDate > 0 && (currentYear - endDate) > 15;
 
     if (isOlderThan15Years) return 2;
-    if (idx === 0) return 4;       // Most recent role
-    if (idx <= 2) return 3;        // Second and third roles
-    return 2;                      // Fourth+ role
+    if (idx === 0) return 5;       // Most recent role — needs depth for executive presence
+    if (idx <= 2) return 4;        // Second and third roles
+    return 3;                      // Fourth+ role
   });
 }
 

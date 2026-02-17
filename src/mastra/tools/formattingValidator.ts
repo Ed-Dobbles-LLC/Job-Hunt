@@ -385,7 +385,7 @@ export function checkBulletLength(xml: string): FormattingViolation[] {
 }
 
 /**
- * Check total bullet count — should be 13-15 for a 2-page resume.
+ * Check total bullet count — should be 16-19 for a 2-page resume.
  */
 export function checkTotalBulletCount(xml: string): FormattingViolation[] {
   const violations: FormattingViolation[] = [];
@@ -393,13 +393,13 @@ export function checkTotalBulletCount(xml: string): FormattingViolation[] {
   const bulletMatches = plainText.match(/•\s+/g) || [];
   const count = bulletMatches.length;
 
-  if (count > 17) {
+  if (count > 21) {
     violations.push({
       check: "TOO_MANY_BULLETS",
       severity: "warning",
-      message: `Resume has ${count} bullets (target: 13-15, max: 17)`,
+      message: `Resume has ${count} bullets (target: 16-19, max: 21)`,
       location: "experience",
-      details: `Too many bullets risk exceeding 2 pages. Reduce to 13-15 total by trimming older roles first.`,
+      details: `Too many bullets risk exceeding 2 pages. Reduce to 16-19 total by trimming older roles first.`,
     });
   }
 

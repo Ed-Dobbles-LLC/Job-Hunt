@@ -265,12 +265,12 @@ function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
     const bulletsBefore = exp.bullets.length;
     originalCount += bulletsBefore;
 
-    // Determine max bullets based on recency
+    // Determine max bullets based on recency — generous caps, compression handles overflow
     let maxBullets: number;
     if (i === 0) {
-      maxBullets = 4; // Most recent role
+      maxBullets = 5; // Most recent role — needs depth for executive presence
     } else if (i <= 2) {
-      maxBullets = 3; // 2nd and 3rd roles
+      maxBullets = 4; // 2nd and 3rd roles
     } else {
       // Check if older than 15 years
       const startYear = parseInt(exp.start_date?.match(/\d{4}/)?.[0] || "0");
@@ -289,9 +289,9 @@ function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
     finalCount += exp.bullets.length;
   }
 
-  // Total cap: 13-15 bullets — trim non-impact bullets from oldest roles first
-  if (finalCount > 15) {
-    let excess = finalCount - 15;
+  // Total cap: 16-19 bullets — trim non-impact bullets from oldest roles first
+  if (finalCount > 19) {
+    let excess = finalCount - 19;
     for (let i = resume.experience.length - 1; i >= 0 && excess > 0; i--) {
       const exp = resume.experience[i];
       // Sort so non-impact bullets are at the end, then pop from end
@@ -307,7 +307,7 @@ function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
       }
     }
     if (excess > 0) {
-      details.push(`Total bullets still ${finalCount + excess}, could not trim below 15`);
+      details.push(`Total bullets still ${finalCount + excess}, could not trim below 19`);
     }
     capped = true;
   }
@@ -803,7 +803,7 @@ function enforceSummaryDensity(resume: TailoredResume): boolean {
  * - Certifications: ~1 line per entry
  * - Skills section: ~2-3 lines
  *
- * Standard page ~= 48 lines (Calibri 11pt, 0.7" margins, standard resume layout)
+ * Standard page ~= 42 lines (Calibri 11pt, 0.7" margins, accounting for DOCX section/role/bullet spacing)
  *
  * Character-per-line estimates use 85 chars (Calibri 11pt at 0.7" margins),
  * NOT the generic 75 chars used in earlier versions.
@@ -817,7 +817,7 @@ interface PageEstimate {
 }
 
 function estimatePages(resume: TailoredResume): PageEstimate {
-  const LINES_PER_PAGE = 48;
+  const LINES_PER_PAGE = 42; // Calibri 11pt, 0.7" margins — accounts for generous DOCX spacing (section/role/bullet gaps)
   const CHARS_PER_LINE = 85; // Calibri 11pt, 0.7" margins — measured from DOCX output
   const breakdown: Record<string, number> = {};
   const suggestions: string[] = [];
@@ -945,11 +945,13 @@ const MIN_ROLES = 3; // Minimum enterprise roles for career progression signal
  * BALANCED COMPRESSION: Fit within 2 pages while preserving executive depth.
  *
  * Strategy (in order — respects impact & career arc):
- * 1. Drop NON-IMPACT bullets from oldest roles (keep min 2 per role)
+ * 1. Drop NON-IMPACT bullets from oldest roles (keep min 3 per role)
  * 2. Trim competencies to 10 (less aggressive than before)
- * 3. Reduce most recent role to 3 bullets (impact-preserved)
- * 4. Trim summary to 2 paragraphs
- * 5. Drop oldest roles — but NEVER enterprise-scale roles first,
+ * 3. Trim summary to 2 paragraphs
+ * 3b. More aggressive competency trim to 8
+ * 4. Drop NON-IMPACT bullets from 2nd role (keep min 3)
+ * 5. Reduce most recent role to 4 bullets (impact-preserved, last resort)
+ * 5+. Drop oldest roles — but NEVER enterprise-scale roles first,
  *    and NEVER below MIN_ROLES
  *
  * CAREER ARC RULE: At least 3 major roles must remain. At least 1
@@ -968,12 +970,12 @@ function compressToPageBudget(resume: TailoredResume): { compressed: boolean; bl
     return { compressed: false, blocked: false, actions: [] };
   }
 
-  // Step 1: Drop NON-IMPACT bullets from oldest roles (keep min 2 per role)
+  // Step 1: Drop NON-IMPACT bullets from oldest roles (keep min 3 per role)
   for (let i = resume.experience.length - 1; i >= 1 && estimate.exceeds_2_pages; i--) {
     const exp = resume.experience[i];
     // Sort so non-impact bullets are at the end
     exp.bullets = sortByImpact(exp.bullets);
-    while (exp.bullets.length > 2 && estimate.exceeds_2_pages) {
+    while (exp.bullets.length > 3 && estimate.exceeds_2_pages) {
       const removed = exp.bullets.pop()!;
       const hadImpact = bulletHasOutcome(removed.text);
       actions.push(`Dropped ${hadImpact ? "IMPACT " : ""}bullet from ${exp.employer} (role ${i})`);
@@ -1009,10 +1011,10 @@ function compressToPageBudget(resume: TailoredResume): { compressed: boolean; bl
   }
 
   // Step 4: Drop NON-IMPACT bullets from the 2nd role before touching the most recent role
-  if (estimate.exceeds_2_pages && resume.experience[1]?.bullets.length > 2) {
+  if (estimate.exceeds_2_pages && resume.experience[1]?.bullets.length > 3) {
     const exp1 = resume.experience[1];
     exp1.bullets = sortByImpact(exp1.bullets);
-    while (exp1.bullets.length > 2 && estimate.exceeds_2_pages) {
+    while (exp1.bullets.length > 3 && estimate.exceeds_2_pages) {
       const removed = exp1.bullets.pop()!;
       const hadImpact = bulletHasOutcome(removed.text);
       actions.push(`Dropped ${hadImpact ? "IMPACT " : ""}bullet from 2nd role ${exp1.employer}`);
@@ -1020,10 +1022,10 @@ function compressToPageBudget(resume: TailoredResume): { compressed: boolean; bl
     }
   }
 
-  // Step 5: LAST RESORT for most recent role — reduce to 3 bullets (impact-preserved)
-  if (estimate.exceeds_2_pages && resume.experience[0]?.bullets.length > 3) {
-    resume.experience[0].bullets = sortByImpact(resume.experience[0].bullets).slice(0, 3);
-    actions.push(`Reduced most recent role to 3 bullets (last resort, impact-preserved)`);
+  // Step 5: LAST RESORT for most recent role — reduce to 4 bullets (impact-preserved)
+  if (estimate.exceeds_2_pages && resume.experience[0]?.bullets.length > 4) {
+    resume.experience[0].bullets = sortByImpact(resume.experience[0].bullets).slice(0, 4);
+    actions.push(`Reduced most recent role to 4 bullets (last resort, impact-preserved)`);
     estimate = estimatePages(resume);
   }
 
@@ -1117,7 +1119,7 @@ function expandToPageBand(
   for (let i = 2; i < resume.experience.length && estimate.estimated_pages < PAGE_BAND_MIN; i++) {
     const exp = resume.experience[i];
     const originalCount = originalBulletCounts[i] || exp.bullets.length;
-    const maxBullets = i <= 2 ? 3 : 2;
+    const maxBullets = i <= 2 ? 4 : 3;
 
     if (exp.bullets.length < maxBullets && exp.bullets.length < originalCount) {
       actions.push(`SIGNAL: Role "${exp.employer}" has room for ${maxBullets - exp.bullets.length} more impact bullet(s) — restore on next generation`);

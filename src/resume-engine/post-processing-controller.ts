@@ -430,7 +430,7 @@ function detectLayoutCompliance(
   issues: PostProcessingIssue[],
 ): number {
   let score = 100;
-  const LINES_PER_PAGE = 48;
+  const LINES_PER_PAGE = 42; // Calibri 11pt with DOCX spacing
   const CHARS_PER_LINE = 85;
 
   // Page estimate

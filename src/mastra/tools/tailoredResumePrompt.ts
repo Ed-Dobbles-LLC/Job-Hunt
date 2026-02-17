@@ -164,7 +164,7 @@ Retained executive recruiters who review resumes in 30-45 seconds. They are look
 The final rendered document MUST NOT exceed 2 pages. This is non-negotiable.
 - No reduction in font size below professional norms.
 - No margin manipulation.
-- Target 13-15 total bullets across all roles.
+- Target 16-19 total bullets across all roles to fill 2 full pages.
 - If content risks exceeding 2 pages, compress lower-priority bullets first, then tools, then condense older roles.
 - NEVER cut the most recent role first.
 
@@ -303,11 +303,12 @@ The resume should feel balanced and calm across both pages — no cramming.
    If a phrase appeared in a prior tailored resume, you MUST use different language. Each resume must have distinct language patterns.
 
    **BULLET CAPS BY ROLE RECENCY (STRICTLY ENFORCED):**
-   - Most recent role: EXACTLY 4 bullets
-   - Second most recent role: 3 bullets
-   - Third role: 3 bullets
+   - Most recent role: 4-5 bullets (executive depth required)
+   - Second most recent role: 3-4 bullets
+   - Third role: 3-4 bullets
+   - Fourth+ roles: 2-3 bullets
    - Roles older than 15 years: 2 bullets max (promotion + single top-impact result)
-   - Total across all roles: 13-15 bullets maximum
+   - Total across all roles: 16-19 bullets maximum — YOU MUST FILL 2 FULL PAGES
 
    **NO SECTION LONGER THAN 10-12 LINES** (content lines, not spacing). If a section exceeds this, compress it.
 
@@ -476,8 +477,8 @@ ${JSON.stringify(allowlist, null, 2)}
    c. Do NOT repeat scope_line info in bullets. Scope_line handles org context, bullets handle achievements.
    d. Start every bullet with a direct action verb. Follow Action → Scale → Outcome format. No passive, no hedging, no explanatory clauses.
    e. MAX 22 WORDS PER BULLET. No exceptions. Remove filler adjectives and passive phrasing. No stacked metrics.
-   f. STRICT bullet caps: 4 for most recent role, 3 for second and third roles, 2 for roles older than 15 years.
-   g. Total: 13-15 bullets maximum across all roles.
+   f. STRICT bullet caps: 4-5 for most recent role, 3-4 for second and third roles, 2-3 for fourth+ roles, 2 for roles older than 15 years.
+   g. Total: 16-19 bullets across all roles — you MUST fill 2 full pages.
    h. MANDATE-DRIVEN ORDERING: First 2 bullets per role must align with the dominant mandate. If mandate ≠ revenue growth, revenue bullets must NOT lead.
    i. TRUTH RULES: Do NOT introduce any new numbers, tool names, or platform names not in the inventory. Do NOT claim ownership of systems not explicitly documented. Do NOT upgrade "contributed to" → "led" or "team member" → "owner". If a JD requirement is unsupported, use transferable phrasing from adjacent experience or omit — never fabricate.
 6. Do NOT create both core_competencies and enterprise_capabilities — this creates redundancy. When core_competencies is present, only emit tools_and_platforms.
