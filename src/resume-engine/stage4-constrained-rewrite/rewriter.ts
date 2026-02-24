@@ -25,6 +25,14 @@ import { compressResume } from "../../mastra/tools/resumeCompressor";
 import {
   getArchetypeSummaryFraming,
 } from "../../mastra/tools/resumeDivergenceEnforcer";
+import { isClaudeAvailable } from "../llm-provider";
+import {
+  buildStrategicResumeSystemPrompt,
+  buildStrategicCoverLetterSystemPrompt,
+  buildStrategicResumeUserPrompt,
+} from "../strategic-prompt-builder";
+import type { PositioningBrief } from "../stage2b-positioning-strategy/strategist";
+import type { CompanyResearch } from "../stage2c-company-research/researcher";
 import type { MandateProfile } from "../stage2-mandate-classifier/classifier";
 import type { ScoredBulletPlan, ClarificationQuestion, AttemptRecord } from "../types";
 import type { Violation, LineItemFix, VerifierReport } from "../../mastra/tools/truthfulnessVerifier";
@@ -409,6 +417,10 @@ export interface RewriteInput {
   bulletPlan: ScoredBulletPlan;
   companyContext?: string;
   divergencePrompt?: string;
+  /** Positioning brief from Stage 2b (Phase 2) — enables strategic prompts */
+  positioningBrief?: PositioningBrief;
+  /** Company research from Stage 2c (Phase 3) — enriches context */
+  companyResearch?: CompanyResearch;
   correctionContext?: {
     previousResume: TailoredResume;
     previousCoverLetter: TailoredCoverLetter;
@@ -522,15 +534,37 @@ export async function constrainedRewrite(input: RewriteInput): Promise<RewriteRe
     }
   } else {
     // ── Initial Resume Generation ──
-    let finalPrompt = resumeUserPrompt;
+    // Phase 5: Use strategic prompts when positioning brief is available AND Claude is the provider
+    const useStrategicPrompts = !!input.positioningBrief && isClaudeAvailable();
+
+    let activeResumeSystemPrompt: string;
+    let activeResumeUserPrompt: string;
+
+    if (useStrategicPrompts) {
+      input.logger?.info(`🧠 [Stage 4] Using STRATEGIC prompt (positioning brief available, Claude active)`);
+      activeResumeSystemPrompt = buildStrategicResumeSystemPrompt(
+        input.positioningBrief!,
+        input.mandate,
+        input.companyResearch,
+      );
+      activeResumeUserPrompt = buildStrategicResumeUserPrompt(
+        input.inventory, input.allowlist, input.requirements, input.title, input.company,
+      ) + "\n\n" + mandateContext;
+    } else {
+      input.logger?.info(`📋 [Stage 4] Using STANDARD prompt (legacy mode)`);
+      activeResumeSystemPrompt = resumeSystemPrompt;
+      activeResumeUserPrompt = resumeUserPrompt;
+    }
+
+    let finalPrompt = activeResumeUserPrompt;
     if (input.divergencePrompt) finalPrompt += "\n\n" + input.divergencePrompt;
 
     resume = (await resilientGenerateObject({
       schema: TailoredResumeSchema,
-      system: resumeSystemPrompt,
+      system: activeResumeSystemPrompt,
       prompt: finalPrompt,
-      temperature: 0.3,
-      label: "Stage 4: resume-initial",
+      temperature: useStrategicPrompts ? 0.4 : 0.3,
+      label: `Stage 4: resume-initial${useStrategicPrompts ? " (strategic)" : ""}`,
       lane: "heavy",
       logger: input.logger,
     })).object;
@@ -569,16 +603,28 @@ Anchor the opener to THIS job's specific mandate: ${input.mandate.primary_mandat
 
     // ── Cover Letter Generation (with bullet alignment context) ──
     const bulletContext = buildCoverLetterBulletContext(resume, input.bulletPlan);
+
+    let activeClSystemPrompt: string;
+    if (useStrategicPrompts) {
+      activeClSystemPrompt = buildStrategicCoverLetterSystemPrompt(
+        input.positioningBrief!,
+        input.mandate,
+        input.companyResearch,
+      );
+    } else {
+      activeClSystemPrompt = clSystemPrompt;
+    }
+
     const clUserPrompt = buildCoverLetterUserPrompt(
       input.inventory, input.allowlist, input.requirements, input.title, input.company, input.companyContext,
     ) + "\n\n" + bulletContext;
 
     coverLetter = (await resilientGenerateObject({
       schema: TailoredCoverLetterSchema,
-      system: clSystemPrompt,
+      system: activeClSystemPrompt,
       prompt: clUserPrompt,
-      temperature: 0.4,
-      label: "Stage 4: coverLetter-initial",
+      temperature: useStrategicPrompts ? 0.5 : 0.4,
+      label: `Stage 4: coverLetter-initial${useStrategicPrompts ? " (strategic)" : ""}`,
       lane: "heavy",
       logger: input.logger,
     })).object;

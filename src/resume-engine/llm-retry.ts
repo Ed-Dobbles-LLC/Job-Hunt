@@ -17,6 +17,7 @@ import { generateObject } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { getGlobalLimiter, type LaneName } from "./llm-concurrency-limiter";
 import { getGlobalCostAccumulator } from "./cost-tracker";
+import { resolveProvider, type LLMProviderConfig } from "./llm-provider";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -44,8 +45,10 @@ export interface LLMCallOptions<T extends z.ZodTypeAny> {
   label: string;
   /** Which concurrency lane to use (default: "heavy") */
   lane?: LaneName;
-  /** Model ID (default: "gpt-4o") */
+  /** Model ID (default: auto-detected from environment — Claude if ANTHROPIC_API_KEY set, else GPT-4o) */
   model?: string;
+  /** LLM provider config override (provider, model, force) */
+  providerConfig?: LLMProviderConfig;
   /** Override max_tokens on the generation call */
   maxTokens?: number;
   /** Retry configuration overrides */
@@ -213,7 +216,11 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
   opts: LLMCallOptions<T>,
 ): Promise<LLMCallResult<z.infer<T>>> {
   const lane = opts.lane ?? "heavy";
-  const model = opts.model ?? "gpt-4o";
+
+  // ── Provider resolution: prefer Claude when ANTHROPIC_API_KEY is set ──
+  const resolved = resolveProvider(opts.providerConfig);
+  const model = opts.model ?? resolved.model;
+
   const config: Required<RetryConfig> = {
     baseDelayMs: opts.retry?.baseDelayMs ?? DEFAULTS.baseDelayMs,
     factor: opts.retry?.factor ?? DEFAULTS.factor,
@@ -241,7 +248,7 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
         const timer = setTimeout(() => controller.abort(), config.timeoutMs);
 
         const generateOpts: any = {
-          model: getOpenAI()(model),
+          model: opts.model ? getOpenAI()(opts.model) : resolved.instance,
           schema: opts.schema,
           system: opts.system,
           prompt: opts.prompt,

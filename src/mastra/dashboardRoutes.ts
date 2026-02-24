@@ -2003,5 +2003,54 @@ CRITICAL INSTRUCTIONS:
         return c.json({ run_id: runId, cost: runCost });
       },
     },
+    // ── Phase 4: Packet Feedback Endpoints ──────────────────────────
+    {
+      path: "/api/dashboard/feedback",
+      method: "POST" as const,
+      createHandler: async () => async (c: any) => {
+        try {
+          const body = await c.req.json();
+          const { job_id, rating, reason, aspect } = body;
+          if (!job_id || !rating || rating < 1 || rating > 5) {
+            return c.json({ error: "job_id and rating (1-5) required" }, 400);
+          }
+          // Fetch mandate for this job
+          const jobResult = await query(
+            `SELECT s.breakdown_json FROM scores s WHERE s.job_id = $1`,
+            [job_id],
+          );
+          const mandate = jobResult.rows[0]?.breakdown_json?.verified_packet?.positioning_angle
+            ? "unknown"
+            : (jobResult.rows[0]?.breakdown_json?.mandate || "unknown");
+          const narrativeAngle = jobResult.rows[0]?.breakdown_json?.verified_packet?.positioning_angle;
+
+          const { recordFeedback } = await import("../resume-engine/feedback-loop");
+          await recordFeedback({
+            job_id,
+            rating,
+            reason,
+            aspect,
+            mandate,
+            narrative_angle: narrativeAngle,
+          });
+          return c.json({ success: true, job_id, rating });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/dashboard/feedback/stats",
+      method: "GET" as const,
+      createHandler: async () => async (c: any) => {
+        try {
+          const { getFeedbackStats } = await import("../resume-engine/feedback-loop");
+          const stats = await getFeedbackStats();
+          return c.json({ stats });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
   ];
 }

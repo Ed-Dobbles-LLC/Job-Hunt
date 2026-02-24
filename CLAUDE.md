@@ -309,5 +309,93 @@ Same as Claude.ai — use Project Instructions field.
 ### Per-Project Context
 Each project should also have a `PROJECT.md` at its repo root covering what the project does, current state, next milestone, and project-specific constraints. This doctrine file covers how we work; PROJECT.md covers what we're building.
 ---
+## 7. PACKET GENERATION PIPELINE — STRATEGIC ARCHITECTURE (v2-strategic)
+
+The automated resume/cover letter pipeline has been rebuilt to close the quality gap with interactive Claude sessions. The core insight: the interactive project is better because a human reasons about positioning strategy before writing, has company context, and provides taste-based feedback. This architecture replicates all three.
+
+### Pipeline Stage Flow (new stages in bold)
+
+```
+Stage 0:  Identity Validation         (DETERMINISTIC)
+Stage 1:  Claims Ledger Extraction     (DETERMINISTIC)
+Stage 2:  Mandate Classification       (LLM)
+Stage 2c: Company Research             (LLM — best-effort, never blocks)     ← NEW
+Stage 3:  Bullet Scoring & Reordering  (DETERMINISTIC)
+Stage 2b: Positioning Strategy         (LLM — produces PositioningBrief)     ← NEW
+Stage 4:  Generation (strategic mode)  (LLM — resume + cover letter)         ← MODIFIED
+Stage 5:  Differentiation Gate         (DETERMINISTIC — detection only)
+Stage 6:  Layout Governor              (DETERMINISTIC — structure mutation)
+Stage 7:  Truth Audit                  (DETERMINISTIC — detection only)
+Stage 8:  Recruiter Review             (LLM — feedback only)
+Post:     Consolidated Quality Check   (DETERMINISTIC — detection only)
+```
+
+### Phase 1: Model Swap + Provider Abstraction
+- `llm-provider.ts` — auto-detects Claude vs GPT-4o based on API keys
+- Claude (`claude-sonnet-4-20250514`) is default when `ANTHROPIC_API_KEY` is set
+- Falls back to GPT-4o if only `OPENAI_API_KEY` is available
+- `llm-retry.ts` updated to use provider abstraction instead of hardcoded OpenAI
+- Requires: `npm install @ai-sdk/anthropic`
+
+### Phase 2: Strategic Positioning (Stage 2b)
+- `stage2b-positioning-strategy/strategist.ts`
+- Runs AFTER bullet scoring (needs scored bullets for context)
+- Produces a `PositioningBrief` with: narrative_angle, lead_with, story_arc, rare_combination, summary_thesis, de_emphasize, cover_letter_hook, company_alignment, positioning_warnings
+- The brief replaces human strategic reasoning — it's the "think before you write" step
+- Fed into Stage 4 to guide generation
+
+### Phase 3: Company Research (Stage 2c)
+- `stage2c-company-research/researcher.ts`
+- Extracts company intelligence from the JD text (industry, tech stack, culture signals, likely challenges, data maturity)
+- Caches results in `company_research` table (30-day TTL)
+- Populates the `companyContext` field that was previously always empty
+- Best-effort — never blocks the pipeline on failure
+
+### Phase 4: Feedback Loop
+- `feedback-loop.ts`
+- Users rate packets 1-5 via `POST /api/dashboard/feedback`
+- Stores rating + positioning brief per mandate archetype
+- `getSuccessPatterns(mandate)` retrieves highly-rated narrative angles for a mandate type
+- Patterns fed into Stage 2b to guide future positioning
+- Creates `packet_feedback` and `company_research` tables on first run
+- Stats available at `GET /api/dashboard/feedback/stats`
+
+### Phase 5: Constraint Inversion
+- `strategic-prompt-builder.ts`
+- When Claude + positioning brief are available, uses a ~150-line strategic system prompt instead of the ~437-line constraint-heavy prompt
+- Truth boundaries (entity allowlist, claims ledger, no fabrication) stay in generation prompt — non-negotiable
+- Stylistic constraints (word limits, bullet caps, phrase bans) handled by post-verification (Stage 7 + post-processing)
+- Higher temperature (0.4 vs 0.3) for more creative generation
+- Falls back to legacy prompt when brief is unavailable or GPT-4o is the provider
+
+### Configuration
+```
+# Required for Claude-based generation (Phase 1)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Existing — still works as fallback
+OPENAI_API_KEY=sk-...
+```
+
+### Key Files
+```
+src/resume-engine/llm-provider.ts                          # Phase 1: Provider abstraction
+src/resume-engine/stage2b-positioning-strategy/strategist.ts # Phase 2: Strategic positioning
+src/resume-engine/stage2c-company-research/researcher.ts    # Phase 3: Company research
+src/resume-engine/feedback-loop.ts                          # Phase 4: Feedback loop
+src/resume-engine/strategic-prompt-builder.ts               # Phase 5: Strategic prompts
+src/resume-engine/pipeline-v2.ts                            # Pipeline orchestrator (all phases wired in)
+src/resume-engine/stage4-constrained-rewrite/rewriter.ts    # Updated to accept positioning brief
+src/resume-engine/llm-retry.ts                              # Updated for provider abstraction
+src/mastra/dashboardRoutes.ts                               # Feedback API endpoints
+```
+
+### Database Tables (auto-created)
+```sql
+packet_feedback   — ratings, narrative angles, mandate-scoped patterns
+company_research  — cached company intelligence (30-day TTL)
+```
+
+---
 ## VERSION
 Last updated: 2026-02-24

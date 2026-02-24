@@ -51,6 +51,8 @@ import type { JDRequirements } from "../mastra/tools/extractJDRequirementsTool";
 // Stage imports
 import { extractClaimsFromInventory } from "./stage1-claims-ledger/extractor";
 import { classifyJobMandate } from "./stage2-mandate-classifier/classifier";
+import { researchCompany, type CompanyResearch } from "./stage2c-company-research/researcher";
+import { generatePositioningBrief, type PositioningBrief } from "./stage2b-positioning-strategy/strategist";
 import { scoreBullets } from "./stage3-bullet-scoring/scorer";
 import { constrainedRewrite } from "./stage4-constrained-rewrite/rewriter";
 import { initDivergenceTracking, checkDifferentiation, storeDivergenceSnapshot } from "./stage5-differentiation/gate";
@@ -61,6 +63,7 @@ import { runVerbIntegrityGuard } from "./qa/verbIntegrityGuard";
 import { renderPlaintext } from "./output/plaintext-renderer";
 import { buildClarificationQuestions } from "./output/clarification-builder";
 import { CostAccumulator, setGlobalCostAccumulator, formatCostSummary, type CostSummary } from "./cost-tracker";
+import { getSuccessPatterns, ensureFeedbackTables } from "./feedback-loop";
 
 // v2: Consolidated post-processing (replaces QA Gate + Refinement Layer)
 import { runPostProcessing, type PostProcessingReport } from "./post-processing-controller";
@@ -232,6 +235,19 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
   const { mandate } = stage2.data;
   logger?.info(`🎯 [Pipeline] Mandate: primary=${mandate.primary_mandate}, seniority=${mandate.seniority_level}`);
 
+  // ── STAGE 2c: Company Research (Phase 3) ────────────────────────
+  // Best-effort — never blocks the pipeline on failure.
+
+  let companyResearch: CompanyResearch | undefined;
+  const stage2c = await runStage("Stage 2c: Company Research", async () => {
+    return researchCompany({ company, jdText, logger });
+  }, logger);
+  stageResults["stage2c"] = stage2c;
+  if (stage2c.success && stage2c.data.research.confidence > 0) {
+    companyResearch = stage2c.data.research;
+    logger?.info(`🔍 [Pipeline] Company research: confidence=${companyResearch!.confidence}, source=${companyResearch!.source}`);
+  }
+
   // ── STAGE 3: Bullet Scoring ────────────────────────────────────
 
   const stage3 = await runStage("Stage 3: Bullet Scoring", () => {
@@ -248,6 +264,46 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
 
   const bulletPlan: ScoredBulletPlan = stage3.data;
   logger?.info(`🎯 [Pipeline] Scored ${bulletPlan.scored_bullets.length} bullets, ${bulletPlan.mandate_gaps.length} gaps`);
+
+  // ── STAGE 2b: Positioning Strategy (Phase 2) ───────────────────
+  // Runs after bullet scoring so the strategist has scored bullets for context.
+  // Uses company research (Phase 3) and feedback patterns (Phase 4).
+
+  let positioningBrief: PositioningBrief | undefined;
+
+  // Check budget for the positioning LLM call
+  const s2bBudget = budget.wouldExceed({ llm_calls: 1 });
+  if (s2bBudget) {
+    logger?.warn(`🚫 [Pipeline] Budget insufficient for Stage 2b: ${s2bBudget.message} — skipping`);
+  } else {
+    // Phase 4: Retrieve success patterns from feedback loop
+    let priorSuccessPatterns: string[] = [];
+    try {
+      await ensureFeedbackTables(logger);
+      priorSuccessPatterns = await getSuccessPatterns(mandate.primary_mandate, 5, logger);
+    } catch { /* non-fatal */ }
+
+    const stage2b = await runStage("Stage 2b: Positioning Strategy", async () => {
+      return generatePositioningBrief({
+        title,
+        company,
+        mandate,
+        bulletPlan,
+        jdText,
+        inventory,
+        companyResearch,
+        priorSuccessPatterns,
+        logger,
+      });
+    }, logger);
+    stageResults["stage2b"] = stage2b;
+    budget.recordLLMCall();
+
+    if (stage2b.success) {
+      positioningBrief = stage2b.data.brief;
+      logger?.info(`🧠 [Pipeline] Positioning: "${positioningBrief!.narrative_angle.substring(0, 80)}..."`);
+    }
+  }
 
   // ── Initialize divergence tracking ─────────────────────────────
 
@@ -297,6 +353,8 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
           mandate,
           bulletPlan,
           companyContext: input.company_context,
+          positioningBrief,
+          companyResearch,
           correctionContext,
           logger,
         });
@@ -356,6 +414,8 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
             return constrainedRewrite({
               inventory, allowlist, requirements, title, company, mandate, bulletPlan,
               companyContext: input.company_context,
+              positioningBrief,
+              companyResearch,
               divergencePrompt: stage5.data.divergence_prompt,
               logger,
             });
@@ -709,8 +769,12 @@ export async function runPipelineV2(input: PipelineInput): Promise<PipelineResul
         attempts_used: attemptHistory.length,
         max_attempts: maxAttempts,
         best_attempt: bestAttemptIndex,
-        pipeline_version: "v2-consolidated",
+        pipeline_version: "v2-strategic",
         stages_run: Object.keys(stageResults),
+        has_positioning_brief: !!positioningBrief,
+        has_company_research: !!companyResearch,
+        positioning_angle: positioningBrief?.narrative_angle?.substring(0, 200),
+        company_research_confidence: companyResearch?.confidence,
         budget_used: {
           llm_calls: budgetSnapshot.llm_calls,
           repair_loops: budgetSnapshot.repair_loops,
