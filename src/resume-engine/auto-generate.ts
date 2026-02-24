@@ -108,12 +108,13 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
          WHERE j.job_id = ANY($1)
            AND a.job_id IS NULL
            AND LENGTH(COALESCE(j.jd_raw_text, '')) >= 100
+           AND (j.user_action IS NULL OR j.user_action = '')
          ORDER BY s.total_score DESC`,
         [config.jobIds],
       );
       candidates = jobResult.rows;
     } else {
-      // Find top scored jobs without packets
+      // Find top scored jobs without packets (skip applied/dismissed)
       const jobResult = await query(
         `SELECT j.job_id, j.company, j.title, j.jd_raw_text, s.total_score
          FROM jobs j
@@ -122,6 +123,7 @@ export async function autoGeneratePackets(config: AutoGenerateConfig = {}): Prom
          WHERE a.job_id IS NULL
            AND LENGTH(COALESCE(j.jd_raw_text, '')) >= 100
            AND s.total_score >= $1
+           AND (j.user_action IS NULL OR j.user_action = '')
          ORDER BY s.total_score DESC
          LIMIT $2`,
         [minScore, topN],

@@ -153,6 +153,18 @@ export function getDashboardRoutes() {
           const page = parseInt(url.searchParams.get("page") || "1");
           const limit = parseInt(url.searchParams.get("limit") || "500");
           const offset = (page - 1) * limit;
+          const folder = url.searchParams.get("folder") || "all";
+
+          // Build WHERE clause based on folder filter
+          let whereClause = "";
+          const params: any[] = [limit, offset];
+          if (folder === "new") {
+            whereClause = "WHERE (j.user_action IS NULL OR j.user_action = '')";
+          } else if (folder === "applied") {
+            whereClause = "WHERE j.user_action = 'applied'";
+          } else if (folder === "deleted") {
+            whereClause = "WHERE j.user_action = 'deleted'";
+          }
 
           const result = await query(`
             SELECT j.job_id, j.company, j.title, j.location, j.remote_hybrid,
@@ -164,17 +176,31 @@ export function getDashboardRoutes() {
             FROM jobs j
             LEFT JOIN scores s ON j.job_id = s.job_id
             LEFT JOIN artifacts a ON j.job_id = a.job_id
+            ${whereClause}
             ORDER BY j.date_ingested DESC
             LIMIT $1 OFFSET $2
-          `, [limit, offset]);
+          `, params);
 
-          const countResult = await query("SELECT COUNT(*) as count FROM jobs");
+          // Return counts for all folders so the UI can show tab badges
+          const countResult = await query(`
+            SELECT
+              COUNT(*) as total,
+              COUNT(*) FILTER (WHERE user_action IS NULL OR user_action = '') as count_new,
+              COUNT(*) FILTER (WHERE user_action = 'applied') as count_applied,
+              COUNT(*) FILTER (WHERE user_action = 'deleted') as count_deleted
+            FROM jobs
+          `);
+          const counts = countResult.rows[0];
 
           return c.json({
             jobs: result.rows,
-            total: parseInt(countResult.rows[0].count),
+            total: parseInt(counts.total),
+            count_new: parseInt(counts.count_new),
+            count_applied: parseInt(counts.count_applied),
+            count_deleted: parseInt(counts.count_deleted),
             page,
             limit,
+            folder,
           });
         } catch (err: any) {
           logger?.error(`❌ [dashboard] Jobs error: ${err.message}`);
@@ -1179,11 +1205,14 @@ export function getDashboardRoutes() {
 
           let jobIds: number[];
           if (all) {
-            const allResult = await query(`SELECT job_id FROM jobs`);
+            const allResult = await query(
+              `SELECT job_id FROM jobs WHERE user_action IS NULL OR user_action = ''`
+            );
             jobIds = allResult.rows.map((r: any) => Number(r.job_id));
           } else {
             const unscoredResult = await query(
-              `SELECT j.job_id FROM jobs j LEFT JOIN scores s ON j.job_id = s.job_id WHERE s.job_id IS NULL`
+              `SELECT j.job_id FROM jobs j LEFT JOIN scores s ON j.job_id = s.job_id
+               WHERE s.job_id IS NULL AND (j.user_action IS NULL OR j.user_action = '')`
             );
             jobIds = unscoredResult.rows.map((r: any) => Number(r.job_id));
           }
@@ -1233,7 +1262,7 @@ export function getDashboardRoutes() {
           const topN = parseInt(url.searchParams.get("topN") || "10");
           const minScore = parseInt(url.searchParams.get("minScore") || "0");
 
-          // Find top scored jobs that don't already have packets
+          // Find top scored jobs that don't already have packets (skip applied/dismissed)
           const candidates = await query(
             `SELECT j.job_id, j.company, j.title, s.total_score
              FROM jobs j
@@ -1242,6 +1271,7 @@ export function getDashboardRoutes() {
              WHERE a.job_id IS NULL
                AND LENGTH(COALESCE(j.jd_raw_text, '')) >= 100
                AND s.total_score >= $1
+               AND (j.user_action IS NULL OR j.user_action = '')
              ORDER BY s.total_score DESC
              LIMIT $2`,
             [minScore, topN],
@@ -1458,7 +1488,8 @@ ONLY use webSearch and enrich-jobs tools.`,
                    COALESCE(LENGTH(jd_raw_text), 0) as jd_length,
                    date_ingested
             FROM jobs
-            WHERE jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100
+            WHERE (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)
+              AND (user_action IS NULL OR user_action = '')
             ORDER BY date_ingested DESC
           `);
           return c.json({ jobs: result.rows, total: result.rows.length });
@@ -1486,7 +1517,8 @@ ONLY use webSearch and enrich-jobs tools.`,
             const result = await query(
               `SELECT job_id, company, title, location, posting_url
                FROM jobs WHERE job_id = ANY($1)
-               AND (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)`,
+               AND (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)
+               AND (user_action IS NULL OR user_action = '')`,
               [requestedIds],
             );
             jobsToEnrich = result.rows;
@@ -1494,7 +1526,8 @@ ONLY use webSearch and enrich-jobs tools.`,
             const result = await query(
               `SELECT job_id, company, title, location, posting_url
                FROM jobs
-               WHERE jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100
+               WHERE (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)
+                 AND (user_action IS NULL OR user_action = '')
                ORDER BY date_ingested DESC`,
             );
             jobsToEnrich = result.rows;

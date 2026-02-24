@@ -1456,10 +1456,19 @@
       }
     }
 
+    // Server-returned folder counts (updated on every loadJobs call)
+    let folderCounts = { count_new: 0, count_applied: 0, count_deleted: 0, total: 0 };
+
     async function loadJobs() {
       try {
-        const data = await api('/jobs');
+        const data = await api('/jobs?folder=' + currentFolder);
         allJobs = data.jobs || [];
+        folderCounts = {
+          count_new: data.count_new ?? 0,
+          count_applied: data.count_applied ?? 0,
+          count_deleted: data.count_deleted ?? 0,
+          total: data.total ?? 0,
+        };
         applySortAndRender();
       } catch (e) {
         console.error('Jobs load error:', e);
@@ -1483,29 +1492,22 @@
     }
 
     function updateFolderCounts() {
-      const newCount = allJobs.filter(j => !j.user_action).length;
-      const appliedCount = allJobs.filter(j => j.user_action === 'applied').length;
-      const deletedCount = allJobs.filter(j => j.user_action === 'deleted').length;
-      document.getElementById('count-new').textContent = newCount;
-      document.getElementById('count-applied').textContent = appliedCount;
-      document.getElementById('count-deleted').textContent = deletedCount;
-      document.getElementById('count-all').textContent = allJobs.length;
+      document.getElementById('count-new').textContent = folderCounts.count_new;
+      document.getElementById('count-applied').textContent = folderCounts.count_applied;
+      document.getElementById('count-deleted').textContent = folderCounts.count_deleted;
+      document.getElementById('count-all').textContent = folderCounts.total;
     }
 
     function setFolder(folder) {
       currentFolder = folder;
       document.querySelectorAll('.folder-tab').forEach(t => t.classList.remove('active'));
       document.querySelector(`.folder-tab[onclick="setFolder('${folder}')"]`).classList.add('active');
-      applySortAndRender();
+      loadJobs();
     }
 
     function getFilteredJobs() {
-      switch (currentFolder) {
-        case 'new': return allJobs.filter(j => !j.user_action);
-        case 'applied': return allJobs.filter(j => j.user_action === 'applied');
-        case 'deleted': return allJobs.filter(j => j.user_action === 'deleted');
-        default: return allJobs;
-      }
+      // Server already returns jobs filtered by folder
+      return allJobs;
     }
 
     function getMatchReasons(j) {
@@ -1735,8 +1737,18 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action }),
         });
-        const job = allJobs.find(j => j.job_id === jobId);
-        if (job) job.user_action = action;
+        // Remove the job from the local list (it no longer belongs in the current folder)
+        allJobs = allJobs.filter(j => j.job_id !== jobId);
+        // Refresh counts from the server
+        try {
+          const countData = await api('/jobs?folder=' + currentFolder + '&limit=0');
+          folderCounts = {
+            count_new: countData.count_new ?? folderCounts.count_new,
+            count_applied: countData.count_applied ?? folderCounts.count_applied,
+            count_deleted: countData.count_deleted ?? folderCounts.count_deleted,
+            total: countData.total ?? folderCounts.total,
+          };
+        } catch (_) { /* counts will refresh on next full load */ }
         updateFolderCounts();
         applySortAndRender();
         showToast(action ? `Marked as ${action}` : 'Moved back to New', 'success');
