@@ -122,6 +122,7 @@ export function getDashboardRoutes() {
                    s.total_score
             FROM jobs j
             LEFT JOIN scores s ON j.job_id = s.job_id
+            WHERE (j.user_action IS NULL OR j.user_action = '')
             ORDER BY s.total_score DESC NULLS LAST
             LIMIT 5
           `);
@@ -653,6 +654,7 @@ export function getDashboardRoutes() {
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         const jobId = parseInt(c.req.param("jobId"));
+        if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
         logger?.info(`🔄 [generate-packet] Starting for job_id=${jobId}`);
 
         try {
@@ -1022,7 +1024,7 @@ export function getDashboardRoutes() {
           const errStack = err?.stack?.split('\n').slice(0, 8) || [];
           logger?.error(`❌ [generate-packet] Preflight error: ${errMsg}\n${errStack.join('\n')}`);
           logGen({ jobId, company: "?", title: "?", status: "error", message: errMsg, phase: "preflight" });
-          return c.json({ error: errMsg, phase: "preflight", stack: errStack }, 500);
+          return c.json({ error: errMsg, phase: "preflight" }, 500);
         }
       },
     },
@@ -1032,6 +1034,7 @@ export function getDashboardRoutes() {
       method: "GET" as const,
       createHandler: async () => async (c: any) => {
         const jobId = parseInt(c.req.param("jobId"));
+        if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
         const status = packetGenStatus.get(jobId);
 
         if (!status) {
@@ -1086,6 +1089,7 @@ export function getDashboardRoutes() {
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         const jobId = parseInt(c.req.param("jobId"));
+        if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
         const status = packetGenStatus.get(jobId);
 
         if (!status) {
@@ -1948,7 +1952,7 @@ CRITICAL INSTRUCTIONS:
           });
         } catch (err: any) {
           logger?.error(`❌ [import-excel] Error: ${err.message}`);
-          return c.json({ error: err.message, stack: err.stack?.split('\n').slice(0, 5) }, 500);
+          return c.json({ error: err.message }, 500);
         }
       },
     },
@@ -1980,6 +1984,7 @@ CRITICAL INSTRUCTIONS:
       createHandler: async () => async (c: any) => {
         const { COST_QUERY_DAILY } = await import("../resume-engine/cost-tracker");
         const days = parseInt(c.req.query("days") || "30");
+        if (isNaN(days) || days < 1 || days > 365) return c.json({ error: "Invalid days parameter" }, 400);
         try {
           const result = await query(COST_QUERY_DAILY, [days]);
           return c.json({ days: result.rows });

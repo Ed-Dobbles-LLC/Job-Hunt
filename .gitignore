@@ -1,8 +1,9 @@
 node_modules
 dist
 .mastra
-.env.development
-.env
+.env*
+!.env.example
+.replit
 *.db
 *.db-*
 .DS_Store

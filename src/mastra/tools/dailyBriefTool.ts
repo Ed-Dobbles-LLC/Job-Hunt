@@ -229,7 +229,8 @@ export const assembleDailyBriefTool = createTool({
 
     try {
       const fetchedResult = await query(
-        `SELECT COUNT(*) as count FROM jobs WHERE date_ingested::date = $1`,
+        `SELECT COUNT(*) as count FROM jobs WHERE date_ingested::date = $1
+         AND (user_action IS NULL OR user_action = '')`,
         [today],
       );
       const jobsFetched = parseInt(fetchedResult.rows[0]?.count || "0");
@@ -237,7 +238,8 @@ export const assembleDailyBriefTool = createTool({
       const scoredResult = await query(
         `SELECT COUNT(*) as count FROM scores s
          JOIN jobs j ON s.job_id = j.job_id
-         WHERE j.date_ingested::date = $1`,
+         WHERE j.date_ingested::date = $1
+         AND (j.user_action IS NULL OR j.user_action = '')`,
         [today],
       );
       const jobsScored = parseInt(scoredResult.rows[0]?.count || "0");
@@ -256,6 +258,7 @@ export const assembleDailyBriefTool = createTool({
          JOIN scores s ON j.job_id = s.job_id
          LEFT JOIN artifacts a ON j.job_id = a.job_id
          WHERE j.date_ingested::date = $1
+         AND (j.user_action IS NULL OR j.user_action = '')
          ORDER BY s.total_score DESC`,
         [today],
       );

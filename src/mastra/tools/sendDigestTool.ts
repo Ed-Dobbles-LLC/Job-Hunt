@@ -29,7 +29,8 @@ async function aggregateTodayStats(): Promise<{
   const today = new Date().toISOString().split("T")[0];
 
   const fetchedResult = await query(
-    `SELECT COUNT(*) as count FROM jobs WHERE date_ingested::date = $1`,
+    `SELECT COUNT(*) as count FROM jobs WHERE date_ingested::date = $1
+     AND (user_action IS NULL OR user_action = '')`,
     [today],
   );
   const jobsFetched = parseInt(fetchedResult.rows[0]?.count || "0");
@@ -37,7 +38,8 @@ async function aggregateTodayStats(): Promise<{
   const scoredResult = await query(
     `SELECT COUNT(*) as count FROM scores s
      JOIN jobs j ON s.job_id = j.job_id
-     WHERE j.date_ingested::date = $1`,
+     WHERE j.date_ingested::date = $1
+     AND (j.user_action IS NULL OR j.user_action = '')`,
     [today],
   );
   const jobsScored = parseInt(scoredResult.rows[0]?.count || "0");
@@ -51,6 +53,7 @@ async function aggregateTodayStats(): Promise<{
      JOIN scores s ON j.job_id = s.job_id
      LEFT JOIN artifacts a ON j.job_id = a.job_id
      WHERE j.date_ingested::date = $1
+     AND (j.user_action IS NULL OR j.user_action = '')
      ORDER BY s.total_score DESC`,
     [today],
   );

@@ -741,6 +741,7 @@
     .toast.visible { opacity: 1; transform: translateY(0); }
     .toast.success { border-color: var(--green); }
     .toast.error { border-color: var(--red); }
+    .toast.info { border-color: var(--blue); }
 
     .spinner {
       display: inline-block;
@@ -1031,7 +1032,7 @@
         <div class="stats-grid" id="statsGrid"></div>
 
         <!-- Generation Log (collapsible) -->
-        <div id="genLogPanel" style="display:none;margin:12px 0;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:12px 16px;max-height:220px;overflow-y:auto">
+        <div id="genLogPanel" style="display:none;margin:12px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;max-height:220px;overflow-y:auto">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <span style="font-weight:600;font-size:13px">Generation Log</span>
             <button onclick="document.getElementById('genLogPanel').style.display='none'" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px">&times;</button>
@@ -1391,12 +1392,14 @@
       return `<span class="gate-badge gate-${gate}">${gate}</span>`;
     }
 
+    let _toastTimer;
     function showToast(msg, type = 'success') {
       const el = document.getElementById('toast');
       el.textContent = msg;
       el.className = 'toast visible ' + type;
+      clearTimeout(_toastTimer);
       const duration = type === 'error' ? 10000 : 3000;
-      setTimeout(() => el.className = 'toast', duration);
+      _toastTimer = setTimeout(() => el.className = 'toast', duration);
       if (type === 'error') console.error('[toast]', msg);
     }
 
@@ -1419,14 +1422,14 @@
           <div class="stat-card" style="cursor:pointer" onclick="rescoreJobs()" title="Click to score unscored jobs">
             <div class="stat-icon" style="background:var(--yellow-soft)">&#x1F3AF;</div>
             <div>
-              <div class="label">Scored${data.stats.scoredJobs < data.stats.totalJobs ? ' <span style=&quot;font-size:0.7em;color:var(--coral)&quot;>(click to score all)</span>' : ''}</div>
+              <div class="label">Scored${data.stats.scoredJobs < data.stats.totalJobs ? ' <span style=&quot;font-size:0.7em;color:var(--accent)&quot;>(click to score all)</span>' : ''}</div>
               <div class="value">${data.stats.scoredJobs}</div>
             </div>
           </div>
           <div class="stat-card" style="cursor:pointer" onclick="autoGeneratePackets()" title="Click to generate packets for top matches">
             <div class="stat-icon" style="background:var(--green-soft)">&#x1F4E6;</div>
             <div>
-              <div class="label">Packets Ready${data.stats.packetsGenerated < data.stats.scoredJobs ? ' <span style=&quot;font-size:0.7em;color:var(--coral)&quot;>(click to auto-generate)</span>' : ''}</div>
+              <div class="label">Packets Ready${data.stats.packetsGenerated < data.stats.scoredJobs ? ' <span style=&quot;font-size:0.7em;color:var(--accent)&quot;>(click to auto-generate)</span>' : ''}</div>
               <div class="value">${data.stats.packetsGenerated}</div>
             </div>
           </div>
@@ -1447,7 +1450,7 @@
         el.innerHTML = entries.slice(0, 20).map(e => {
           const icon = e.status === 'success' ? '&#x2705;' : e.status === 'error' ? '&#x274C;' : '&#x23F3;';
           const time = new Date(e.ts).toLocaleTimeString();
-          const color = e.status === 'error' ? 'var(--coral)' : e.status === 'success' ? 'var(--green)' : 'var(--text-dim)';
+          const color = e.status === 'error' ? 'var(--accent)' : e.status === 'success' ? 'var(--green)' : 'var(--text-dim)';
           const phase = e.phase ? ` <span style="color:var(--text-dim)">[${esc(e.phase)}]</span>` : '';
           return `<div style="color:${color};padding:2px 0">${icon} <strong>${time}</strong> ${esc(e.company)} — ${esc(e.title)}${phase}: ${esc(e.message)}</div>`;
         }).join('');
@@ -2722,7 +2725,7 @@
     }
 
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { closeModal(); closeImportModal(); }
+      if (e.key === 'Escape') { closeModal(); closeImportModal(); closeQuickAddModal(); }
     });
 
     refreshData();
