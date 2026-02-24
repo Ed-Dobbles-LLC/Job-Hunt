@@ -1568,7 +1568,8 @@ ONLY use webSearch and enrich-jobs tools.`,
             const stillNeedEnrichment = await query(
               `SELECT job_id, company, title, location, posting_url
                FROM jobs WHERE job_id = ANY($1)
-               AND (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)`,
+               AND (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)
+               AND (user_action IS NULL OR user_action = '')`,
               [jobsToEnrich.map((j: any) => j.job_id)],
             );
 
