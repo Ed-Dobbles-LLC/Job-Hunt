@@ -63,7 +63,7 @@ describe("Corruption Detection", () => {
       ],
     });
 
-    const result = runVerbIntegrityGuard(resume);
+    const result = runVerbIntegrityGuard(resume, { detectOnly: false });
 
     expect(result.issues.length).toBeGreaterThan(0);
     const corruptionIssue = result.issues.find(i => i.type === "CORRUPTION" && i.original === "Influencedd");
@@ -81,7 +81,7 @@ describe("Corruption Detection", () => {
       ],
     });
 
-    const result = runVerbIntegrityGuard(resume);
+    const result = runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const issue = result.issues.find(i => i.original === "Briefedd");
     expect(issue).toBeDefined();
@@ -96,7 +96,7 @@ describe("Corruption Detection", () => {
       ],
     });
 
-    const result = runVerbIntegrityGuard(resume);
+    const result = runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const issue = result.issues.find(i => i.original === "Mentoredd");
     expect(issue).toBeDefined();
@@ -111,7 +111,7 @@ describe("Corruption Detection", () => {
       ],
     });
 
-    const result = runVerbIntegrityGuard(resume);
+    const result = runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const issue = result.issues.find(i => i.original === "Recruitedd");
     expect(issue).toBeDefined();
@@ -125,7 +125,7 @@ describe("Corruption Detection", () => {
       ],
     });
 
-    const result = runVerbIntegrityGuard(resume);
+    const result = runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const issue = result.issues.find(i => i.type === "CORRUPTION");
     expect(issue).toBeDefined();
@@ -139,7 +139,7 @@ describe("Corruption Detection", () => {
       ],
     });
 
-    const result = runVerbIntegrityGuard(resume);
+    const result = runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const issue = result.issues.find(i => i.type === "CORRUPTION" && i.original.includes("managinging"));
     expect(issue).toBeDefined();
@@ -150,7 +150,7 @@ describe("Corruption Detection", () => {
     const resume = makeTestResume();
     resume.professional_summary = "Experiencedd data leader driving platform modernization.";
 
-    const result = runVerbIntegrityGuard(resume);
+    const result = runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const issue = result.issues.find(i => i.location === "resume.professional_summary");
     expect(issue).toBeDefined();
@@ -230,7 +230,7 @@ describe("Semantic Drift Detection", () => {
       ],
     });
 
-    const result = runVerbIntegrityGuard(resume);
+    const result = runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const driftIssue = result.issues.find(i => i.type === "SEMANTIC_DRIFT");
     expect(driftIssue).toBeDefined();
@@ -253,7 +253,7 @@ describe("Semantic Drift Detection", () => {
       ],
     });
 
-    const result = runVerbIntegrityGuard(resume);
+    const result = runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const driftIssue = result.issues.find(i => i.type === "SEMANTIC_DRIFT");
     expect(driftIssue).toBeDefined();
@@ -327,7 +327,7 @@ describe("Fact Preservation", () => {
       ],
     });
 
-    runVerbIntegrityGuard(resume);
+    runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const text = resume.experience[0].bullets[0].text;
     expect(text).toContain("$12M");
@@ -341,7 +341,7 @@ describe("Fact Preservation", () => {
       ],
     });
 
-    runVerbIntegrityGuard(resume);
+    runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const text = resume.experience[0].bullets[0].text;
     expect(text).toContain("Snowflake");
@@ -356,7 +356,7 @@ describe("Fact Preservation", () => {
       ],
     });
 
-    runVerbIntegrityGuard(resume);
+    runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const text = resume.experience[0].bullets[0].text;
     expect(text).toContain("$5M");
@@ -372,7 +372,7 @@ describe("Fact Preservation", () => {
       ],
     });
 
-    runVerbIntegrityGuard(resume);
+    runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const bullet = resume.experience[0].bullets[0];
     expect(bullet.source_hash).toBe("orig-hash");
@@ -390,7 +390,7 @@ describe("Fact Preservation", () => {
       ],
     });
 
-    runVerbIntegrityGuard(resume);
+    runVerbIntegrityGuard(resume, { detectOnly: false });
 
     const newText = resume.experience[0].bullets[0].text;
     const newWordCount = newText.split(/\s+/).length;

@@ -17,7 +17,7 @@
  * The v2 PipelineInput extends v1 with an optional `budget` field.
  */
 
-import type { PipelineResult } from "./types";
+import type { PipelineResult, EmbeddingConfig } from "./types";
 import type { BudgetConfig } from "./pipeline-budget";
 
 // Re-export the v1 PipelineInput (superset compatible)
@@ -33,7 +33,7 @@ export interface PipelineInput {
   company_context?: string;
   max_attempts?: number;
   run_id?: string;
-  embedding_config?: { model?: string; dimensions?: number };
+  embedding_config?: EmbeddingConfig;
   /** v2 only: Budget overrides */
   budget?: Partial<BudgetConfig>;
   /** Dry-run mode: validate stage ordering and contracts without LLM calls */

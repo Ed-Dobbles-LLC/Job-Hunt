@@ -192,7 +192,7 @@ export interface PipelineResult {
   ownership_warnings: OwnershipInflationWarning[];
   final_report: any;
   recruiter_review?: RecruiterReviewReport;
-  refinement_score?: import("./refinement-layer").RefinementScore;
+  refinement_score?: import("./refinement-layer").RefinementScore | import("./post-processing-controller").PostProcessingScores;
   positioning_score?: import("./positioning-pass").PositioningScore;
   attempt_history: AttemptRecord[];
   human_review_required: boolean;

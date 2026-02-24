@@ -253,9 +253,9 @@ describe("Stage 6: Layout Governor", () => {
 
     const result = governLayout(resume, mandate);
 
-    // After compression + cap enforcement, should have at most 4 bullets for most recent role
-    expect(result.resume.experience[0].bullets.length).toBeLessThanOrEqual(4);
-    // The compression or cap logic should have trimmed from 6 to 4
+    // After compression + cap enforcement, most recent role (i===0) allows 5 bullets for executive depth
+    expect(result.resume.experience[0].bullets.length).toBeLessThanOrEqual(5);
+    // The compression or cap logic should have trimmed from 6 to 5
     expect(result.resume.experience[0].bullets.length).toBeLessThan(6);
   });
 

@@ -395,9 +395,8 @@ const UNGROUNDED_AUTHORITY_PATTERNS: { pattern: RegExp; label: string; requires_
 /**
  * Check for hype and inflated language. Returns issues found.
  *
- * DETECTION ONLY — does NOT mutate the resume.
- * Issues are returned as structured data for the pipeline to decide
- * whether to feed back to an LLM correction prompt.
+ * Auto-fixes inflated adjectives in-place on the resume object.
+ * Ungrounded authority claims are flagged but not auto-fixed.
  */
 export function checkAuthorityWithoutHype(
   resume: TailoredResume,
@@ -407,20 +406,23 @@ export function checkAuthorityWithoutHype(
   const actions: string[] = [];
   const inventoryText = inventory ? JSON.stringify(inventory).toLowerCase() : "";
 
-  function scanText(text: string, location: string) {
-    // Check inflated adjectives — DETECT ONLY (no auto-fix)
+  function scanText(text: string, location: string): string {
+    let result = text;
+
+    // Check inflated adjectives — detect and auto-fix in-place
     for (const adj of INFLATED_ADJECTIVES) {
       adj.pattern.lastIndex = 0;
-      const match = text.match(adj.pattern);
+      const match = result.match(adj.pattern);
       if (match) {
         issues.push({
           location,
           text: match[0],
           type: "inflated_adjective",
           replacement: adj.replacement,
-          auto_fixed: false,
+          auto_fixed: true,
         });
-        actions.push(`Detected inflated adjective "${match[0]}" at ${location} → suggest "${adj.replacement}"`);
+        result = result.replace(adj.pattern, adj.replacement);
+        actions.push(`Replaced inflated adjective "${match[0]}" at ${location} → "${adj.replacement}"`);
       }
     }
 
@@ -441,22 +443,24 @@ export function checkAuthorityWithoutHype(
         }
       }
     }
+
+    return result;
   }
 
-  // Scan summary (READ ONLY)
-  scanText(resume.professional_summary, "summary");
+  // Scan summary and auto-fix inflated adjectives in-place
+  resume.professional_summary = scanText(resume.professional_summary, "summary");
 
-  // Scan bullets (READ ONLY)
+  // Scan bullets and auto-fix inflated adjectives in-place
   for (let i = 0; i < resume.experience.length; i++) {
     for (let j = 0; j < resume.experience[i].bullets.length; j++) {
-      scanText(
+      resume.experience[i].bullets[j].text = scanText(
         resume.experience[i].bullets[j].text,
         `experience[${i}].bullets[${j}]`,
       );
     }
     const exp = resume.experience[i] as any;
     if (exp.scope_line) {
-      scanText(exp.scope_line, `experience[${i}].scope_line`);
+      exp.scope_line = scanText(exp.scope_line, `experience[${i}].scope_line`);
     }
   }
 
