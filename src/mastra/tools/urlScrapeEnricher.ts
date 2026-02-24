@@ -208,6 +208,7 @@ export async function enrichAllByUrl(
     SELECT job_id, company, title, posting_url
     FROM jobs
     WHERE (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)
+      AND (user_action IS NULL OR user_action = '')
     ORDER BY date_ingested DESC
   `);
 
@@ -225,7 +226,8 @@ export async function enrichAllByUrl(
   // Re-count remaining after scraping
   const remaining = await query(`
     SELECT COUNT(*) as cnt FROM jobs
-    WHERE jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100
+    WHERE (jd_raw_text IS NULL OR LENGTH(jd_raw_text) < 100)
+      AND (user_action IS NULL OR user_action = '')
   `);
   const remainingCount = parseInt(remaining.rows[0].cnt, 10);
 

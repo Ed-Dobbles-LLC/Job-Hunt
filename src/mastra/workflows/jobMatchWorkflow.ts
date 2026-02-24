@@ -367,7 +367,8 @@ async function executeScoreAndShortlist({ inputData, mastra }: { inputData: any;
     `SELECT j.job_id FROM jobs j
      LEFT JOIN scores s ON j.job_id = s.job_id
      WHERE s.job_id IS NULL AND j.jd_raw_text IS NOT NULL AND LENGTH(j.jd_raw_text) > 100
-     AND j.job_id != ALL($1)`,
+     AND j.job_id != ALL($1)
+     AND (j.user_action IS NULL OR j.user_action = '')`,
     [inputData.enrichedJobIds || []],
   );
   const unscoredIds = unscoredResult.rows.map((r: any) => r.job_id);
