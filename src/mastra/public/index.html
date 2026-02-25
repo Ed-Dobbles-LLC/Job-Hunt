@@ -563,6 +563,7 @@
 
     .action-btn:hover { border-color: var(--accent); color: var(--text); }
     .action-btn.applied { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+    .action-btn.not_interested { background: var(--yellow-soft); border-color: var(--yellow); color: var(--yellow); }
     .action-btn.deleted { background: var(--red-soft); border-color: var(--red); color: var(--red); }
     .action-btn.undo { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
@@ -1113,6 +1114,8 @@
           <div class="folder-tabs" id="folderTabs">
             <button class="folder-tab active" onclick="setFolder('new')">New <span class="count" id="count-new">0</span></button>
             <button class="folder-tab" onclick="setFolder('applied')">Applied <span class="count" id="count-applied">0</span></button>
+            <button class="folder-tab" onclick="setFolder('not_interested')">Not Interested <span class="count" id="count-not_interested">0</span></button>
+            <button class="folder-tab" onclick="setFolder('archived')">Archived <span class="count" id="count-archived">0</span></button>
             <button class="folder-tab" onclick="setFolder('deleted')">Dismissed <span class="count" id="count-deleted">0</span></button>
             <button class="folder-tab" onclick="setFolder('all')">All <span class="count" id="count-all">0</span></button>
           </div>
@@ -1460,7 +1463,7 @@
     }
 
     // Server-returned folder counts (updated on every loadJobs call)
-    let folderCounts = { count_new: 0, count_applied: 0, count_deleted: 0, total: 0 };
+    let folderCounts = { count_new: 0, count_applied: 0, count_not_interested: 0, count_deleted: 0, count_archived: 0, total: 0 };
 
     async function loadJobs() {
       try {
@@ -1469,7 +1472,9 @@
         folderCounts = {
           count_new: data.count_new ?? 0,
           count_applied: data.count_applied ?? 0,
+          count_not_interested: data.count_not_interested ?? 0,
           count_deleted: data.count_deleted ?? 0,
+          count_archived: data.count_archived ?? 0,
           total: data.total ?? 0,
         };
         applySortAndRender();
@@ -1497,6 +1502,8 @@
     function updateFolderCounts() {
       document.getElementById('count-new').textContent = folderCounts.count_new;
       document.getElementById('count-applied').textContent = folderCounts.count_applied;
+      document.getElementById('count-not_interested').textContent = folderCounts.count_not_interested;
+      document.getElementById('count-archived').textContent = folderCounts.count_archived;
       document.getElementById('count-deleted').textContent = folderCounts.count_deleted;
       document.getElementById('count-all').textContent = folderCounts.total;
     }
@@ -1600,9 +1607,21 @@
       const shapeLabels = { A: 'Strategy', B: 'Hybrid', C: 'Analytics', D: 'Eng/IC' };
       const shape = bd && bd._role_shape ? bd._role_shape : null;
 
+      // Age badge — show how old the job is
+      const ageMs = Date.now() - new Date(j.date_ingested).getTime();
+      const ageDays = Math.floor(ageMs / 86400000);
+      const ageBadge = ageDays === 0 ? '<span style="color:var(--green);font-size:11px;margin-left:6px">Today</span>'
+        : ageDays === 1 ? '<span style="color:var(--green);font-size:11px;margin-left:6px">1d ago</span>'
+        : ageDays <= 3 ? `<span style="color:var(--text-dim);font-size:11px;margin-left:6px">${ageDays}d ago</span>`
+        : ageDays <= 7 ? `<span style="color:var(--yellow);font-size:11px;margin-left:6px">${ageDays}d ago</span>`
+        : `<span style="color:var(--red);font-size:11px;margin-left:6px">${ageDays}d ago</span>`;
+
       let actionsHtml = '';
       if (j.user_action === 'applied') {
         actionsHtml = `<span class="action-btn applied" style="font-size:13px">Applied</span>
+          <button class="action-btn undo" onclick="event.stopPropagation(); setJobAction(${j.job_id}, null)">Undo</button>`;
+      } else if (j.user_action === 'not_interested') {
+        actionsHtml = `<span class="action-btn not_interested" style="font-size:13px">Not Interested</span>
           <button class="action-btn undo" onclick="event.stopPropagation(); setJobAction(${j.job_id}, null)">Undo</button>`;
       } else if (j.user_action === 'deleted') {
         actionsHtml = `<span class="action-btn deleted" style="font-size:13px">Dismissed</span>
@@ -1616,6 +1635,7 @@
         }
         actionsHtml += `<div class="action-btns" style="margin-top:4px">
           <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'applied')">Applied</button>
+          <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'not_interested')">Not Interested</button>
           <button class="action-btn" onclick="event.stopPropagation(); setJobAction(${j.job_id}, 'deleted')">Dismiss</button>
         </div>`;
       }
@@ -1624,7 +1644,7 @@
         <div class="jc-main">
           <div class="jc-header">
             <span class="jc-company">${esc(j.company || '-')}</span>
-            <span class="jc-title">${esc(j.title || '-')}</span>
+            <span class="jc-title">${esc(j.title || '-')}${ageBadge}</span>
           </div>
           <div class="jc-badges">
             <span class="jc-location">&#x1F4CD; ${esc(j.location || '-')}</span>
@@ -1748,13 +1768,16 @@
           folderCounts = {
             count_new: countData.count_new ?? folderCounts.count_new,
             count_applied: countData.count_applied ?? folderCounts.count_applied,
+            count_not_interested: countData.count_not_interested ?? folderCounts.count_not_interested,
             count_deleted: countData.count_deleted ?? folderCounts.count_deleted,
+            count_archived: countData.count_archived ?? folderCounts.count_archived,
             total: countData.total ?? folderCounts.total,
           };
         } catch (_) { /* counts will refresh on next full load */ }
         updateFolderCounts();
         applySortAndRender();
-        showToast(action ? `Marked as ${action}` : 'Moved back to New', 'success');
+        const actionLabels = { applied: 'Applied', not_interested: 'Not Interested', deleted: 'Dismissed' };
+        showToast(action ? `Marked as ${actionLabels[action] || action}` : 'Moved back to New', 'success');
       } catch (e) {
         console.error('Action error:', e);
         showToast('Failed to update job', 'error');

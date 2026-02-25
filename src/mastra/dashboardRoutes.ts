@@ -119,10 +119,11 @@ export function getDashboardRoutes() {
           );
           const topJobs = await query(`
             SELECT j.job_id, j.company, j.title, j.location, j.status, j.posting_url,
-                   s.total_score
+                   s.total_score, j.date_ingested
             FROM jobs j
             LEFT JOIN scores s ON j.job_id = s.job_id
             WHERE (j.user_action IS NULL OR j.user_action = '')
+              AND j.date_ingested > NOW() - INTERVAL '7 days'
             ORDER BY s.total_score DESC NULLS LAST
             LIMIT 5
           `);
@@ -160,11 +161,15 @@ export function getDashboardRoutes() {
           let whereClause = "";
           const params: any[] = [limit, offset];
           if (folder === "new") {
-            whereClause = "WHERE (j.user_action IS NULL OR j.user_action = '')";
+            whereClause = "WHERE (j.user_action IS NULL OR j.user_action = '') AND j.date_ingested > NOW() - INTERVAL '7 days'";
           } else if (folder === "applied") {
             whereClause = "WHERE j.user_action = 'applied'";
+          } else if (folder === "not_interested") {
+            whereClause = "WHERE j.user_action = 'not_interested'";
           } else if (folder === "deleted") {
             whereClause = "WHERE j.user_action = 'deleted'";
+          } else if (folder === "archived") {
+            whereClause = "WHERE (j.user_action IS NULL OR j.user_action = '') AND j.date_ingested <= NOW() - INTERVAL '7 days'";
           }
 
           const result = await query(`
@@ -186,9 +191,11 @@ export function getDashboardRoutes() {
           const countResult = await query(`
             SELECT
               COUNT(*) as total,
-              COUNT(*) FILTER (WHERE user_action IS NULL OR user_action = '') as count_new,
+              COUNT(*) FILTER (WHERE (user_action IS NULL OR user_action = '') AND date_ingested > NOW() - INTERVAL '7 days') as count_new,
               COUNT(*) FILTER (WHERE user_action = 'applied') as count_applied,
-              COUNT(*) FILTER (WHERE user_action = 'deleted') as count_deleted
+              COUNT(*) FILTER (WHERE user_action = 'not_interested') as count_not_interested,
+              COUNT(*) FILTER (WHERE user_action = 'deleted') as count_deleted,
+              COUNT(*) FILTER (WHERE (user_action IS NULL OR user_action = '') AND date_ingested <= NOW() - INTERVAL '7 days') as count_archived
             FROM jobs
           `);
           const counts = countResult.rows[0];
@@ -198,7 +205,9 @@ export function getDashboardRoutes() {
             total: parseInt(counts.total),
             count_new: parseInt(counts.count_new),
             count_applied: parseInt(counts.count_applied),
+            count_not_interested: parseInt(counts.count_not_interested),
             count_deleted: parseInt(counts.count_deleted),
+            count_archived: parseInt(counts.count_archived),
             page,
             limit,
             folder,
@@ -293,8 +302,8 @@ export function getDashboardRoutes() {
         try {
           const body = await c.req.json();
           const action = body.action;
-          if (!['applied', 'deleted', null].includes(action)) {
-            return c.json({ error: "Invalid action. Use 'applied', 'deleted', or null." }, 400);
+          if (!['applied', 'deleted', 'not_interested', null].includes(action)) {
+            return c.json({ error: "Invalid action. Use 'applied', 'deleted', 'not_interested', or null." }, 400);
           }
           logger?.info(`📊 [dashboard] Setting job ${jobId} action to: ${action}`);
           await query("UPDATE jobs SET user_action = $1 WHERE job_id = $2", [action, jobId]);
@@ -1206,17 +1215,19 @@ export function getDashboardRoutes() {
 
           const url = new URL(c.req.url);
           const all = url.searchParams.get("all") === "true";
+          const includeArchived = url.searchParams.get("includeArchived") === "true";
+          const ageFilter = includeArchived ? "" : " AND j.date_ingested > NOW() - INTERVAL '7 days'";
 
           let jobIds: number[];
           if (all) {
             const allResult = await query(
-              `SELECT job_id FROM jobs WHERE user_action IS NULL OR user_action = ''`
+              `SELECT j.job_id FROM jobs j WHERE (j.user_action IS NULL OR j.user_action = '')${ageFilter}`
             );
             jobIds = allResult.rows.map((r: any) => Number(r.job_id));
           } else {
             const unscoredResult = await query(
               `SELECT j.job_id FROM jobs j LEFT JOIN scores s ON j.job_id = s.job_id
-               WHERE s.job_id IS NULL AND (j.user_action IS NULL OR j.user_action = '')`
+               WHERE s.job_id IS NULL AND (j.user_action IS NULL OR j.user_action = '')${ageFilter}`
             );
             jobIds = unscoredResult.rows.map((r: any) => Number(r.job_id));
           }
