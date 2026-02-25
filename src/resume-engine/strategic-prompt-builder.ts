@@ -101,7 +101,9 @@ The first sentence of the summary MUST reflect this mandate. Not a generic ident
 
 5. **Reject, Don't Fabricate**: If a JD requirement can't be supported, add a gap_note. Never invent experience, metrics, employers, tools, or certifications.
 
-6. **No Ownership Inflation**: Don't upgrade "contributed to" → "led" or "team member" → "owner". Use the level of ownership documented in inventory.`);
+6. **No Ownership Inflation**: Don't upgrade "contributed to" → "led" or "team member" → "owner". Use the level of ownership documented in inventory.
+
+7. **Evidence Pointers (MANDATORY)**: Generate one entry in the evidence_pointers array per resume bullet. Each pointer must contain: claim_text (the exact bullet text you emitted), source_hash (inventory bullet ID, e.g. "exp-001-b2"), evidence_quote (verbatim from the inventory bullet), confidence (float 0.7-1.0). An empty evidence_pointers array is a schema violation.`);
 
   // ── Resume Architecture (streamlined) ───────────────────────────
   sections.push(`## RESUME STRUCTURE
