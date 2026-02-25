@@ -56,7 +56,6 @@ export const ResumeBulletSchema = z.object({
     .describe("Verbatim quote from the inventory bullet"),
   claim_ids: z
     .array(z.string())
-    .min(1, "Every bullet MUST have at least one claim ID from the Claims Ledger. Bullets with empty claim_ids are rejected.")
     .describe("MANDATORY. Claims Ledger IDs backing this bullet (e.g., ['claim-exp001-b2-metric-12M', 'claim-exp001-b2-tool-snowflake']). Every factual claim — metrics, tools, team sizes, budgets — MUST reference at least one claim ID from the Claims Ledger. No claim ID → bullet is rejected."),
 });
 export type ResumeBullet = z.infer<typeof ResumeBulletSchema>;
@@ -75,9 +74,7 @@ export const ResumeExperienceSchema = z.object({
     ),
   bullets: z
     .array(ResumeBulletSchema)
-    .min(1)
-    .max(5)
-    .describe("Tailored bullets per role: 4 max for most recent role, 3 for next 2 roles, 2 for roles older than 15 years. Each bullet: Action → Scale → Outcome, 18-24 words, max 2 lines. Lead with mandate/transformation bullet."),
+    .describe("Tailored bullets per role: 4 max for most recent role, 3 for next 2 roles, 2 for roles older than 15 years. Each bullet: Action → Scale → Outcome, 18-24 words, max 2 lines. Lead with mandate/transformation bullet. Min 1, max 5 bullets per role."),
 });
 
 export const TailoredResumeSchema = z.object({
@@ -100,17 +97,13 @@ export const TailoredResumeSchema = z.object({
     ),
   core_competencies: z
     .array(z.string())
-    .min(4)
-    .max(12)
     .optional()
     .describe(
-      "8-12 enterprise-level competency keywords for ATS and AI screening. HARD MAX 12. Frame strategically, not tactically. Include terms like: Enterprise Data Strategy, Data Governance, Digital Transformation, AI/ML Strategy & Deployment, Revenue & Pricing Optimization, Forecasting & Demand Planning, Commercial Analytics, Organizational Transformation, P&L Influence, Board & C-Suite Advisory, Organizational Design, Change Management. Only include competencies supported by inventory evidence.",
+      "8-12 enterprise-level competency keywords for ATS and AI screening. HARD MAX 12, minimum 4. Frame strategically, not tactically. Include terms like: Enterprise Data Strategy, Data Governance, Digital Transformation, AI/ML Strategy & Deployment, Revenue & Pricing Optimization, Forecasting & Demand Planning, Commercial Analytics, Organizational Transformation, P&L Influence, Board & C-Suite Advisory, Organizational Design, Change Management. Only include competencies supported by inventory evidence.",
     ),
   experience: z
     .array(ResumeExperienceSchema)
-    .min(1)
-    .max(7)
-    .describe("Work experience entries, ordered by relevance then recency. Include ALL relevant roles — a 25+ year career should show 4-5 roles to demonstrate depth."),
+    .describe("Work experience entries, ordered by relevance then recency. Include ALL relevant roles — a 25+ year career should show 4-5 roles to demonstrate depth. Min 1, max 7 entries."),
   skills: z.object({
     enterprise_capabilities: z
       .array(z.string())
@@ -120,7 +113,7 @@ export const TailoredResumeSchema = z.object({
       .array(z.string())
       .optional()
       .describe("Technical tools as a secondary sub-list. Include platforms (Snowflake, AWS, Tableau) and languages (Python, R, SQL) only if relevant to the JD."),
-  }).passthrough(),
+  }),
   education: z.array(
     z.object({
       institution: z.string(),

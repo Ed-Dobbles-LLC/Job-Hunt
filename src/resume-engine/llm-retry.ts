@@ -140,9 +140,10 @@ function classifyError(err: any): ClassifiedError {
     return { retryable: false, type: "auth_error" };
   }
 
-  // Schema validation — never retry (unless caller wraps us)
+  // Schema validation — retry up to 2 times since Claude's tool use output is stochastic
+  // and may produce valid output on a subsequent attempt (unlike deterministic auth errors)
   if (msg.includes("did not match schema") || msg.includes("No object generated") || msg.includes("parse")) {
-    return { retryable: false, type: "schema_error" };
+    return { retryable: true, type: "schema_error" };
   }
 
   // Rate limit (429)
@@ -255,8 +256,11 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
           temperature: opts.temperature,
           abortSignal: controller.signal,
         };
+        // Set maxTokens: explicit value > Anthropic default (16K for large structured output) > omit for OpenAI
         if (opts.maxTokens) {
           generateOpts.maxTokens = opts.maxTokens;
+        } else if (resolved.provider === "anthropic") {
+          generateOpts.maxTokens = 16384;
         }
 
         const result = await generateObject(generateOpts);
@@ -304,12 +308,17 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
         // timer is cleared on success path; on error path it will fire harmlessly
         const classified = classifyError(err);
 
+        // Cap schema errors at 2 retries (stochastic output, not transient network issue)
+        const effectiveMaxRetries = classified.type === "schema_error"
+          ? Math.min(2, config.maxRetries)
+          : config.maxRetries;
+
         const entry: AttemptTelemetry = {
           request_id: requestId,
           label: opts.label,
           attempt,
-          max_retries: config.maxRetries,
-          status: classified.retryable && attempt < config.maxRetries ? "retry" : "fatal",
+          max_retries: effectiveMaxRetries,
+          status: classified.retryable && attempt < effectiveMaxRetries ? "retry" : "fatal",
           error_type: classified.type,
           duration_ms: Date.now() - attemptStart,
           model,
@@ -339,7 +348,7 @@ export async function resilientGenerateObject<T extends z.ZodTypeAny>(
         }
 
         // Retryable error
-        if (attempt < config.maxRetries) {
+        if (attempt < effectiveMaxRetries) {
           const delayMs = computeDelay(attempt, config, classified.retryAfterMs);
           entry.delay_ms = delayMs;
           if (classified.retryAfterMs) entry.retry_after_ms = classified.retryAfterMs;

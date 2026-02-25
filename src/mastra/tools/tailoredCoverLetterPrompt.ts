@@ -39,10 +39,8 @@ export const TailoredCoverLetterSchema = z.object({
     ),
   body_paragraphs: z
     .array(z.string())
-    .min(2)
-    .max(3)
     .describe(
-      "P2-P3 (or P2-P4): 2-3 body paragraphs. P2 = relevant transformation example with metric. P3 = enterprise scale and cross-functional leadership. Optional P4 = additional differentiation. Total letter must be 300-400 words.",
+      "P2-P3 (or P2-P4): 2-3 body paragraphs (min 2, max 3). P2 = relevant transformation example with metric. P3 = enterprise scale and cross-functional leadership. Optional P4 = additional differentiation. Total letter must be 300-400 words.",
     ),
   closing_paragraph: z
     .string()
@@ -52,10 +50,8 @@ export const TailoredCoverLetterSchema = z.object({
   sign_off: z.string().describe("e.g., 'Sincerely,' followed by name"),
   value_claims: z
     .array(ValueClaimSchema)
-    .min(1)
-    .max(3)
     .describe(
-      "Exactly 1-3 specific value claims made in the body. Each MUST have source_hash and evidence_quote.",
+      "1-3 specific value claims made in the body (min 1, max 3). Each MUST have source_hash and evidence_quote.",
     ),
   evidence_pointers: z
     .array(EvidencePointerSchema)
