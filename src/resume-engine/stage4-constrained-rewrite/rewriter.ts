@@ -546,6 +546,7 @@ export async function constrainedRewrite(input: RewriteInput): Promise<RewriteRe
         input.positioningBrief!,
         input.mandate,
         input.companyResearch,
+        input.inventory?.ens,
       );
       activeResumeUserPrompt = buildStrategicResumeUserPrompt(
         input.inventory, input.allowlist, input.requirements, input.title, input.company,

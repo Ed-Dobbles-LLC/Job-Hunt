@@ -40,6 +40,7 @@ export function buildStrategicResumeSystemPrompt(
   brief: PositioningBrief,
   mandate: MandateProfile,
   companyResearch?: CompanyResearch,
+  ens?: Record<string, any>,
 ): string {
   const sections: string[] = [];
 
@@ -68,6 +69,20 @@ Your output is a JSON object conforming to the TailoredResume schema.`);
 ${brief.positioning_warnings.length > 0 ? `**Watch Out For:** ${brief.positioning_warnings.join("; ")}` : ""}
 
 This brief is your North Star. Every decision — which bullets to lead with, how to frame the summary, what to emphasize in the cover letter — should serve this positioning strategy.`);
+
+  // ── Candidate Narrative Spine (if available) ────────────────────
+  if (ens) {
+    sections.push(`## CANDIDATE NARRATIVE SPINE (reference)
+
+**Core Identity:** ${ens.core_identity}
+**Transformation Thread:** ${ens.transformation_thread}
+**Differentiator:** ${ens.differentiator}
+
+**Signature Problems:** ${(ens.signature_problems || []).map((sp: any) => sp.label).join(" | ")}
+**Proof Anchors:** ${(ens.proof_anchors || []).map((pa: any) => pa.label).join(" | ")}
+
+The positioning brief above was generated from this spine. Use it as a grounding reference — if you're uncertain about a positioning choice, the ENS is the tiebreaker.`);
+  }
 
   // ── Company Context (if available) ──────────────────────────────
   if (companyResearch && companyResearch.confidence > 0.2) {

@@ -436,6 +436,33 @@ export function buildResumeUserPrompt(
   targetRole: string,
   targetCompany: string,
 ): string {
+  const ens = inventory?.ens;
+  let ensBlock = "";
+  if (ens) {
+    ensBlock = `
+## EXECUTIVE NARRATIVE SPINE (strategic positioning guide)
+
+This candidate has a defined strategic identity. Use it to make positioning decisions:
+
+**Core Identity:** ${ens.core_identity}
+
+**Signature Problems (the recurring problems this candidate solves):**
+${(ens.signature_problems || []).map((sp: any) => `- ${sp.label}: ${sp.description}`).join("\n")}
+
+**Proof Anchors (highest-impact evidence — lead with these when they align with the JD):**
+${(ens.proof_anchors || []).map((pa: any) => `- ${pa.label}: ${pa.summary}`).join("\n")}
+
+**Transformation Thread:** ${ens.transformation_thread}
+**Differentiator:** ${ens.differentiator}
+
+INSTRUCTIONS FOR USING THE ENS:
+1. Read the JD and identify which signature problem it most closely maps to. The executive summary's first sentence should connect the role's mandate to that problem.
+2. Lead with the proof anchor(s) that most directly address the role's needs. These should appear as the first 1-2 bullets under the most relevant role.
+3. The professional_summary paragraph 2 (story arc) should trace the transformation thread across the career.
+4. The professional_summary paragraph 3 (differentiator) should build on the differentiator statement, adapted to this specific role's mandate.
+5. Do NOT copy ENS language verbatim — adapt it to the target role's context and mandate.`;
+  }
+
   return `Generate a TailoredResume JSON for the following application.
 
 ## TARGET ROLE
@@ -447,6 +474,7 @@ ${JSON.stringify(requirements, null, 2)}
 
 ## EXPERIENCE INVENTORY (your ONLY source of truth)
 ${JSON.stringify(inventory, null, 2)}
+${ensBlock}
 
 ## ENTITY ALLOWLIST (every entity you emit must appear here)
 ${JSON.stringify(allowlist, null, 2)}

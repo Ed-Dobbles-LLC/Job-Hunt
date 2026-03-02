@@ -92,7 +92,20 @@ RULES:
 - The narrative_angle should be ONE clear thesis, not a list of everything the candidate can do.
 - The rare_combination should identify what makes this candidate genuinely unusual — not generic "leadership + technical" claims.
 - Be honest about positioning_warnings. If there's a gap, name it.
-- If company research is provided, use it to sharpen positioning. Generic advice when company context exists is a failure.`;
+- If company research is provided, use it to sharpen positioning. Generic advice when company context exists is a failure.
+
+CANDIDATE NARRATIVE SPINE: The candidate has a defined Executive Narrative Spine (ENS) that governs positioning across all materials. Your positioning brief MUST align with this spine — it is the strategic identity, not just a list of accomplishments.
+
+The ENS has three components you must understand:
+1. SIGNATURE PROBLEMS — the recurring problems this candidate solves. Every role in their career maps to one or more of these. Your narrative_angle should connect the target role's mandate to whichever signature problem is most relevant.
+2. PROOF ANCHORS — the highest-impact, most defensible evidence. These are the "if you remember one thing" stories. Your lead_with recommendations should draw from these when they align with the mandate.
+3. TRANSFORMATION THREAD — the consistent pattern across all roles. Your story_arc should trace this thread, not just list jobs chronologically.
+
+When generating the brief:
+- Map the JD's primary mandate to the most relevant signature problem
+- Identify which proof anchor(s) most directly address the role's needs
+- Frame the rare_combination around the differentiator
+- The summary_thesis should echo the transformation thread adapted to this role's mandate`;
 }
 
 // ── User Prompt ─────────────────────────────────────────────────
@@ -134,6 +147,32 @@ ${input.bulletPlan.mandate_gaps.map(g => `  - ${g.label} (coverage: ${g.best_cov
   sections.push(`## CANDIDATE ROLES
 ${roles}`);
 
+  // ENS context if available in inventory
+  const ens = input.inventory?.ens;
+  if (ens) {
+    const ensSection = [
+      `## EXECUTIVE NARRATIVE SPINE (strategic identity)`,
+      ``,
+      `**Core Identity:** ${ens.core_identity}`,
+      ``,
+      `**Signature Problems:**`,
+    ];
+    for (const sp of ens.signature_problems || []) {
+      ensSection.push(`  ${sp.id}. ${sp.label}: ${sp.description}`);
+    }
+    ensSection.push(``);
+    ensSection.push(`**Proof Anchors:**`);
+    for (const pa of ens.proof_anchors || []) {
+      ensSection.push(`  ${pa.id}. ${pa.label}: ${pa.summary}`);
+    }
+    ensSection.push(``);
+    ensSection.push(`**Transformation Thread:** ${ens.transformation_thread}`);
+    ensSection.push(`**Differentiator:** ${ens.differentiator}`);
+    ensSection.push(``);
+    ensSection.push(`Use the ENS to ground your positioning decisions. The narrative_angle should connect the target mandate to the most relevant signature problem. The lead_with should reference the most relevant proof anchor(s). The story_arc should trace the transformation thread.`);
+    sections.push(ensSection.join("\n"));
+  }
+
   // Company research if available
   if (input.companyResearch) {
     sections.push(`## COMPANY RESEARCH
@@ -152,7 +191,7 @@ ${input.priorSuccessPatterns.map(p => `  - ${p}`).join("\n")}`);
   }
 
   sections.push(`## TASK
-Produce a PositioningBrief JSON. Think strategically about what angle will win for THIS specific role at THIS specific company. Be specific — reference actual inventory content.`);
+Produce a PositioningBrief JSON. Think strategically about what angle will win for THIS specific role at THIS specific company. Ground your positioning in the candidate's ENS — connect the role's mandate to the most relevant signature problem and proof anchor. Be specific — reference actual inventory content.`);
 
   return sections.join("\n\n");
 }
