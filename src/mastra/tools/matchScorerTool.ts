@@ -53,7 +53,7 @@ const MatchExplanationSchema = z.object({
 export const matchScorerTool = createTool({
   id: "match-score",
   description:
-    "Compares structured JD requirements against the experience inventory to produce a detailed MatchReport. Takes JD requirements (from extract-jd-requirements) and returns: total score (0-100), sub-scores per category, top 10 supporting inventory bullets, explainability sentences with evidence pointers, ATS keyword coverage, and red flag assessment. This is a deterministic scorer — no LLM calls.",
+    "Compares structured JD requirements against the experience inventory to produce a detailed MatchReport. Takes JD requirements (from extract-jd-requirements) and returns: total score (0-100), sub-scores per category, top 10 supporting inventory bullets, explainability sentences with evidence pointers, ATS keyword coverage, and red flag assessment. Core scoring is deterministic; the scoreJobsTool adds an optional LLM-based strategic fit layer (via strategicFitAssessor) that maps JD mandates to the candidate's ENS signature problems.",
   inputSchema: z.object({
     job_id: z.number().describe("Database job ID to score"),
     requirements: JDRequirementsSchema.optional().describe(

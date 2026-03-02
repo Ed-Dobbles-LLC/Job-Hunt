@@ -10,6 +10,7 @@ export interface ScoringWeights {
   compensation: number;
   transformation_mandate: number;
   company_preference: number;
+  strategic_fit: number;
   execution_mode_match: { min: number; max: number };
   spec_inflation_penalty: { min: number; max: number };
 }
@@ -21,7 +22,7 @@ export interface ScoringProfile {
 }
 
 const PRECISION_WEIGHTS: ScoringWeights = {
-  role_level_match: 20,
+  role_level_match: 15,
   leadership_scope: 15,
   domain_relevance: 8,
   ai_strategy_stack: 8,
@@ -30,6 +31,7 @@ const PRECISION_WEIGHTS: ScoringWeights = {
   compensation: 8,
   transformation_mandate: 12,
   company_preference: 5,
+  strategic_fit: 15,
   execution_mode_match: { min: -20, max: 10 },
   spec_inflation_penalty: { min: -10, max: 0 },
 };
@@ -44,6 +46,7 @@ const RECALL_WEIGHTS: ScoringWeights = {
   compensation: 8,
   transformation_mandate: 10,
   company_preference: 5,
+  strategic_fit: 10,
   execution_mode_match: { min: -10, max: 5 },
   spec_inflation_penalty: { min: -5, max: 0 },
 };
@@ -82,6 +85,7 @@ export function getMaxPositiveScore(w: ScoringWeights): number {
     w.compensation +
     w.transformation_mandate +
     w.company_preference +
+    w.strategic_fit +
     w.execution_mode_match.max
   );
 }

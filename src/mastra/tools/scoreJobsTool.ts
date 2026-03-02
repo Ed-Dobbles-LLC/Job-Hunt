@@ -17,6 +17,7 @@ import { evaluateRules } from "./hardFlagEngine";
 import type { GateStatus } from "./hardFlagRules";
 import { classifyRoleShape, type RoleShapeResult } from "./roleShapeClassifier";
 import { loadInventoryStrict } from "../../resume-engine/inventory-loader";
+import type { StrategicFitAssessment } from "./strategicFitAssessor";
 
 /** Load inventory via centralized loader — throws MissingBaselineError, never returns stubs */
 async function loadInventory(): Promise<any> {
@@ -234,6 +235,7 @@ const DISPLAY_ORDER = [
   "compensation",
   "transformation_mandate",
   "company_preference",
+  "strategic_fit",
   "execution_mode_match",
   "spec_inflation_penalty",
 ] as const;
@@ -247,6 +249,7 @@ export function scoreSingleJob(
   inventory: any,
   profile?: ScoringProfile,
   locationPrefs?: { metros: string[]; prefRemote: string; prefHybrid: string; prefOnsite: string; countries: string[] },
+  strategicFit?: StrategicFitAssessment,
 ): { total: number; breakdown: Record<string, any>; mode: string; report: ScoreReport } {
   const p = profile || getActiveProfile();
   const w = p.weights;
@@ -543,6 +546,21 @@ export function scoreSingleJob(
     matchedPhrases: cap(prefHits, 5),
   };
 
+  // Strategic fit — LLM-assessed score (0-25 scaled to weight), defaults to 0 when unavailable
+  const strategicFitScore = strategicFit
+    ? Math.round((Math.min(strategicFit.strategic_score, 25) / 25) * w.strategic_fit)
+    : 0;
+  breakdown.strategic_fit = strategicFitScore;
+  categories.strategic_fit = {
+    score: strategicFitScore,
+    maxPoints: w.strategic_fit,
+    matchedPhrases: strategicFit ? [
+      `Mandate: ${strategicFit.primary_mandate_problem.jd_mandate}`,
+      `Maps to: ${strategicFit.primary_mandate_problem.mapped_signature_problem}`,
+    ] : [],
+    reason: strategicFit?.narrative_fit.fit_summary || "ENS not available — strategic fit not assessed",
+  };
+
   const execMode = classifyExecutionMode(jd);
   const clampedExec = Math.max(w.execution_mode_match.min, Math.min(w.execution_mode_match.max, execMode.score));
   breakdown.execution_mode_match = clampedExec;
@@ -779,6 +797,18 @@ export const scoreJobsTool = createTool({
 
     const scoredJobs: any[] = [];
 
+    // Lazy-load strategic fit assessor to avoid import errors when LLM deps are missing
+    const ens = inventory?.ens;
+    let assessStrategicFitFn: typeof import("./strategicFitAssessor").assessStrategicFit | undefined;
+    if (ens) {
+      try {
+        const mod = await import("./strategicFitAssessor");
+        assessStrategicFitFn = mod.assessStrategicFit;
+      } catch (e: any) {
+        logger?.warn(`⚠️ [scoreJobs] Could not load strategic fit assessor: ${e.message}`);
+      }
+    }
+
     for (const jobId of context.jobIds) {
       try {
         const result = await query("SELECT * FROM jobs WHERE job_id = $1", [
@@ -789,13 +819,28 @@ export const scoreJobsTool = createTool({
           continue;
         }
         const job = result.rows[0];
-        const { total, breakdown } = scoreSingleJob(job, inventory, profile, locationPrefs);
+
+        // Strategic fit assessment (LLM call — non-fatal)
+        let strategicFitResult: import("./strategicFitAssessor").StrategicFitAssessment | undefined;
+        if (assessStrategicFitFn && ens && job.jd_raw_text) {
+          try {
+            const fitResult = await assessStrategicFitFn({ jdText: job.jd_raw_text, ens, logger });
+            strategicFitResult = fitResult.assessment;
+          } catch (err: any) {
+            logger?.warn(`⚠️ [scoreJobs] Strategic fit assessment failed for job ${jobId}, continuing without: ${err.message}`);
+          }
+        }
+
+        const { total, breakdown } = scoreSingleJob(job, inventory, profile, locationPrefs, strategicFitResult);
+
+        // Ensure strategic_fit_assessment column exists (idempotent)
+        await query(`ALTER TABLE scores ADD COLUMN IF NOT EXISTS strategic_fit_assessment JSONB`).catch(() => {});
 
         await query(
-          `INSERT INTO scores (job_id, total_score, breakdown_json)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (job_id) DO UPDATE SET total_score = $2, breakdown_json = $3`,
-          [jobId, total, JSON.stringify(breakdown)],
+          `INSERT INTO scores (job_id, total_score, breakdown_json, strategic_fit_assessment)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (job_id) DO UPDATE SET total_score = $2, breakdown_json = $3, strategic_fit_assessment = $4`,
+          [jobId, total, JSON.stringify(breakdown), strategicFitResult ? JSON.stringify(strategicFitResult) : null],
         );
 
         scoredJobs.push({

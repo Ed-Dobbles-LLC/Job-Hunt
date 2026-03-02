@@ -129,9 +129,9 @@ function runTests() {
 
   console.log("\n--- Max Positive Score Calculation ---");
   const maxPrec = getMaxPositiveScore(precisionProfile.weights);
-  assert("Precision max positive = 101", maxPrec, 101);
+  assert("Precision max positive = 111", maxPrec, 111);
   const maxRec = getMaxPositiveScore(recallProfile.weights);
-  assert("Recall max positive = 90", maxRec, 90);
+  assert("Recall max positive = 100", maxRec, 100);
 
   console.log("\n--- Precision vs Recall: Same JD Different Scores ---");
   console.log(`  SVP Precision: ${svpPrecision.total}/100 (raw: ${svpPrecision.breakdown._raw_total}/${svpPrecision.breakdown._max_possible})`);
