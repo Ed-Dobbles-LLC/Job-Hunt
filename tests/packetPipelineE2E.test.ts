@@ -57,121 +57,122 @@ beforeAll(() => {
 /** A compliant TailoredResume built entirely from real inventory data */
 function buildCompliantResume(): TailoredResume {
   return {
-    target_role: "VP of Data & Analytics",
+    target_role: "Chief Analytics Officer",
     target_company: "Ignite Corp",
     professional_summary:
-      "Data & Analytics executive with 15+ years of experience leading enterprise-scale data transformations across financial services, healthcare, and technology sectors. Proven track record building high-performing teams and driving measurable business impact through advanced analytics and AI/ML.",
+      "C-suite analytics and AI executive with 25+ years architecting analytics functions that transform data into competitive advantage for Fortune 500 companies. Track record leading teams of 60+ FTEs, managing $17M budgets, and delivering measurable enterprise impact through strategic analytics, AI/ML implementation, and cultural transformation.",
     experience: [
       {
-        employer: "Acme Financial Group",
-        title: "VP of Data & Analytics",
-        start_date: "2021-03",
-        end_date: "present",
-        location: "Chicago, IL (Hybrid)",
+        employer: "Diageo North America Inc.",
+        title: "Vice President, Advanced Analytics",
+        start_date: "2019-01",
+        end_date: "2025-01",
+        location: "New York, NY",
         bullets: [
           {
-            text: "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
-            source_hash: "exp-001-b1",
-            evidence_quote: "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
-            claim_ids: ["claim-exp001-b1-team-45"],
+            text: "Led analytics transformation for world's largest premium spirits portfolio, overseeing $17M budget and 20-person team delivering data-driven market execution across North America.",
+            source_hash: "exp-002-b1",
+            evidence_quote: "Led analytics transformation for world's largest premium spirits portfolio, overseeing $17M budget and 20-person team delivering data-driven market execution across North America.",
+            claim_ids: ["claim-exp002-b1-metric-17M", "claim-exp002-b1-team-20"],
           },
           {
-            text: "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
-            source_hash: "exp-001-b2",
-            evidence_quote: "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
-            claim_ids: ["claim-exp001-b2-metric-12M", "claim-exp001-b2-tool-snowflake"],
+            text: "Scaled analytically-driven distribution program enterprise-wide, generating 115,000 net-new distribution points and $64M-$120M in incremental annual revenue — representing 10% of total US growth for $4B+ business unit.",
+            source_hash: "exp-002-b2",
+            evidence_quote: "Scaled analytically-driven distribution program enterprise-wide, generating 115,000 net-new distribution points and $64M-$120M in incremental annual revenue — representing 10% of total US growth for $4B+ business unit.",
+            claim_ids: ["claim-exp002-b2-metric-115K", "claim-exp002-b2-metric-64M-120M"],
           },
           {
-            text: "Launched enterprise ML ops pipeline processing 2B+ daily events for real-time fraud detection, reducing false positive rate by 38%",
-            source_hash: "exp-001-b3",
-            evidence_quote: "Launched enterprise ML ops pipeline processing 2B+ daily events for real-time fraud detection, reducing false positive rate by 38%",
-            claim_ids: ["claim-exp001-b3-metric-2B", "claim-exp001-b3-metric-38pct"],
+            text: "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 60 hours monthly.",
+            source_hash: "exp-002-b3",
+            evidence_quote: "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 60 hours monthly, plus deployed generative AI business intelligence solution with natural language query capabilities.",
+            claim_ids: ["claim-exp002-b3-metric-5pct", "claim-exp002-b3-metric-60hrs"],
           },
         ],
       },
       {
-        employer: "HealthTech Solutions Inc.",
-        title: "Senior Director, Data Science & Analytics",
-        start_date: "2018-06",
-        end_date: "2021-02",
-        location: "Chicago, IL",
+        employer: "H&R Block, Inc.",
+        title: "Vice President, Analytics & Pricing / Client Insight",
+        start_date: "2010-01",
+        end_date: "2019-01",
+        location: "Kansas City, MO",
         bullets: [
           {
-            text: "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
-            source_hash: "exp-002-b1",
-            evidence_quote: "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
-            claim_ids: ["claim-exp002-b1-team-28"],
+            text: "Prevented revenue erosion of $180M-$360M annually by declining widespread price reduction pressure; instead implemented strategic pricing increases yielding $50M in annual incremental revenue.",
+            source_hash: "exp-003-b4",
+            evidence_quote: "Prevented revenue erosion of $180M-$360M annually by declining widespread price reduction pressure; instead implemented strategic pricing increases yielding $50M in annual incremental revenue.",
+            claim_ids: ["claim-exp003-b4-metric-180M-360M", "claim-exp003-b4-metric-50M"],
           },
           {
-            text: "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M",
-            source_hash: "exp-002-b2",
-            evidence_quote: "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M",
-            claim_ids: ["claim-exp002-b2-metric-AUC", "claim-exp002-b2-metric-31M"],
+            text: "Transformed team culture and performance, doubling employee engagement from 40% to 80% within one year and sustaining 70-80% engagement through tenure.",
+            source_hash: "exp-003-b6",
+            evidence_quote: "Transformed team culture and performance, doubling employee engagement from 40% to 80% within one year and sustaining 70-80% engagement through tenure.",
+            claim_ids: ["claim-exp003-b6-metric-40-80pct"],
           },
         ],
       },
     ],
     skills: {
-      technical: ["Python", "SQL", "Snowflake", "dbt", "Airflow", "Tableau"],
-      leadership: ["Executive stakeholder management", "Team building & mentorship", "Strategic planning"],
-      data_science: ["Machine Learning", "Deep Learning", "A/B Testing"],
+      technical: ["Snowflake", "SQL", "Python", "R", "Tableau", "Power BI"],
+      leadership: ["Enterprise Analytics Strategy", "AI/ML Strategy & Deployment", "Board & C-Suite Advisory"],
+      data_science: ["Predictive Modeling", "Machine Learning", "Generative AI"],
     },
     education: [
-      { institution: "University of Chicago", degree: "MBA, Concentrations in Econometrics & Statistics and Strategic Management", year: "2010" },
-      { institution: "University of Illinois at Urbana-Champaign", degree: "BS in Computer Science, Minor in Mathematics", year: "2006" },
+      { institution: "Rutgers University", degree: "Doctor of Business Administration", year: "2019" },
+      { institution: "University of Wisconsin-Madison", degree: "Master of Science, Marketing/Market Research", year: "1996" },
+      { institution: "Michigan State University", degree: "Bachelor of Arts, Advertising", year: "1994" },
     ],
     certifications: [
-      { name: "AWS Certified Solutions Architect", year: "2020" },
-      { name: "Google Cloud Professional Data Engineer", year: "2021" },
+      { name: "Behavioral Economics Certificate" },
+      { name: "Certified EMT" },
     ],
     evidence_pointers: [
-      { claim_text: "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units", source_hash: "exp-001-b1", evidence_quote: "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units", confidence: 0.95 },
-      { claim_text: "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses", source_hash: "exp-001-b2", evidence_quote: "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses", confidence: 0.95 },
-      { claim_text: "Launched enterprise ML ops pipeline processing 2B+ daily events for real-time fraud detection, reducing false positive rate by 38%", source_hash: "exp-001-b3", evidence_quote: "Launched enterprise ML ops pipeline processing 2B+ daily events for real-time fraud detection, reducing false positive rate by 38%", confidence: 0.95 },
-      { claim_text: "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management", source_hash: "exp-002-b1", evidence_quote: "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management", confidence: 0.90 },
-      { claim_text: "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M", source_hash: "exp-002-b2", evidence_quote: "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M", confidence: 0.90 },
+      { claim_text: "Led analytics transformation for world's largest premium spirits portfolio, overseeing $17M budget and 20-person team delivering data-driven market execution across North America.", source_hash: "exp-002-b1", evidence_quote: "Led analytics transformation for world's largest premium spirits portfolio, overseeing $17M budget and 20-person team delivering data-driven market execution across North America.", confidence: 0.95 },
+      { claim_text: "Scaled analytically-driven distribution program enterprise-wide, generating 115,000 net-new distribution points and $64M-$120M in incremental annual revenue — representing 10% of total US growth for $4B+ business unit.", source_hash: "exp-002-b2", evidence_quote: "Scaled analytically-driven distribution program enterprise-wide, generating 115,000 net-new distribution points and $64M-$120M in incremental annual revenue — representing 10% of total US growth for $4B+ business unit.", confidence: 0.95 },
+      { claim_text: "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 60 hours monthly.", source_hash: "exp-002-b3", evidence_quote: "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 60 hours monthly, plus deployed generative AI business intelligence solution with natural language query capabilities.", confidence: 0.90 },
+      { claim_text: "Prevented revenue erosion of $180M-$360M annually by declining widespread price reduction pressure; instead implemented strategic pricing increases yielding $50M in annual incremental revenue.", source_hash: "exp-003-b4", evidence_quote: "Prevented revenue erosion of $180M-$360M annually by declining widespread price reduction pressure; instead implemented strategic pricing increases yielding $50M in annual incremental revenue.", confidence: 0.95 },
+      { claim_text: "Transformed team culture and performance, doubling employee engagement from 40% to 80% within one year and sustaining 70-80% engagement through tenure.", source_hash: "exp-003-b6", evidence_quote: "Transformed team culture and performance, doubling employee engagement from 40% to 80% within one year and sustaining 70-80% engagement through tenure.", confidence: 0.90 },
     ],
     gap_notes: [
-      { requirement_text: "5+ years of Kubernetes orchestration", reason: "No Kubernetes-specific leadership experience in inventory; Kubernetes listed as a tool in exp-001-b3 context only.", closest_match: "exp-001-b3" },
+      { requirement_text: "5+ years of cloud platform migration", reason: "No cloud platform migration leadership experience documented in inventory.", closest_match: "exp-002-b3" },
     ],
-    ats_keywords_used: ["data governance", "machine learning", "Snowflake", "analytics", "data platform"],
+    ats_keywords_used: ["analytics strategy", "machine learning", "Snowflake", "pricing strategy", "AI/ML"],
   };
 }
 
 function buildCompliantCoverLetter(): TailoredCoverLetter {
   return {
-    target_role: "VP of Data & Analytics",
+    target_role: "Chief Analytics Officer",
     target_company: "Ignite Corp",
     salutation: "Dear Hiring Manager,",
-    opening_paragraph: "I am excited to apply for the VP of Data & Analytics role at Ignite Corp, where my experience building enterprise data organizations and delivering measurable business impact aligns directly with your team's objectives.",
+    opening_paragraph: "I am writing to express my interest in the Chief Analytics Officer role at Ignite Corp, where my 25+ years of experience transforming analytics functions from cost centers into strategic growth engines at Fortune 500 companies directly aligns with your mandate.",
     body_paragraphs: [
-      "At Acme Financial Group, I led a 45-person data organization and drove $12M in annual cost savings by architecting a unified Snowflake data platform that consolidated 7 legacy data warehouses. This initiative required cross-functional alignment with engineering, finance, and executive stakeholders to deliver on an aggressive 18-month timeline.",
-      "Previously at HealthTech Solutions Inc., I developed a patient readmission prediction model achieving 0.89 AUC that prevented an estimated 4,200 unnecessary readmissions annually, saving $31M. This work demonstrated my ability to translate advanced analytics into direct business and patient outcomes.",
+      "At Diageo North America, I led a 20-person analytics team with a $17M budget, scaling an analytically-driven distribution program that generated 115,000 net-new distribution points and $64M-$120M in incremental annual revenue — representing 10% of total US growth for a $4B+ business unit.",
+      "At H&R Block, I implemented strategic pricing increases yielding $50M in annual incremental revenue, while doubling team engagement from 40% to 80%.",
     ],
-    closing_paragraph: "I would welcome the opportunity to discuss how my experience leading data transformations at scale can contribute to your data strategy. Thank you for your consideration.",
-    sign_off: "Sincerely,\nEd Martinez",
+    closing_paragraph: "I would welcome the opportunity to discuss how my track record of transforming analytics into trusted decision engines can accelerate your data strategy.",
+    sign_off: "Sincerely,\nEd Dobbles",
     value_claims: [
       {
-        claim_sentence: "I drove $12M in annual cost savings by architecting a unified Snowflake data platform that consolidated 7 legacy data warehouses.",
-        source_hash: "exp-001-b2",
-        evidence_quote: "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
-        metric_used: "$12M",
+        claim_sentence: "I scaled an analytically-driven distribution program that generated $64M-$120M in incremental annual revenue.",
+        source_hash: "exp-002-b2",
+        evidence_quote: "Scaled analytically-driven distribution program enterprise-wide, generating 115,000 net-new distribution points and $64M-$120M in incremental annual revenue — representing 10% of total US growth for $4B+ business unit.",
+        metric_used: "$64M-$120M",
       },
       {
-        claim_sentence: "I developed a patient readmission prediction model achieving 0.89 AUC that prevented an estimated 4,200 unnecessary readmissions annually, saving $31M.",
-        source_hash: "exp-002-b2",
-        evidence_quote: "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M",
-        metric_used: "$31M",
+        claim_sentence: "I prevented $180M-$360M in annual revenue erosion by implementing strategic pricing increases yielding $50M in annual incremental revenue.",
+        source_hash: "exp-003-b4",
+        evidence_quote: "Prevented revenue erosion of $180M-$360M annually by declining widespread price reduction pressure; instead implemented strategic pricing increases yielding $50M in annual incremental revenue.",
+        metric_used: "$50M",
       },
     ],
     evidence_pointers: [
-      { claim_text: "I led a 45-person data organization", source_hash: "exp-001-b1", evidence_quote: "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units", confidence: 0.90 },
-      { claim_text: "I drove $12M in annual cost savings by architecting a unified Snowflake data platform", source_hash: "exp-001-b2", evidence_quote: "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses", confidence: 0.95 },
-      { claim_text: "I developed a patient readmission prediction model achieving 0.89 AUC", source_hash: "exp-002-b2", evidence_quote: "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M", confidence: 0.95 },
+      { claim_text: "I led a 20-person analytics team with a $17M budget", source_hash: "exp-002-b1", evidence_quote: "Led analytics transformation for world's largest premium spirits portfolio, overseeing $17M budget and 20-person team delivering data-driven market execution across North America.", confidence: 0.90 },
+      { claim_text: "I scaled an analytically-driven distribution program that generated $64M-$120M in incremental annual revenue", source_hash: "exp-002-b2", evidence_quote: "Scaled analytically-driven distribution program enterprise-wide, generating 115,000 net-new distribution points and $64M-$120M in incremental annual revenue — representing 10% of total US growth for $4B+ business unit.", confidence: 0.95 },
+      { claim_text: "I prevented $180M-$360M in annual revenue erosion", source_hash: "exp-003-b4", evidence_quote: "Prevented revenue erosion of $180M-$360M annually by declining widespread price reduction pressure; instead implemented strategic pricing increases yielding $50M in annual incremental revenue.", confidence: 0.95 },
     ],
     gap_notes: [],
     company_research_todo: ["Research Ignite Corp data infrastructure and strategic priorities"],
-    word_count: 290,
+    word_count: 280,
   };
 }
 
@@ -185,8 +186,8 @@ describe("E2E: Full Packet Pipeline", () => {
 
     it("extracts all metrics with parsed numbers", () => {
       expect(allowlist.metrics.length).toBeGreaterThan(10);
-      const has12M = allowlist.metrics.some((m: any) => m.raw.includes("$12M"));
-      expect(has12M).toBe(true);
+      const has17M = allowlist.metrics.some((m: any) => m.raw.includes("$17M"));
+      expect(has17M).toBe(true);
     });
 
     it("extracts skills across all categories", () => {
@@ -205,7 +206,7 @@ describe("E2E: Full Packet Pipeline", () => {
 
     it("resume user prompt includes inventory and allowlist", () => {
       const prompt = buildResumeUserPrompt(inventory, allowlist, { must_have: [], nice_to_have: [] } as any, "VP Data", "TestCo");
-      expect(prompt).toContain("Acme Financial Group");
+      expect(prompt).toContain("Diageo North America");
       expect(prompt).toContain("ENTITY ALLOWLIST");
       expect(prompt).toContain("JOB REQUIREMENTS");
     });
@@ -282,7 +283,7 @@ describe("E2E: Full Packet Pipeline", () => {
 
     it("wrong date triggers INCONSISTENT_DATE critical", () => {
       const resume = buildCompliantResume();
-      resume.experience[0].start_date = "2019-01";
+      resume.experience[0].start_date = "2015-06";
       const report = runTruthfulnessVerification(resume, buildCompliantCoverLetter(), allowlist, inventory);
       const dateViolations = report.violations.filter(v => v.type === "INCONSISTENT_DATE");
       expect(dateViolations.length).toBeGreaterThan(0);
@@ -320,12 +321,12 @@ describe("E2E: Full Packet Pipeline", () => {
         "resume",
         '{"target_role": "Test"}',
         [{ type: "NEW_ENTITY", severity: "critical", location: "resume.experience[0].employer", found_value: "Google", explanation: "Not in allowlist" }],
-        [{ location: "resume.experience[0].employer", current_text: "Google", suggested_text: "Acme Financial Group", reason: "Use allowlisted employer", violation_type: "NEW_ENTITY" }],
+        [{ location: "resume.experience[0].employer", current_text: "Google", suggested_text: "Diageo North America Inc.", reason: "Use allowlisted employer", violation_type: "NEW_ENTITY" }],
         2,
       );
       expect(prompt).toContain("Attempt 2");
       expect(prompt).toContain("Google");
-      expect(prompt).toContain("Acme Financial Group");
+      expect(prompt).toContain("Diageo North America Inc.");
     });
   });
 
@@ -333,7 +334,7 @@ describe("E2E: Full Packet Pipeline", () => {
     it("gap notes are preserved through verification", () => {
       const resume = buildCompliantResume();
       expect(resume.gap_notes.length).toBeGreaterThan(0);
-      expect(resume.gap_notes[0].requirement_text).toContain("Kubernetes");
+      expect(resume.gap_notes[0].requirement_text).toContain("cloud platform migration");
 
       const report = runTruthfulnessVerification(resume, buildCompliantCoverLetter(), allowlist, inventory);
       // Gap notes should NOT cause verification failures

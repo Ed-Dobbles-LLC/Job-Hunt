@@ -1,0 +1,175 @@
+{
+  "profile": {
+    "name": "Ed Martinez",
+    "current_title": "VP of Data & Analytics",
+    "email": "ed.martinez@example.com",
+    "phone": "(555) 123-4567",
+    "location": "Chicago, IL",
+    "linkedin": "linkedin.com/in/edmartinez",
+    "summary": "Data & Analytics executive with 15+ years of experience leading enterprise-scale data transformations, building high-performing teams, and driving strategic decisions through advanced analytics and AI/ML. Proven track record of delivering measurable business impact across financial services, healthcare, and technology sectors."
+  },
+  "experience": [
+    {
+      "id": "exp-001",
+      "employer": "Acme Financial Group",
+      "title": "VP of Data & Analytics",
+      "start_date": "2021-03",
+      "end_date": "present",
+      "location": "Chicago, IL (Hybrid)",
+      "bullets": [
+        {
+          "id": "exp-001-b1",
+          "text": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
+          "metrics": ["45-person team", "3 business units"]
+        },
+        {
+          "id": "exp-001-b2",
+          "text": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
+          "metrics": ["$12M annual cost savings", "7 legacy data warehouses consolidated"],
+          "tools": ["Snowflake", "dbt", "Airflow"]
+        },
+        {
+          "id": "exp-001-b3",
+          "text": "Launched enterprise ML ops pipeline processing 2B+ daily events for real-time fraud detection, reducing false positive rate by 38%",
+          "metrics": ["2B+ daily events", "38% reduction in false positives"],
+          "tools": ["Python", "Spark", "MLflow", "Kubernetes"]
+        },
+        {
+          "id": "exp-001-b4",
+          "text": "Established data governance framework with 200+ data quality rules, improving data trust score from 62% to 94%",
+          "metrics": ["200+ data quality rules", "62% to 94% data trust score"]
+        },
+        {
+          "id": "exp-001-b5",
+          "text": "Built executive analytics dashboard suite adopted by C-suite and board, enabling data-driven quarterly strategic planning",
+          "tools": ["Tableau", "Looker"]
+        },
+        {
+          "id": "exp-001-b6",
+          "text": "Presented data strategy roadmap to board of directors, securing $8M multi-year investment in data infrastructure modernization",
+          "metrics": ["$8M investment"]
+        }
+      ]
+    },
+    {
+      "id": "exp-002",
+      "employer": "HealthTech Solutions Inc.",
+      "title": "Senior Director, Data Science & Analytics",
+      "start_date": "2018-06",
+      "end_date": "2021-02",
+      "location": "Chicago, IL",
+      "bullets": [
+        {
+          "id": "exp-002-b1",
+          "text": "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
+          "metrics": ["28-person team"]
+        },
+        {
+          "id": "exp-002-b2",
+          "text": "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M",
+          "metrics": ["0.89 AUC", "4,200 readmissions prevented", "$31M saved"],
+          "tools": ["Python", "XGBoost", "TensorFlow"]
+        },
+        {
+          "id": "exp-002-b3",
+          "text": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
+          "metrics": ["40% TCO reduction"],
+          "tools": ["AWS", "Redshift", "EMR", "SageMaker", "Hadoop"]
+        },
+        {
+          "id": "exp-002-b4",
+          "text": "Designed and implemented A/B testing framework adopted across 5 product teams, increasing experiment velocity by 3x",
+          "metrics": ["5 product teams", "3x experiment velocity"]
+        },
+        {
+          "id": "exp-002-b5",
+          "text": "Partnered with Chief Medical Officer to develop clinical analytics program, resulting in 15% improvement in care quality metrics",
+          "metrics": ["15% improvement in care quality metrics"]
+        }
+      ]
+    },
+    {
+      "id": "exp-003",
+      "employer": "Global Retail Corp",
+      "title": "Director of Analytics",
+      "start_date": "2015-01",
+      "end_date": "2018-05",
+      "location": "Dallas, TX",
+      "bullets": [
+        {
+          "id": "exp-003-b1",
+          "text": "Built and led a 15-person analytics team from scratch, establishing the company's first centralized analytics function",
+          "metrics": ["15-person team"]
+        },
+        {
+          "id": "exp-003-b2",
+          "text": "Created customer segmentation model driving $18M incremental revenue through personalized marketing campaigns",
+          "metrics": ["$18M incremental revenue"],
+          "tools": ["Python", "R", "SQL"]
+        },
+        {
+          "id": "exp-003-b3",
+          "text": "Implemented demand forecasting system reducing inventory carrying costs by $6.5M annually using time-series models",
+          "metrics": ["$6.5M cost reduction"],
+          "tools": ["Python", "Prophet", "SQL Server"]
+        },
+        {
+          "id": "exp-003-b4",
+          "text": "Built self-service BI platform serving 500+ business users with automated reporting, reducing ad-hoc request volume by 65%",
+          "metrics": ["500+ users", "65% reduction in ad-hoc requests"],
+          "tools": ["Tableau", "SQL Server", "Python"]
+        }
+      ]
+    },
+    {
+      "id": "exp-004",
+      "employer": "DataFirst Consulting",
+      "title": "Senior Data Analyst / Analytics Manager",
+      "start_date": "2010-08",
+      "end_date": "2014-12",
+      "location": "Chicago, IL",
+      "bullets": [
+        {
+          "id": "exp-004-b1",
+          "text": "Promoted from Senior Data Analyst to Analytics Manager within 2 years based on delivery of high-impact client projects",
+          "metrics": ["promoted within 2 years"]
+        },
+        {
+          "id": "exp-004-b2",
+          "text": "Led analytics engagements for Fortune 500 clients across financial services, retail, and CPG industries",
+          "tools": ["SQL", "Python", "R", "Excel", "Tableau"]
+        },
+        {
+          "id": "exp-004-b3",
+          "text": "Developed churn prediction model for telecom client reducing annual churn by 12%, representing $22M in retained revenue",
+          "metrics": ["12% churn reduction", "$22M retained revenue"],
+          "tools": ["Python", "R", "SQL"]
+        }
+      ]
+    }
+  ],
+  "education": [
+    {
+      "id": "edu-001",
+      "institution": "University of Chicago",
+      "degree": "MBA, Concentrations in Econometrics & Statistics and Strategic Management",
+      "year": "2010"
+    },
+    {
+      "id": "edu-002",
+      "institution": "University of Illinois at Urbana-Champaign",
+      "degree": "BS in Computer Science, Minor in Mathematics",
+      "year": "2006"
+    }
+  ],
+  "skills": {
+    "leadership": ["Executive stakeholder management", "Team building & mentorship", "Strategic planning", "P&L ownership", "Board-level presentations", "Vendor management", "Agile/Scrum"],
+    "technical": ["Python", "SQL", "R", "Spark", "Snowflake", "dbt", "Airflow", "Tableau", "Looker", "Power BI", "AWS (Redshift, EMR, SageMaker, S3)", "GCP (BigQuery)", "Azure", "Kubernetes", "Docker", "Git"],
+    "data_science": ["Machine Learning", "Deep Learning", "NLP", "Time Series Forecasting", "A/B Testing", "Statistical Modeling", "MLOps", "Feature Engineering"],
+    "domains": ["Financial Services", "Healthcare", "Retail", "Technology", "CPG"]
+  },
+  "certifications": [
+    {"id": "cert-001", "name": "AWS Certified Solutions Architect", "year": "2020"},
+    {"id": "cert-002", "name": "Google Cloud Professional Data Engineer", "year": "2021"}
+  ]
+}

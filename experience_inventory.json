@@ -1,175 +1,400 @@
 {
   "profile": {
-    "name": "Ed Martinez",
-    "current_title": "VP of Data & Analytics",
-    "email": "ed.martinez@example.com",
-    "phone": "(555) 123-4567",
-    "location": "Chicago, IL",
-    "linkedin": "linkedin.com/in/edmartinez",
-    "summary": "Data & Analytics executive with 15+ years of experience leading enterprise-scale data transformations, building high-performing teams, and driving strategic decisions through advanced analytics and AI/ML. Proven track record of delivering measurable business impact across financial services, healthcare, and technology sectors."
+    "name": "Ed Dobbles",
+    "current_title": "Chief Analytics Officer",
+    "email": "Ed@Dobbles.AI",
+    "phone": "(612) 239-1035",
+    "location": "Minneapolis-St. Paul Metro",
+    "linkedin": "linkedin.com/in/ed-dobbles",
+    "summary": "C-suite analytics and AI executive with 25+ years architecting analytics functions that transform data into competitive advantage for Fortune 500 companies and high-growth ventures. Track record leading teams of 60+ FTEs, managing $17M+ budgets, and delivering $300M+ in measurable enterprise impact through strategic analytics, AI/ML implementation, and cultural transformation. Translates complex data into board-level insights and executable strategies that drive revenue growth, operational excellence, and market differentiation.",
+    "candidate_id": "ed-dobbles"
+  },
+  "ens": {
+    "core_identity": "Analytics and AI executive who brings science, data, and emerging AI capabilities to life through business storytelling and decisive action — turning analytics from a cost center into a trusted engine for business outcomes.",
+    "signature_problems": [
+      {
+        "id": "sp-1",
+        "label": "Analytics disconnected from business",
+        "description": "When analytics is only used tactically or for reporting, it loses credibility, isn't trusted, and ultimately isn't used — causing organizations to forgo significant enterprise value. As AI becomes more accessible, this disconnect becomes more dangerous because faster tools only accelerate bad decisions when analytics lacks credibility."
+      },
+      {
+        "id": "sp-2",
+        "label": "Gap between vision and execution",
+        "description": "Many organizations have strong analytics visions but fail in execution, adoption, and scale. Strategy exists, but value never materializes."
+      },
+      {
+        "id": "sp-3",
+        "label": "Analytics built at wrong speed",
+        "description": "When analytics isn't built to operate at business speed and with business outcomes in mind, it answers the wrong questions at the wrong time — rendering even good analysis irrelevant. AI amplifies this failure — models deliver answers instantly, but without the right questions, operating model, and decision rights, speed destroys value instead of creating it."
+      }
+    ],
+    "proof_anchors": [
+      {
+        "id": "pa-1",
+        "label": "Enterprise Decision Enablement at Scale (Diageo)",
+        "summary": "Built custom forecast of sales potential for every brand and package across every outlet in the US, enabling sales teams to prioritize highest-value distribution gaps. Generated $64M-$120M incremental annual revenue, representing 10% of total US growth for $4B+ business unit."
+      },
+      {
+        "id": "pa-2",
+        "label": "Value Protection and CEO-Level Partnership (H&R Block)",
+        "summary": "Prevented $180M-$360M in annual revenue erosion by declining widespread price reduction pressure. Instead implemented strategic pricing increases yielding $50M in annual incremental revenue. Operated as trusted CEO-level advisor on long-term strategic planning."
+      },
+      {
+        "id": "pa-3",
+        "label": "Data Waiter to Decision Engine Transformation",
+        "summary": "Repeated pattern across every organization: inherited analytics teams treated as data waiters and order-takers, transformed them into trusted strategic advisors embedded in business decisions. Measurable culture shifts (e.g., employee engagement doubled from 40% to 80% at H&R Block)."
+      }
+    ],
+    "transformation_thread": "Data waiter to decision engine — the consistent thread across every role is transforming analytics from a cost center and order-taking function into a trusted engine for business decisions.",
+    "differentiator": "Geek that can Speak — distinctly technical for a C-suite executive, but leads with business outcomes and board-ready storytelling, not technology. Combines DBA-level analytical rigor with Fortune 500 commercial instincts."
   },
   "experience": [
     {
       "id": "exp-001",
-      "employer": "Acme Financial Group",
-      "title": "VP of Data & Analytics",
-      "start_date": "2021-03",
+      "employer": "Overproof",
+      "title": "Chief Analytics Officer",
+      "start_date": "2025-01",
       "end_date": "present",
-      "location": "Chicago, IL (Hybrid)",
+      "location": "Miami, FL",
+      "scope": "C-suite member | Emerging beverage intelligence platform | Startup environment",
       "bullets": [
         {
           "id": "exp-001-b1",
-          "text": "Led a 45-person data organization spanning analytics engineering, data science, and business intelligence across 3 business units",
-          "metrics": ["45-person team", "3 business units"]
+          "text": "Recruited to build and scale analytics capabilities for emerging beverage intelligence platform, serving as core C-suite member shaping business strategy, culture, and enterprise growth trajectory.",
+          "metrics": ["C-suite member"],
+          "tools": [],
+          "tags": ["leadership", "strategy", "startup"]
         },
         {
           "id": "exp-001-b2",
-          "text": "Drove $12M annual cost savings by architecting a unified data platform on Snowflake, consolidating 7 legacy data warehouses",
-          "metrics": ["$12M annual cost savings", "7 legacy data warehouses consolidated"],
-          "tools": ["Snowflake", "dbt", "Airflow"]
+          "text": "Accelerated enterprise growth from single client to $120K in active pilots with $1.5M+ in committed full-rollout revenue and robust pipeline of 2-5 additional enterprise opportunities.",
+          "metrics": ["$120K active pilots", "$1.5M+ committed revenue", "2-5 enterprise pipeline"],
+          "tools": [],
+          "tags": ["revenue", "growth", "enterprise-sales"]
         },
         {
           "id": "exp-001-b3",
-          "text": "Launched enterprise ML ops pipeline processing 2B+ daily events for real-time fraud detection, reducing false positive rate by 38%",
-          "metrics": ["2B+ daily events", "38% reduction in false positives"],
-          "tools": ["Python", "Spark", "MLflow", "Kubernetes"]
+          "text": "Built practical AI toolkit out of operational necessity — moving from a 20-person enterprise team at Diageo to a 2-person startup, pioneered AI-powered chat-to-Snowflake platform that compressed analysis cycles from days to minutes, then recognized the approach could address operational bottlenecks that have consumed analyst capacity at every organization for 25 years.",
+          "metrics": ["20-person to 2-person transition", "analysis cycles from days to minutes"],
+          "tools": ["Snowflake", "Generative AI", "Natural Language Processing"],
+          "tags": ["ai-innovation", "platform", "efficiency"]
         },
         {
           "id": "exp-001-b4",
-          "text": "Established data governance framework with 200+ data quality rules, improving data trust score from 62% to 94%",
-          "metrics": ["200+ data quality rules", "62% to 94% data trust score"]
+          "text": "Pioneered AI-powered analytics platform integrating chat-to-Snowflake capabilities, compressing analysis cycles from days to minutes and establishing market-leading competitive differentiation.",
+          "metrics": ["analysis cycles from days to minutes"],
+          "tools": ["Snowflake", "Generative AI", "NLP"],
+          "tags": ["ai-innovation", "platform", "competitive-advantage"]
         },
         {
           "id": "exp-001-b5",
-          "text": "Built executive analytics dashboard suite adopted by C-suite and board, enabling data-driven quarterly strategic planning",
-          "tools": ["Tableau", "Looker"]
+          "text": "Architected industry-first automated content platform leveraging AI across the full production lifecycle — from news curation and script generation to recording and publishing — eliminating manual intervention and scaling thought leadership.",
+          "metrics": [],
+          "tools": ["Generative AI", "AI Automation"],
+          "tags": ["ai-innovation", "content-automation", "thought-leadership"]
         },
         {
           "id": "exp-001-b6",
-          "text": "Presented data strategy roadmap to board of directors, securing $8M multi-year investment in data infrastructure modernization",
-          "metrics": ["$8M investment"]
+          "text": "Expanded into purpose-built tools spanning core analytics functions — data foundation, demand management, analysis acceleration, insight delivery, and governance — with select components in daily production use and others architected for rapid customization in new environments.",
+          "metrics": [],
+          "tools": ["AI", "Low-Code/No-Code"],
+          "tags": ["ai-toolkit", "portability", "analytics-operations"]
+        },
+        {
+          "id": "exp-001-b7",
+          "text": "Designed entire toolkit for portability — tools travel with the leader, not the organization, enabling Day 1 acceleration when entering any new analytics environment.",
+          "metrics": [],
+          "tools": [],
+          "tags": ["portability", "leadership-asset", "day-one-impact"]
+        },
+        {
+          "id": "exp-001-b8",
+          "text": "Positioned analytics as strategic growth engine, transforming from cost center to revenue driver and market differentiator while guiding company through financial restructuring and scaling challenges.",
+          "metrics": [],
+          "tools": [],
+          "tags": ["transformation", "cost-center-to-revenue", "restructuring"]
         }
       ]
     },
     {
       "id": "exp-002",
-      "employer": "HealthTech Solutions Inc.",
-      "title": "Senior Director, Data Science & Analytics",
-      "start_date": "2018-06",
-      "end_date": "2021-02",
-      "location": "Chicago, IL",
+      "employer": "Diageo North America Inc.",
+      "title": "Vice President, Advanced Analytics",
+      "start_date": "2019-01",
+      "end_date": "2025-01",
+      "location": "New York, NY",
+      "scope": "$4B+ business unit | 20-person team | $17M budget | North America",
       "bullets": [
         {
           "id": "exp-002-b1",
-          "text": "Managed a team of 28 data scientists, analysts, and engineers delivering predictive analytics for population health management",
-          "metrics": ["28-person team"]
+          "text": "Led analytics transformation for world's largest premium spirits portfolio, overseeing $17M budget and 20-person team delivering data-driven market execution across North America.",
+          "metrics": ["$17M budget", "20-person team", "world's largest premium spirits portfolio"],
+          "tools": [],
+          "tags": ["leadership", "transformation", "beverage", "cpg"]
         },
         {
           "id": "exp-002-b2",
-          "text": "Developed patient readmission prediction model achieving 0.89 AUC, preventing an estimated 4,200 unnecessary readmissions annually saving $31M",
-          "metrics": ["0.89 AUC", "4,200 readmissions prevented", "$31M saved"],
-          "tools": ["Python", "XGBoost", "TensorFlow"]
+          "text": "Scaled analytically-driven distribution program enterprise-wide, generating 115,000 net-new distribution points and $64M-$120M in incremental annual revenue — representing 10% of total US growth for $4B+ business unit.",
+          "metrics": ["115,000 net-new distribution points", "$64M-$120M incremental annual revenue", "10% of total US growth", "$4B+ business unit"],
+          "tools": ["Predictive Modeling", "Statistical Analysis"],
+          "tags": ["revenue", "distribution", "enterprise-scale", "proof-anchor-1"]
         },
         {
           "id": "exp-002-b3",
-          "text": "Migrated analytics infrastructure from on-prem Hadoop to AWS (Redshift, EMR, SageMaker), reducing total cost of ownership by 40%",
-          "metrics": ["40% TCO reduction"],
-          "tools": ["AWS", "Redshift", "EMR", "SageMaker", "Hadoop"]
+          "text": "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 60 hours monthly, plus deployed generative AI business intelligence solution with natural language query capabilities.",
+          "metrics": ["5% accuracy improvement", "60 hours monthly reduction"],
+          "tools": ["Machine Learning", "Generative AI", "NLP", "Forecasting"],
+          "tags": ["ai-innovation", "forecasting", "efficiency"]
         },
         {
           "id": "exp-002-b4",
-          "text": "Designed and implemented A/B testing framework adopted across 5 product teams, increasing experiment velocity by 3x",
-          "metrics": ["5 product teams", "3x experiment velocity"]
+          "text": "Transformed analytics operating model through low-code platform adoption, accelerating project delivery 5X and democratizing data access across commercial organization.",
+          "metrics": ["5X project delivery acceleration"],
+          "tools": ["Low-Code/No-Code"],
+          "tags": ["operating-model", "democratization", "efficiency"]
         },
         {
           "id": "exp-002-b5",
-          "text": "Partnered with Chief Medical Officer to develop clinical analytics program, resulting in 15% improvement in care quality metrics",
-          "metrics": ["15% improvement in care quality metrics"]
+          "text": "Established enterprise analytics culture as 'Geek that can Speak,' bridging technical capabilities with business strategy to drive adoption and measurable ROI across sales, marketing, and supply chain functions.",
+          "metrics": [],
+          "tools": [],
+          "tags": ["culture", "geek-that-can-speak", "adoption", "cross-functional"]
         }
       ]
     },
     {
       "id": "exp-003",
-      "employer": "Global Retail Corp",
-      "title": "Director of Analytics",
-      "start_date": "2015-01",
-      "end_date": "2018-05",
-      "location": "Dallas, TX",
+      "employer": "H&R Block, Inc.",
+      "title": "Vice President, Analytics & Pricing / Client Insight",
+      "start_date": "2010-01",
+      "end_date": "2019-01",
+      "location": "Kansas City, MO",
+      "scope": "$3B+ tax services leader | C-suite advisory | Enterprise pricing & analytics",
       "bullets": [
         {
           "id": "exp-003-b1",
-          "text": "Built and led a 15-person analytics team from scratch, establishing the company's first centralized analytics function",
-          "metrics": ["15-person team"]
+          "text": "Directed analytics, pricing strategy, and client intelligence for $3B+ tax services leader, partnering with C-suite on long-term strategic planning and enterprise transformation initiatives.",
+          "metrics": ["$3B+ company"],
+          "tools": [],
+          "tags": ["leadership", "c-suite-advisory", "financial-services"]
         },
         {
           "id": "exp-003-b2",
-          "text": "Created customer segmentation model driving $18M incremental revenue through personalized marketing campaigns",
-          "metrics": ["$18M incremental revenue"],
-          "tools": ["Python", "R", "SQL"]
+          "text": "Championed simplified pricing architecture that increased higher-margin client mix 8% in test markets, with projected 4% volume growth and 9% customer satisfaction improvement at national scale.",
+          "metrics": ["8% higher-margin client mix increase", "4% projected volume growth", "9% customer satisfaction improvement"],
+          "tools": ["Pricing Models", "Statistical Analysis"],
+          "tags": ["pricing", "revenue-optimization", "testing"]
         },
         {
           "id": "exp-003-b3",
-          "text": "Implemented demand forecasting system reducing inventory carrying costs by $6.5M annually using time-series models",
-          "metrics": ["$6.5M cost reduction"],
-          "tools": ["Python", "Prophet", "SQL Server"]
+          "text": "Architected and launched New Client Acquisition program generating 220,000 incremental clients and $100M+ in projected lifetime revenue, establishing sustainable competitive advantage in mature market.",
+          "metrics": ["220,000 incremental clients", "$100M+ projected lifetime revenue"],
+          "tools": ["Predictive Modeling", "Customer Analytics"],
+          "tags": ["acquisition", "revenue", "competitive-advantage"]
         },
         {
           "id": "exp-003-b4",
-          "text": "Built self-service BI platform serving 500+ business users with automated reporting, reducing ad-hoc request volume by 65%",
-          "metrics": ["500+ users", "65% reduction in ad-hoc requests"],
-          "tools": ["Tableau", "SQL Server", "Python"]
+          "text": "Prevented revenue erosion of $180M-$360M annually by declining widespread price reduction pressure; instead implemented strategic pricing increases yielding $50M in annual incremental revenue.",
+          "metrics": ["$180M-$360M prevented erosion", "$50M annual incremental revenue"],
+          "tools": ["Pricing Strategy", "Econometric Modeling"],
+          "tags": ["value-protection", "pricing", "proof-anchor-2"]
+        },
+        {
+          "id": "exp-003-b5",
+          "text": "Led International Expansion analytics supporting India market entry, acquiring 100,000 new customers and establishing blueprint for future geographic growth.",
+          "metrics": ["100,000 new customers", "India market entry"],
+          "tools": [],
+          "tags": ["international", "expansion", "market-entry"]
+        },
+        {
+          "id": "exp-003-b6",
+          "text": "Transformed team culture and performance, doubling employee engagement from 40% to 80% within one year and sustaining 70-80% engagement through tenure.",
+          "metrics": ["40% to 80% employee engagement", "doubled in one year", "sustained 70-80%"],
+          "tools": [],
+          "tags": ["culture", "engagement", "team-transformation", "proof-anchor-3"]
         }
       ]
     },
     {
       "id": "exp-004",
-      "employer": "DataFirst Consulting",
-      "title": "Senior Data Analyst / Analytics Manager",
-      "start_date": "2010-08",
-      "end_date": "2014-12",
-      "location": "Chicago, IL",
+      "employer": "SuperValu, Inc.",
+      "title": "Vice President, Research & Analytics",
+      "start_date": "2007-01",
+      "end_date": "2010-01",
+      "location": "Eden Prairie, MN",
+      "scope": "$40B+ grocery retailer | 60 FTEs + 20 contractors | $15M annual budget | Board presentations",
       "bullets": [
         {
           "id": "exp-004-b1",
-          "text": "Promoted from Senior Data Analyst to Analytics Manager within 2 years based on delivery of high-impact client projects",
-          "metrics": ["promoted within 2 years"]
+          "text": "Established global analytics capability for $40B+ grocery retailer, managing 60 FTEs, 20 contractors, and $15M annual budget while presenting strategic insights to Board of Directors and executive leadership.",
+          "metrics": ["$40B+ company", "60 FTEs", "20 contractors", "$15M annual budget", "Board presentations"],
+          "tools": [],
+          "tags": ["leadership", "board-advisory", "retail", "grocery"]
         },
         {
           "id": "exp-004-b2",
-          "text": "Led analytics engagements for Fortune 500 clients across financial services, retail, and CPG industries",
-          "tools": ["SQL", "Python", "R", "Excel", "Tableau"]
+          "text": "Built offshore analytics center from concept to full operation in 12 months, establishing 30-person international team and reducing annual labor costs $4M while enabling 24/7 measurement capabilities.",
+          "metrics": ["12-month build", "30-person international team", "$4M annual labor cost reduction", "24/7 measurement"],
+          "tools": [],
+          "tags": ["offshore", "org-building", "cost-reduction"]
         },
         {
           "id": "exp-004-b3",
-          "text": "Developed churn prediction model for telecom client reducing annual churn by 12%, representing $22M in retained revenue",
-          "metrics": ["12% churn reduction", "$22M retained revenue"],
-          "tools": ["Python", "R", "SQL"]
+          "text": "Increased promotional effectiveness one-third through advanced modeling and optimization, delivering 6:1 ROI and $30M annual improvement in marketing efficiency.",
+          "metrics": ["33% promotional effectiveness increase", "6:1 ROI", "$30M annual marketing efficiency improvement"],
+          "tools": ["Predictive Modeling", "Marketing Mix Modeling"],
+          "tags": ["marketing", "optimization", "roi"]
+        },
+        {
+          "id": "exp-004-b4",
+          "text": "Led Big Relief Price Cut Program generating $60M+ in annual sales gains and reversing decade-long volume decline — first positive unit volume growth in 10 years.",
+          "metrics": ["$60M+ annual sales gains", "first positive unit volume growth in 10 years"],
+          "tools": ["Pricing Analytics"],
+          "tags": ["pricing", "turnaround", "volume-growth"]
         }
       ]
+    },
+    {
+      "id": "exp-005",
+      "employer": "Best Buy",
+      "title": "Director, Growth Marketing / Enterprise Research",
+      "start_date": "2000-01",
+      "end_date": "2007-01",
+      "location": "Minneapolis, MN",
+      "scope": "10-person insights team | Top 25% corporate engagement",
+      "bullets": [
+        {
+          "id": "exp-005-b1",
+          "text": "Led 10-person insights team achieving Top 25% corporate engagement ranking while identifying and developing high-impact growth opportunities.",
+          "metrics": ["10-person team", "Top 25% engagement ranking"],
+          "tools": [],
+          "tags": ["leadership", "retail", "consumer-electronics"]
+        },
+        {
+          "id": "exp-005-b2",
+          "text": "Identified and developed 6 new product/service pipelines representing $9B in addressable growth potential.",
+          "metrics": ["6 new pipelines", "$9B addressable growth potential"],
+          "tools": [],
+          "tags": ["growth", "strategy", "new-business"]
+        },
+        {
+          "id": "exp-005-b3",
+          "text": "Improved in-store customer conversion rate 50% through behavioral analytics and merchandising optimization.",
+          "metrics": ["50% conversion rate improvement"],
+          "tools": ["Behavioral Analytics"],
+          "tags": ["conversion", "customer-experience", "retail"]
+        }
+      ]
+    },
+    {
+      "id": "exp-006",
+      "employer": "The Mark Travel Corporation",
+      "title": "Senior Manager, Market Research",
+      "start_date": "1998-01",
+      "end_date": "2000-01",
+      "location": "",
+      "scope": "Earlier career",
+      "bullets": []
+    },
+    {
+      "id": "exp-007",
+      "employer": "Mercury Marine",
+      "title": "Senior Manager, Market Research",
+      "start_date": "1996-01",
+      "end_date": "1998-01",
+      "location": "",
+      "scope": "Earlier career",
+      "bullets": []
     }
   ],
   "education": [
     {
       "id": "edu-001",
-      "institution": "University of Chicago",
-      "degree": "MBA, Concentrations in Econometrics & Statistics and Strategic Management",
-      "year": "2010"
+      "institution": "Rutgers University",
+      "degree": "Doctor of Business Administration",
+      "year": "2019",
+      "location": "Newark, NJ",
+      "detail": "Dissertation: 'Driving Adoption of Advanced Analytic Tools within Sales Organizations'"
     },
     {
       "id": "edu-002",
-      "institution": "University of Illinois at Urbana-Champaign",
-      "degree": "BS in Computer Science, Minor in Mathematics",
-      "year": "2006"
+      "institution": "University of Wisconsin-Madison",
+      "degree": "Master of Science, Marketing/Market Research",
+      "year": "1996",
+      "location": "Madison, WI",
+      "detail": "AC Nielsen Center for Marketing Research"
+    },
+    {
+      "id": "edu-003",
+      "institution": "Michigan State University",
+      "degree": "Bachelor of Arts, Advertising",
+      "year": "1994",
+      "location": "East Lansing, MI",
+      "detail": ""
     }
   ],
   "skills": {
-    "leadership": ["Executive stakeholder management", "Team building & mentorship", "Strategic planning", "P&L ownership", "Board-level presentations", "Vendor management", "Agile/Scrum"],
-    "technical": ["Python", "SQL", "R", "Spark", "Snowflake", "dbt", "Airflow", "Tableau", "Looker", "Power BI", "AWS (Redshift, EMR, SageMaker, S3)", "GCP (BigQuery)", "Azure", "Kubernetes", "Docker", "Git"],
-    "data_science": ["Machine Learning", "Deep Learning", "NLP", "Time Series Forecasting", "A/B Testing", "Statistical Modeling", "MLOps", "Feature Engineering"],
-    "domains": ["Financial Services", "Healthcare", "Retail", "Technology", "CPG"]
+    "leadership": [
+      "Enterprise Analytics Strategy",
+      "AI/ML Strategy & Deployment",
+      "Organizational Change Management",
+      "Cross-Functional Leadership",
+      "Board & C-Suite Advisory",
+      "Team Building & Transformation",
+      "P&L Influence",
+      "Pricing Strategy & Revenue Optimization"
+    ],
+    "technical": [
+      "Snowflake",
+      "SQL",
+      "Python",
+      "R",
+      "Tableau",
+      "Power BI",
+      "Low-Code/No-Code Solutions"
+    ],
+    "data_science": [
+      "Predictive Modeling",
+      "Machine Learning",
+      "Generative AI",
+      "Natural Language Processing",
+      "Statistical Analysis",
+      "AI-Powered Analytics Automation",
+      "Forecasting",
+      "Marketing Mix Modeling",
+      "Econometric Modeling"
+    ],
+    "domains": [
+      "Beverage/Spirits",
+      "CPG",
+      "Retail",
+      "Financial Services",
+      "Grocery",
+      "Consumer Electronics",
+      "Pricing Strategy",
+      "Revenue Optimization",
+      "Marketing Analytics",
+      "Customer Intelligence",
+      "Supply Chain Analytics"
+    ]
   },
   "certifications": [
-    {"id": "cert-001", "name": "AWS Certified Solutions Architect", "year": "2020"},
-    {"id": "cert-002", "name": "Google Cloud Professional Data Engineer", "year": "2021"}
-  ]
+    {
+      "id": "cert-001",
+      "name": "Behavioral Economics Certificate",
+      "institution": "Harvard Business School",
+      "year": ""
+    },
+    {
+      "id": "cert-002",
+      "name": "Certified EMT",
+      "institution": "National License #E3736245 (NJ, MN)",
+      "year": ""
+    }
+  ],
+  "resume_variants": {
+    "analytics_forward": "Ed_Dobbles_Resume_Executive_Oct_2025.docx",
+    "ai_forward": "Ed_Dobbles_Resume_Executive_Feb2026.docx",
+    "key_differences": "AI-forward variant includes toolkit portability narrative at Overproof (exp-001-b3, exp-001-b6, exp-001-b7) and automated content platform (exp-001-b5). Analytics variant uses shorter Overproof section focused on platform and competitive differentiation (exp-001-b4)."
+  }
 }
