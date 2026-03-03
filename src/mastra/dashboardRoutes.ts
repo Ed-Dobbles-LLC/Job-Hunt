@@ -123,7 +123,7 @@ export function getDashboardRoutes() {
             FROM jobs j
             LEFT JOIN scores s ON j.job_id = s.job_id
             WHERE (j.user_action IS NULL OR j.user_action = '')
-              AND j.date_ingested > NOW() - INTERVAL '7 days'
+              AND j.date_ingested > NOW() - INTERVAL '2 days'
             ORDER BY s.total_score DESC NULLS LAST
             LIMIT 5
           `);
@@ -161,7 +161,7 @@ export function getDashboardRoutes() {
           let whereClause = "";
           const params: any[] = [limit, offset];
           if (folder === "new") {
-            whereClause = "WHERE (j.user_action IS NULL OR j.user_action = '') AND j.date_ingested > NOW() - INTERVAL '7 days'";
+            whereClause = "WHERE (j.user_action IS NULL OR j.user_action = '') AND j.date_ingested > NOW() - INTERVAL '2 days'";
           } else if (folder === "applied") {
             whereClause = "WHERE j.user_action = 'applied'";
           } else if (folder === "not_interested") {
@@ -169,7 +169,7 @@ export function getDashboardRoutes() {
           } else if (folder === "deleted") {
             whereClause = "WHERE j.user_action = 'deleted'";
           } else if (folder === "archived") {
-            whereClause = "WHERE (j.user_action IS NULL OR j.user_action = '') AND j.date_ingested <= NOW() - INTERVAL '7 days'";
+            whereClause = "WHERE (j.user_action IS NULL OR j.user_action = '') AND j.date_ingested <= NOW() - INTERVAL '2 days'";
           }
 
           const result = await query(`
@@ -191,11 +191,11 @@ export function getDashboardRoutes() {
           const countResult = await query(`
             SELECT
               COUNT(*) as total,
-              COUNT(*) FILTER (WHERE (user_action IS NULL OR user_action = '') AND date_ingested > NOW() - INTERVAL '7 days') as count_new,
+              COUNT(*) FILTER (WHERE (user_action IS NULL OR user_action = '') AND date_ingested > NOW() - INTERVAL '2 days') as count_new,
               COUNT(*) FILTER (WHERE user_action = 'applied') as count_applied,
               COUNT(*) FILTER (WHERE user_action = 'not_interested') as count_not_interested,
               COUNT(*) FILTER (WHERE user_action = 'deleted') as count_deleted,
-              COUNT(*) FILTER (WHERE (user_action IS NULL OR user_action = '') AND date_ingested <= NOW() - INTERVAL '7 days') as count_archived
+              COUNT(*) FILTER (WHERE (user_action IS NULL OR user_action = '') AND date_ingested <= NOW() - INTERVAL '2 days') as count_archived
             FROM jobs
           `);
           const counts = countResult.rows[0];
@@ -1216,7 +1216,7 @@ export function getDashboardRoutes() {
           const url = new URL(c.req.url);
           const all = url.searchParams.get("all") === "true";
           const includeArchived = url.searchParams.get("includeArchived") === "true";
-          const ageFilter = includeArchived ? "" : " AND j.date_ingested > NOW() - INTERVAL '7 days'";
+          const ageFilter = includeArchived ? "" : " AND j.date_ingested > NOW() - INTERVAL '2 days'";
 
           let jobIds: number[];
           if (all) {
@@ -1747,7 +1747,7 @@ CRITICAL INSTRUCTIONS:
           const stats = await query(`
             SELECT reason, COUNT(*) as count
             FROM dedup_log
-            WHERE created_at > NOW() - INTERVAL '7 days'
+            WHERE created_at > NOW() - INTERVAL '2 days'
             GROUP BY reason
             ORDER BY count DESC
           `);
