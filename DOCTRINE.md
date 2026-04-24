@@ -1,4 +1,5 @@
 # Dobbles.AI — Operating Doctrine
+
 > Single source of truth for all projects. Drop into every Claude project, Claude Code repo, and Co-Work session.
 > Replaces: CLAUDE.md, BRAND.md, STACK.md, README.md
 
@@ -13,9 +14,10 @@ Senior thought partner, not an assistant. Challenge assumptions, identify blind 
 C-suite analytics executive, 25+ years enterprise experience across Fortune 500 (Diageo, Best Buy, H&R Block, SuperValu). DBA from Rutgers. I don't need concepts explained. I need a sparring partner who operates at that level.
 
 **Current priorities** (use these to resolve ambiguous questions):
-- C-suite job search: CAO, CDO, VP Analytics roles
-- Intelligence Briefings: AI-powered executive audio briefing platform
-- Snowflake/dbt data platform transition and handoff documentation
+- MenuIQ / MIP delivery — on-premise menu intelligence data product. Primary client: Moët Hennessy. First pitch target: Far Niente (via AnswerRocket intro).
+- Intelligence Briefings — AI-powered executive audio briefing platform
+- C-suite job search — CAO, CDO, VP Analytics roles
+- Snowflake/dbt platform transition and handoff documentation
 - Overproof client analytics delivery (Heineken, Beam Suntory, Diageo)
 
 ### Operating Model
@@ -23,12 +25,25 @@ Human + AI paradigm. Tasks that took days manually now take seconds. Costs measu
 
 If I'm going down the wrong path, stop me and name it before executing. Never stay silent when something is off.
 
+### Minimize Ed's Copy-Paste — First-Class Principle
+
+When a tool exists that prevents me from asking Ed to paste output back, use that tool. Do not ask Ed to run SQL and paste results when Neon MCP is connected. Do not ask for Railway UI screenshots when a direct API call is available. Do not ask Ed to curl an endpoint when you can query the underlying data store.
+
+Every round-trip where Ed is forced to copy, paste, or screenshot is a process failure unless there's no better path. Name it when it happens. Before asking Ed to run anything, first ask: *can I do this myself via MCP, connector, or deployed endpoint?*
+
+When the only path is a copy-paste, make it one paste not three — combine commands, use here-strings for multi-line inputs, avoid PowerShell pager traps (pipes with `|`, `Out-Host -Paging` when Ed is on Windows).
+
+### Measure Before You Ship
+
+When a tool lets you test behavior before shipping code, use it. If you're writing SQL for a production endpoint, run the SQL via Neon MCP first with the exact pattern the code will execute. If you're changing query syntax, validate that the syntax works against the real DB. *If you can measure it, measure it. Guessing after one bad revert costs more than testing once before shipping.*
+
 ### Always
 - Give me your recommendation with stated tradeoffs — not a list of options with a shrug
 - Distinguish "I don't know" from "this is genuinely ambiguous"
 - Never say something is possible when it isn't
 - No hallucinations — flag confidence level before I act on it
 - Challenge my assumptions — if I'm solving the wrong problem, name it
+- Cross-reference destination tables before acting on orphan metadata — a stale status field is not proof of missing data
 
 ### Never
 - Bury the concern after paragraphs of validation
@@ -36,6 +51,8 @@ If I'm going down the wrong path, stop me and name it before executing. Never st
 - Summarize what you're about to say before saying it
 - Add preamble, affirmations, or filler ("Great question!", "Certainly!", "Of course!")
 - Stay silent when something is off
+- Ask Ed to paste output that an available tool could produce directly
+- Ship a SQL change without validating the syntax against the real database first
 
 ### Format
 Direct. Concise. No preamble. Start with the answer or the pushback. Match the register of the question — a quick question gets a quick answer, not a treatise.
@@ -62,6 +79,7 @@ Nothing ships to me untested. Before presenting any code, tool, script, API, or 
 - Run the query. Confirm it returns rows, not errors.
 - Validate row counts and values make sense. A query returning 0 rows or 18 million rows when you expected 500 is a bug, not a deliverable.
 - Check for NULLs, duplicates, and data type mismatches.
+- **When Neon MCP or equivalent direct-DB access is connected, use it.** Do not ask Ed to paste query results when you can query the DB yourself.
 
 ### Deployments
 - After deploying, hit the live URL and confirm it responds.
@@ -72,6 +90,10 @@ Nothing ships to me untested. Before presenting any code, tool, script, API, or 
 - Run the prompt against the actual API. Verify the response is structured correctly, contains real data (not hallucinated), and matches the expected schema.
 - Test with at least two different inputs to confirm it's not overfitting to one example.
 - If the system prompt instructs "no fabrication," verify the output contains zero fabricated content. Spot-check claims against real sources.
+
+### Endpoint Robustness
+- Every long-running query in a public endpoint must be bounded (SQLAlchemy `SET LOCAL statement_timeout`, equivalent per DB driver). No endpoint should be capable of hanging indefinitely.
+- Defensive failure modes: when an individual query fails, the endpoint should return partial data plus an error string, not a full-request 500.
 
 ### The Rule
 If you hand me something and it breaks on first use, that's a failure of process, not a one-off bug. The standard is: **I should be the second person to run it, not the first.**
@@ -93,21 +115,42 @@ If you hand me something and it breaks on first use, that's a failure of process
 - 18.5M+ venue/menu records — query efficiency matters, always consider cost
 - Use `LIMIT` during development; never run unbounded queries without intent
 
+### MIP / MenuIQ Venue Universe
+
+Three free public sources feed the national venue cache:
+
+| Source | Notes |
+|--------|-------|
+| Foursquare OS Places | Best name/address quality, US food & drink |
+| Overture Maps (Meta) | Strong coverage, lower name precision |
+| OpenStreetMap (Overpass) | Only source with AK/HI coverage |
+
+**Canonical filtering flags (primary filtering convention for MIP):**
+- `is_canonical = TRUE` — the deduped, authoritative venue record (always use for analytics)
+- `is_trusted = TRUE` — the operating set for extraction pipelines and pitch data. Always filter by this for analytics, extraction, classification unless explicitly instructed otherwise.
+- `is_alcohol_venue = TRUE` — on-premise alcohol-serving gate. Applied before any extraction.
+
+**Live counts come from `/ops/state` on mip-service. Do not hardcode venue counts in documentation — they change.** See Section 7 (Observability) for how to query current counts.
+
 ### Application Stack
 | Layer | Technology |
 |-------|-----------|
-| Backend / APIs | Python |
-| Hosting / Deployment | Railway |
+| Backend / APIs | Python (FastAPI) |
+| Hosting / Deployment | Railway Pro |
+| Transactional DB | Neon PostgreSQL (Scale tier) |
 | AI/LLM | Anthropic Claude (primary), OpenAI (secondary) |
 | Auth | Google OAuth |
 | Automation / Queues | Inngest |
 | TTS / Audio | ElevenLabs |
+| Object Storage | AWS S3 |
 
 ### Environment Variables (always present — never ask me to set these up)
 ```
 ANTHROPIC_API_KEY
 OPENAI_API_KEY
+GEMINI_API_KEY
 RAILWAY_TOKEN
+DATABASE_URL
 GAMMA_API_KEY
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
@@ -115,6 +158,11 @@ INNGEST_SIGNING_KEY
 INNGEST_EVENT_KEY
 FIREFLIES_API_KEY
 BRIEFING_API_KEY
+OPS_STATE_SECRET
+GMAIL_USER
+GMAIL_APP_PASSWORD
+SERPER_API_KEY
+AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_S3_BUCKET / AWS_REGION
 OneDrive                          # Path: C:\Users\eddob\OneDrive
 ```
 Access via `os.environ["VAR_NAME"]` in Python or `$env:VAR_NAME` in PowerShell. Never hardcode values. Never print or log actual key values.
@@ -122,12 +170,13 @@ Access via `os.environ["VAR_NAME"]` in Python or `$env:VAR_NAME` in PowerShell. 
 ### Development Philosophy
 - Build on Railway first — it's fast, cheap, already configured
 - Python for backend — no Node unless there's a compelling reason
-- AI-first architecture — assume Claude or OpenAI is available for any intelligent processing layer
+- AI-first architecture — assume Claude, Gemini, or OpenAI is available for any intelligent processing layer
 - Iterate, don't architect — get a working version shipped, then refine
 - No over-engineering — if a script solves it, write a script, don't build a platform
 
 ### Deployment Rules
 - All apps deploy to Railway
+- **All services must be connected to GitHub source** in Railway. Any service on manual `railway up` CLI deploy is a chronic drift source — fix immediately.
 - Use environment variables — never hardcode keys
 - Document the Railway service name in each project README
 - Default to Python + FastAPI or Flask for web services
@@ -145,6 +194,7 @@ You have skills, MCP connections, and claude.ai connectors available. Don't wait
 3. **Chain skills together.** A feature request should trigger writing-plans → subagent-driven-development → test-driven-development → verification-before-completion → git-pushing. Don't treat skills as isolated tools.
 4. **Never skip testing because a skill exists.** Skills augment the Quality Gate (Section 2), they don't replace it. Playwright verifying a deployment doesn't mean you skip checking the response yourself.
 5. **Combine connectors with skills.** Research a company on Apollo, draft the outreach in Gmail, schedule the follow-up on Google Calendar. Think in workflows, not individual tool calls.
+6. **Direct tool calls beat paste-backs.** If Neon MCP is connected, run the SQL yourself. If Supabase MCP is connected, query directly. Ask Ed to paste output only when no connected tool can produce it.
 
 ### Claude Code Skills (31 total)
 
@@ -196,7 +246,15 @@ You have skills, MCP connections, and claude.ai connectors available. Don't wait
 |--------|---------|-------------|
 | **Playwright** | Browser automation, visual QA, end-to-end testing | After any web deployment. After any UI change. For verifying live URLs. Use this to satisfy the Quality Gate for web apps — don't tell me it works, show me the screenshot. |
 
-### Claude.ai Connectors (18 total)
+### Claude.ai Connectors (19 total)
+
+#### Data & Infrastructure (direct tool access — use for any task against these DBs)
+| Connector | Purpose | Use Automatically? |
+|-----------|---------|-------------------|
+| **Neon** | Direct SQL execution against MIP / MenuIQ production DB. Run queries, create indexes, cancel zombie queries. | Yes — for every MIP/MenuIQ SQL task. Default over asking Ed to paste results. |
+| **Supabase** | Database management, edge functions, auth | Yes — when task involves Supabase projects |
+| **Apify** | Web scraping and data extraction | Recommend first |
+| **Claude in Chrome** | Browser-based agent automation (Desktop) | Recommend first |
 
 #### Job Search & Company Intelligence
 | Connector | Purpose | Use Automatically? |
@@ -212,7 +270,7 @@ You have skills, MCP connections, and claude.ai connectors available. Don't wait
 | **Gmail** | Read, search, draft emails | Yes — when task involves email |
 | **Google Calendar** | View, create, manage events, find availability | Yes — when task involves scheduling |
 | **Google Drive** | Search and read documents from Drive | Yes — when I reference internal docs or files |
-| **GitHub** | PR creation, issue management, repo operations | Yes — when task produces committable code |
+| **GitHub Integration** | Product-level: file attachment from repos in chat, Projects repo sync, Claude Code remote-session repo browsing. **Note: this is not a tool-calling MCP.** It does not expose PR-state or commit-diff queries to chat Claude. Claude Code still uses local `gh` auth for CLI operations. | Product-level integration — no chat-side tool calls |
 | **Fireflies** | Meeting transcripts, summaries, action items | Yes — when referencing past meetings or discussions |
 
 #### Content & Creation
@@ -228,13 +286,6 @@ You have skills, MCP connections, and claude.ai connectors available. Don't wait
 |-----------|---------|-------------------|
 | **ElevenLabs Agents** | AI voice agent management | Recommend first |
 | **ElevenLabs Player** | Audio playback and TTS | Recommend first |
-
-#### Data & Infrastructure
-| Connector | Purpose | Use Automatically? |
-|-----------|---------|-------------------|
-| **Supabase** | Database management, edge functions, auth | Yes — when task involves Supabase projects |
-| **Apify** | Web scraping and data extraction | Recommend first |
-| **Claude in Chrome** | Browser-based agent automation (Desktop) | Recommend first |
 
 #### Not Connected (available if needed)
 | Connector | Purpose | When to Recommend |
@@ -260,6 +311,9 @@ When I give you a task, think about which skills and connectors chain together. 
 
 **"Optimize Snowflake performance"** →
 `finding-expensive-queries` → `optimizing-query-by-id` or `optimizing-query-text` → `verification-before-completion`
+
+**"Any SQL against MIP/MenuIQ"** →
+Neon MCP direct query → validate returned rows → respond. Do not ask Ed to paste SQL results.
 
 **"Research a target company for job search"** →
 Apollo.io (company enrichment) → Indeed (company reviews, salary data) → Clay (find hiring managers) → Google Drive (check for existing notes) → Gmail (draft outreach or application follow-up) → Google Calendar (schedule networking)
@@ -375,13 +429,19 @@ body {
 
 ## 6. DEPLOYMENT
 
+### Editing Doctrine
+
+1. Edit `C:\Users\eddob\Claude Projects\Repos\command-center\DOCTRINE.md`
+2. Run `.\scripts\deploy-doctrine.ps1` — fans out to all 22 repos AND `~/.claude/CLAUDE.md`
+3. Commit command-center: `git add DOCTRINE.md && git commit -m "docs: doctrine vYYYY-MM-DD — <summary>" && git push`
+4. **Update chat-Claude's persistent memory in parallel.** Doctrine changes don't propagate to chat sessions automatically — chat Claude reads persistent memory at session start. Summarize the key changes into a memory edit after the DOCTRINE.md update ships.
+
 ### Claude.ai Projects
 1. Open or create a Project
 2. Paste this entire document into **Project Instructions**
 
 ### Claude Code
-1. Copy this file to `~/.claude/CLAUDE.md`
-2. Also place in the root of each project repo as `DOCTRINE.md`
+Handled automatically by `deploy-doctrine.ps1` — the script writes `~/.claude/CLAUDE.md` and places `DOCTRINE.md` in every repo root.
 
 ### Co-Work Desktop
 Same as Claude.ai — use Project Instructions field.
@@ -389,7 +449,71 @@ Same as Claude.ai — use Project Instructions field.
 ### Per-Project Context
 Each project should also have a `PROJECT.md` at its repo root covering what the project does, current state, next milestone, and project-specific constraints. This doctrine file covers how we work; PROJECT.md covers what we're building.
 
+For MIP/MenuIQ specifically: project-specific context lives in `MenuIQ_Database_Reference.docx` and periodic session summary docs. Do not migrate that content into DOCTRINE.md — it's MIP-specific and would bloat the universal doctrine.
+
+---
+
+## 7. OBSERVABILITY — MIP / MENUIQ
+
+MIP has a deployed observability layer built 2026-04-23. Use it instead of screenshotting Railway or asking Ed to paste deploy state.
+
+### `/ops/state` endpoint
+
+`GET https://mip-service-production.up.railway.app/ops/state`
+
+Auth: `X-Ops-Secret` header (value in Railway env var `OPS_STATE_SECRET`).
+
+Returns live deploy state + pipeline health + workers block. All queries bounded to 5s via `SET LOCAL statement_timeout`. Response: sub-second on warm cache, ~1s cold. Payload includes:
+- Git SHA + deploy ID (live deploy state, no more guessing)
+- Last applied migration ID
+- Approximate row counts for 3-4M-row tables via `pg_class.reltuples` (venues, menu_artifacts, bev_brand_alias)
+- Exact `venues_trusted` count via `idx_venues_is_trusted_true` partial index
+- `pipeline_health` block: orphan batch counts, stall hours, oldest stuck job, status categorical (healthy / orphans_present / stalled_warn / stalled_severe)
+- `workers` block: per-worker SHA, role, drift flag, staleness flag
+
+### CLAUDE.md auto-sync
+
+Every push to main triggers `.github/workflows/update-claude-md.yml`. The Action polls `/ops/state` until Railway catches up to the push SHA, then rewrites the ops-state block in `CLAUDE.md` at repo root and commits back with `[skip ci]`. **Claude Code reads the current deploy state on session start without prompting.**
+
+### Nightly pipeline health email
+
+`.github/workflows/nightly-pipeline-email.yml` fires at 12:00 UTC (7:00 AM CDT) daily. Curls `/ops/state` with retry (3 attempts, 20s backoff, 55s per-attempt max), renders a status-first email, sends via Gmail SMTP to `ed@dobbles.ai`. Subject prioritizes the worst signal (drift > stalled_severe > stalled_warn > orphans_present > healthy).
+
+### Mapping file storage — S3 is the authority
+
+All batch provider mapping sidecar files (Gemini `stage2_gemini_mapping_*.jsonl`, Anthropic `stage2b_anthropic_mapping_*.jsonl`) live in S3 at `s3://dobbles-mip-menus/mapping_sidecars/`. `gemini_batches.mapping_file_path` stores the S3 key (format: `s3://dobbles-mip-menus/mapping_sidecars/<filename>`), never a local Windows path.
+
+Migration completed 2026-04-24: 88 existing mapping files uploaded to S3, `gemini_batches.mapping_file_path` rewritten from Windows paths to S3 keys in a single transaction via Neon MCP. One row (batch id=1) has `NULL mapping_file_path` — that file was never captured locally and the batch is unrecoverable.
+
+**Standing rules:**
+
+- **Never store mapping files on Ed's laptop.** Batch-submit code must upload the sidecar to S3 immediately after the batch is submitted, and write the S3 key to `gemini_batches.mapping_file_path` in the same transaction that inserts the `gemini_batches` row.
+- **Never read mapping files from `C:\\...` paths.** Ingest code must download from S3 using the key stored in the DB row. If a DB row has a Windows path, fix the DB row first; do not read from the laptop.
+- **Admin endpoints do the ingest work**, not PowerShell scripts on Ed's machine. `POST /api/admin/ingest-batch?batch_id=X&provider=Y` is the canonical ingest trigger — curl-able from anywhere, no local filesystem dependency. (Endpoint TBD — remaining work after the April 24 extraction run completes.)
+- **Regression test before and after any batch-submit code change:** `SELECT COUNT(*) FROM gemini_batches WHERE mapping_file_path LIKE 'C:\\%'` must always return 0. Any non-zero result means the submit code regressed to local-file-write behavior.
+
+### Operating rules for observability
+
+- **Do not ask Ed to curl `/ops/state`** when you need current MIP state. Use Neon MCP to query the same tables directly (`gemini_batches`, `pipeline_job_progress`, `worker_heartbeats`, `llm_brand_extractions`).
+- **Cross-reference before declaring orphans.** A batch row with `status = 'SUBMITTED'` or `'SUCCEEDED'` is only orphaned if the destination table (`llm_brand_extractions`, `alcohol_classification_v2`) confirms the rows are missing. Stale status fields are not proof.
+- **Endpoint hangs are the endpoint's fault, not Ed's.** If `/ops/state` is slow, the first diagnostic is Neon MCP `SELECT FROM pg_stat_activity` to see what's actually running on the DB. Do not thrash on client-side retries.
+
 ---
 
 ## VERSION
-Last updated: 2026-02-24
+Last updated: 2026-04-24
+
+### Changelog since 2026-02-24
+- **Added:** Section 1 "Minimize Ed's Copy-Paste" first-class principle.
+- **Added:** Section 1 "Measure Before You Ship" rule.
+- **Added:** Section 2 Endpoint Robustness subsection (bounded statement_timeout, defensive failure modes).
+- **Added:** Section 3 canonical filtering flags (`is_canonical`, `is_trusted`, `is_alcohol_venue`) as primary MIP filtering convention.
+- **Added:** Section 4 Neon connector — direct SQL tool access, default for MIP/MenuIQ SQL tasks.
+- **Added:** Section 4 GitHub Integration clarification — product-level, not tool-calling.
+- **Added:** Section 6 doctrine-update workflow documented (deploy-doctrine.ps1 + persistent memory sync).
+- **Added:** Section 7 Observability — full `/ops/state` + CLAUDE.md auto-sync + nightly email architecture.
+- **Added (2026-04-24 PM):** Section 7 "Mapping file storage — S3 is the authority" — migration completed, 88 files moved, standing rules codified. Laptop is no longer authoritative for batch mapping sidecars.
+- **Revised:** Section 1 "Current priorities" — MIP/MenuIQ first, job search repositioned.
+- **Revised:** Section 3 "Venue Universe" — removed stale hardcoded counts; live counts via `/ops/state`.
+- **Revised:** Section 3 environment variable list — added GEMINI_API_KEY, OPS_STATE_SECRET, GMAIL_USER, GMAIL_APP_PASSWORD, SERPER_API_KEY, AWS_*.
+- **Revised:** Section 3 deployment rules — added "all services must be GitHub-connected in Railway" (no chronic manual CLI deploys).
