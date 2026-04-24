@@ -93,28 +93,6 @@ If you hand me something and it breaks on first use, that's a failure of process
 - 18.5M+ venue/menu records — query efficiency matters, always consider cost
 - Use `LIMIT` during development; never run unbounded queries without intent
 
-### Venue Universe (MIP Service)
-
-Three free public sources feed the national venue cache:
-
-| Source | Raw Count | Notes |
-|--------|-----------|-------|
-| Foursquare OS Places | ~2.1M | Best name/address quality, US food & drink |
-| Overture Maps (Meta) | ~1.3M | Strong coverage, lower name precision |
-| OpenStreetMap (Overpass) | ~440K | Only source with AK/HI coverage |
-| **Total raw** | **~3.8M** | |
-
-**Dedup pipeline (two-pass):**
-- Pass 1 — Grid-snap: `ROUND(lat,4), ROUND(lon,4), LOWER(TRIM(name))` (~11m cells) → ~3.0M
-- Pass 2 — Fuzzy: pg_trgm `similarity > 0.6` in ~111m geo cells via Neon Postgres → **2,576,755 unique venues**
-- Source priority: FSQ (1) > OSM (2) > Overture (3) — higher-priority source wins ties
-
-**Key facts:**
-- Authoritative file: `data/cache/venues_final.parquet` (~130MB, baked into Docker image at build time)
-- AK: 1,242 venues, HI: 1,925 venues (previously near-zero, fixed via OSM)
-- Docker build auto-regenerates `venues_final.parquet` on deploy when `DATABASE_URL` is set
-- Without `DATABASE_URL`, falls back to pass-1-only `venues_deduped.parquet` (~3.0M)
-
 ### Application Stack
 | Layer | Technology |
 |-------|-----------|
