@@ -500,10 +500,27 @@ Migration completed 2026-04-24: 88 existing mapping files uploaded to S3, `gemin
 
 ---
 
+## 8. SHARED-TABLE MUTATION DISCIPLINE
+
+Multiple CC sessions run concurrently against the same production tables (`brand_extractions`, `menu_artifacts`, `dispensaries`, `dip_extractions`, and their MIP equivalents). Uncoordinated bulk mutations compound into a queue of conflicting, hard-to-sequence writes. These rules are mandatory for any brief that mutates a shared table.
+
+1. **Pre-flight open-PR scan — Phase 0, before writing code.** Any brief that mutates a shared table opens with `gh pr list --state open --search "<table>"` (and a full `gh pr list` scan, since titles don't always name the table). Report the overlap between the open-PR row-sets and your target row-set **before** writing code. If another open PR claims the **same id-set**, STOP for a sequencing decision — do not proceed on the assumption it's disjoint. "Probably disjoint" is not "proven disjoint"; when you can't prove it from the PR's cohort definition, treat it as overlap.
+
+2. **One bulk mutation per shared table in flight.** Do NOT open a new bulk-invalidate / dedup / re-extract PR while ≥1 such PR is already open against that table. Drain the queue (merge or close the in-flight ones) first. A merged-but-unapplied mutation still counts as in-flight until its live run has executed and been verified.
+
+3. **Stale-gate re-validation.** Any PR whose count-gate (target rows/outlets) was computed >24h ago MUST re-run its dry-run against current `main` before merge or `--apply`. Concurrent activity drifts the numbers; the claimed count is stale until re-proven.
+
+4. **Reversibility is non-negotiable for bulk writes.** Every bulk mutation stamps a unique `*_run_id` (e.g. `invalidated_run_id`, `target_decontam_run_id`) on every touched row and prints its one-command rollback on every run. No bulk write ships without a tested revert path.
+
+5. **Never silently relax a stated safety gate to force a mutation through.** If the real count violates a threshold the brief set (e.g. a row floor), STOP and surface it with the corrected number and a recommendation. Adjusting the gate is the human's call, made in a reviewable PR — not an in-the-act relaxation during `--apply`.
+
+---
+
 ## VERSION
-Last updated: 2026-04-24
+Last updated: 2026-06-04
 
 ### Changelog since 2026-02-24
+- **Added (2026-06-04):** Section 8 "Shared-table mutation discipline" — pre-flight open-PR scan, one-bulk-mutation-per-table-in-flight, stale-gate re-validation, mandatory reversibility, no silent safety-gate relaxation. Born from the DIP chase: 8+ concurrent open PRs mutating `brand_extractions` created an un-sequenceable queue.
 - **Added:** Section 1 "Minimize Ed's Copy-Paste" first-class principle.
 - **Added:** Section 1 "Measure Before You Ship" rule.
 - **Added:** Section 2 Endpoint Robustness subsection (bounded statement_timeout, defensive failure modes).
