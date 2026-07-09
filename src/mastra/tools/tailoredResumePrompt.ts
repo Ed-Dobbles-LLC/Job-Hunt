@@ -74,7 +74,7 @@ export const ResumeExperienceSchema = z.object({
     ),
   bullets: z
     .array(ResumeBulletSchema)
-    .describe("Tailored bullets per role: 4 max for most recent role, 3 for next 2 roles, 2 for roles older than 15 years. Each bullet: Action → Scale → Outcome, 18-24 words, max 2 lines. Lead with mandate/transformation bullet. Min 1, max 5 bullets per role."),
+    .describe("Tailored bullets per role — the resume must fill 2 FULL pages: 4-5 for the most recent role, 4 for the next 2 roles, 3-4 for older roles (use all available inventory bullets if fewer). Each bullet: Action → Scale → Outcome, 18-24 words, max 2 lines. Lead with mandate/transformation bullet. Min 1, max 5 bullets per role."),
 });
 
 export const TailoredResumeSchema = z.object({

@@ -745,6 +745,12 @@ RULES:
     }
   }
 
+  // ── Deterministic Bullet Backfill (2-full-page requirement) ──
+  // LLMs under-select bullets for older roles regardless of prompt targets.
+  // Backfill from the ranked, unused inventory bullets — verbatim text with
+  // claim_ids intact, so additions are truth-safe by construction.
+  backfillBullets(resume, input.bulletPlan, input.inventory, input.logger);
+
   // Run compression pass (mandate-aware)
   compressResume(resume, input.mandate);
 
@@ -753,4 +759,69 @@ RULES:
     coverLetter,
     duration_ms: Date.now() - start,
   };
+}
+
+
+// ── Deterministic Bullet Backfill ─────────────────────────────────
+// Per-role targets for a 2-full-page executive resume. If the LLM
+// selected fewer bullets than the target and the scored bullet plan has
+// unused bullets for that role, append them verbatim (highest relevance
+// first). Verbatim inventory text + real claim_ids = passes every truth
+// and claim gate without an extra LLM call.
+function backfillBullets(
+  resume: TailoredResume,
+  bulletPlan: ScoredBulletPlan | undefined,
+  inventory: any,
+  logger?: any,
+): void {
+  if (!bulletPlan?.scored_bullets?.length) return;
+
+  const targetFor = (i: number): number => (i === 0 ? 4 : i <= 2 ? 4 : 3);
+
+  // Map experience_id -> employer via inventory for role matching
+  const idToEmployer = new Map<string, string>();
+  for (const e of inventory?.experience ?? []) {
+    if (e?.id && e?.employer) idToEmployer.set(e.id, String(e.employer).toLowerCase());
+  }
+
+  // Group scored bullets by experience_id, sorted by relevance desc
+  const byExp = new Map<string, typeof bulletPlan.scored_bullets>();
+  for (const sb of bulletPlan.scored_bullets) {
+    if (!byExp.has(sb.experience_id)) byExp.set(sb.experience_id, []);
+    byExp.get(sb.experience_id)!.push(sb);
+  }
+  for (const arr of byExp.values()) arr.sort((a, b) => b.total_relevance - a.total_relevance);
+
+  for (let i = 0; i < resume.experience.length; i++) {
+    const exp = resume.experience[i];
+    const target = targetFor(i);
+    if (exp.bullets.length >= target) continue;
+
+    // Find this role's experience_id by employer match
+    const employerLower = String(exp.employer ?? "").toLowerCase();
+    let expId: string | undefined;
+    for (const [id, emp] of idToEmployer) {
+      if (employerLower.includes(emp) || emp.includes(employerLower)) { expId = id; break; }
+    }
+    if (!expId) continue;
+
+    const candidates = byExp.get(expId) ?? [];
+    const usedHashes = new Set(exp.bullets.map(b => (typeof b === "string" ? "" : b.source_hash)));
+    const usedTexts = new Set(exp.bullets.map(b => (typeof b === "string" ? b : b.text).toLowerCase().slice(0, 60)));
+
+    for (const cand of candidates) {
+      if (exp.bullets.length >= target) break;
+      if (usedHashes.has(cand.bullet_id)) continue;
+      if (usedTexts.has(cand.bullet_text.toLowerCase().slice(0, 60))) continue;
+      if (!cand.claim_ids?.length) continue; // must pass the claim gate
+      exp.bullets.push({
+        text: cand.bullet_text,
+        source_hash: cand.bullet_id,
+        evidence_quote: cand.bullet_text,
+        claim_ids: cand.claim_ids,
+      } as any);
+      usedHashes.add(cand.bullet_id);
+      logger?.info(`📏 [Stage 4] Backfilled bullet ${cand.bullet_id} into ${exp.employer} (${exp.bullets.length}/${target})`);
+    }
+  }
 }
