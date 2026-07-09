@@ -24,6 +24,7 @@
  */
 
 import type { TailoredResume } from "../mastra/tools/tailoredResumePrompt";
+import { impossibleClusterAtStart, impossibleClusterAtEnd, BANNED_AI_ISMS } from "./token-heuristics.js";
 import type { MandateProfile } from "./stage2-mandate-classifier/classifier";
 import type { ClaimsLedger } from "./types";
 
@@ -379,7 +380,8 @@ export const INFLATED_ADJECTIVES: { pattern: RegExp; replacement: string; label:
   { pattern: /\bunrivaled\b/gi, replacement: "competitive", label: "unrivaled" },
   { pattern: /\bunmatched\b/gi, replacement: "competitive", label: "unmatched" },
   { pattern: /\bunparalleled\b/gi, replacement: "industry-leading", label: "unparalleled" },
-  { pattern: /\bpowerhouse\b/gi, replacement: "high-performing", label: "powerhouse" },
+  { pattern: /\bpowerhouse\b/gi, replacement: "team", label: "powerhouse" }, // noun-for-noun
+  ...BANNED_AI_ISMS,
   { pattern: /\bseismic\b/gi, replacement: "significant", label: "seismic" },
 ];
 
@@ -614,10 +616,10 @@ function runQAStabilityPass(
       if (word.length < 3) continue;
 
       // Malformed token: impossible consonant clusters
-      if (/^[bcdfghjklmnpqrstvwxyz]{4,}/i.test(word)) {
+      if (impossibleClusterAtStart(word)) {
         issues.push({ location, text: raw, type: "malformed_token", severity: "blocking", explanation: "Impossible consonant cluster at word start" });
       }
-      if (/[bcdfghjklmnpqrstvwxyz]{4,}$/i.test(word)) {
+      if (impossibleClusterAtEnd(word)) {
         issues.push({ location, text: raw, type: "malformed_token", severity: "blocking", explanation: "Impossible consonant cluster at word end" });
       }
 

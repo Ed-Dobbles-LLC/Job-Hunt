@@ -9,6 +9,7 @@
  */
 
 import { resilientGenerateObject } from "../llm-retry";
+import { BANNED_AI_ISMS } from "../token-heuristics.js";
 import {
   TailoredResumeSchema,
   buildResumeSystemPrompt,
@@ -723,6 +724,7 @@ RULES:
       { pattern: /\bseismic\b/gi, replacement: "significant" },
       { pattern: /\bdisruptive\b/gi, replacement: "innovative" },
       { pattern: /\bdrove\s+(?:the\s+)?board\s+to\b/gi, replacement: "presented to the board" },
+      ...BANNED_AI_ISMS,
     ];
     for (const hw of COVER_LETTER_HYPE) {
       coverLetter.opening_paragraph = coverLetter.opening_paragraph.replace(hw.pattern, hw.replacement);

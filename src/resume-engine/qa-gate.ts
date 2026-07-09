@@ -17,6 +17,7 @@
  */
 
 import type { TailoredResume } from "../mastra/tools/tailoredResumePrompt";
+import { impossibleClusterAtStart, impossibleClusterAtEnd, ORPHANED_CONSONANT } from "./token-heuristics.js";
 import type { TailoredCoverLetter } from "../mastra/tools/tailoredCoverLetterPrompt";
 import { HYPE_WORDS, bulletHasOutcome } from "./stage6-layout-governor/governor";
 
@@ -117,7 +118,7 @@ const SUSPICIOUS_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\b\w+izeded\b/i, reason: "doubled -ized-ed suffix" },
   { pattern: /\b\w+atedated\b/i, reason: "doubled -ated suffix" },
   // Orphaned fragments (1-2 char words that aren't real)
-  { pattern: /\b[bcdfghjklmnpqrstvwxyz]{1}\b/i, reason: "orphaned single consonant" },
+  { pattern: ORPHANED_CONSONANT, reason: "orphaned single consonant" },
   // CamelCase in prose (suggests concatenation error)
   { pattern: /[a-z][A-Z][a-z]{2,}/g, reason: "camelCase in prose text" },
   // Consecutive duplicate words
@@ -351,17 +352,10 @@ function checkSpelling(resume: TailoredResume): SpellcheckResult {
       // rhythm, analytics) and the threshold is 5+ with a legal-cluster
       // allowlist — English legitimately ends words with 4-consonant runs
       // (insights, attempts, strengths) that a 4+ rule falsely flags.
-      const LEGAL_END_RUNS = new Set(["ngths", "lfths", "xths"]);
-      const lowerWord = word.toLowerCase();
-      // Word start: legal English onsets max out at 3 consonants; the only
-      // legitimate 4-consonant starts are sch- loanwords/proper nouns
-      // (Schwab, Schmidt, Schneider), which resumes do contain.
-      const startRun = (lowerWord.match(/^[bcdfghjklmnpqrstvwxz]+/) || [""])[0];
-      if ((startRun.length >= 4 && !startRun.startsWith("sch")) || startRun.length >= 6) {
+      if (impossibleClusterAtStart(word)) {
         suspicious.push({ location, token: raw, reason: "impossible consonant cluster at start" });
       }
-      const endRun = (lowerWord.match(/[bcdfghjklmnpqrstvwxz]+$/) || [""])[0];
-      if (endRun.length >= 5 && !LEGAL_END_RUNS.has(endRun)) {
+      if (impossibleClusterAtEnd(word)) {
         suspicious.push({ location, token: raw, reason: "impossible consonant cluster at end" });
       }
 

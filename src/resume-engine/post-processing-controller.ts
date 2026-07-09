@@ -34,6 +34,7 @@
  */
 
 import type { TailoredResume } from "../mastra/tools/tailoredResumePrompt";
+import { impossibleClusterAtStart } from "./token-heuristics.js";
 import type { TailoredCoverLetter } from "../mastra/tools/tailoredCoverLetterPrompt";
 import type { MandateProfile } from "./stage2-mandate-classifier/classifier";
 import type { ClaimsLedger } from "./types";
@@ -155,7 +156,7 @@ function detectCorruption(
         }
       }
       // Impossible consonant clusters
-      if (/^[bcdfghjklmnpqrstvwxyz]{4,}/i.test(clean)) {
+      if (impossibleClusterAtStart(clean)) {
         issues.push({ category: "corruption", severity: "blocking", location, text: raw, explanation: "Impossible consonant cluster at start" });
         score -= 25;
       }
