@@ -1,4 +1,5 @@
 import { query } from "./tools/db";
+import { mapClayLead } from "./tools/clayLeadMapper";
 import { searchApolloJobs } from "./tools/apolloJobSearchTool";
 import {
   normalizeText,
@@ -15,6 +16,9 @@ import {
  * - Recruiter email parsing trigger
  * - Job sources status dashboard
  */
+// Cap raw-payload debug dumps per process boot (self-diagnosing failures without log flooding)
+let clayDebugDumpsRemaining = 5;
+
 export function getJobSourceRoutes() {
   return [
     /* ── Apollo: manually trigger a job search ─────────────────────── */
@@ -90,16 +94,26 @@ export function getJobSourceRoutes() {
           const newJobIds: number[] = [];
           let duplicateCount = 0;
 
-          for (const lead of leads) {
-            const company = lead.company_name || lead.company || lead.organization || "";
-            const title = lead.job_title || lead.title || lead.role || "";
-            const location = lead.location || lead.city || "";
-            const postingUrl = lead.job_url || lead.posting_url || lead.url || lead.linkedin_url || "";
-            const jdText = lead.job_description || lead.description || lead.jd_text || "";
-            const compensation = lead.compensation || lead.salary || "";
+          for (const rawLead of leads) {
+            const lead = mapClayLead(rawLead);
+            const company = lead.company;
+            const title = lead.title;
+            const location = lead.location;
+            const postingUrl = lead.postingUrl;
+            const jdText = lead.jdText;
+            const compensation = lead.compensation;
 
             if (!company && !title) {
-              logger?.warn("[sources/clay] Skipping lead with no company or title");
+              // Self-diagnosing rejection: name the keys we actually received
+              logger?.warn(
+                `[sources/clay] Skipping lead with no company or title. Received keys: [${lead.rawKeys.join(", ")}]`,
+              );
+              if (clayDebugDumpsRemaining > 0) {
+                clayDebugDumpsRemaining--;
+                logger?.warn(
+                  `[sources/clay] Raw payload dump (${clayDebugDumpsRemaining} dumps remaining this boot): ${JSON.stringify(rawLead).slice(0, 2000)}`,
+                );
+              }
               continue;
             }
 
@@ -139,13 +153,14 @@ export function getJobSourceRoutes() {
 
             // Build enrichment context from Clay fields
             const enrichmentParts: string[] = [];
-            if (lead.company_description) enrichmentParts.push(`Company: ${lead.company_description}`);
+            if (lead.companyDescription) enrichmentParts.push(`Company: ${lead.companyDescription}`);
             if (lead.industry) enrichmentParts.push(`Industry: ${lead.industry}`);
-            if (lead.company_size || lead.employee_count) enrichmentParts.push(`Size: ${lead.company_size || lead.employee_count}`);
+            if (lead.companySize) enrichmentParts.push(`Size: ${lead.companySize}`);
             if (lead.funding) enrichmentParts.push(`Funding: ${lead.funding}`);
-            if (lead.contact_name) enrichmentParts.push(`Hiring Contact: ${lead.contact_name} (${lead.contact_title || ""})`);
-            if (lead.contact_linkedin) enrichmentParts.push(`Contact LinkedIn: ${lead.contact_linkedin}`);
-            if (lead.contact_email) enrichmentParts.push(`Contact Email: ${lead.contact_email}`);
+            if (lead.contactName) enrichmentParts.push(`Hiring Contact: ${lead.contactName} (${lead.contactTitle || ""})`);
+            if (lead.contactLinkedin) enrichmentParts.push(`Contact LinkedIn: ${lead.contactLinkedin}`);
+            if (lead.contactEmail) enrichmentParts.push(`Contact Email: ${lead.contactEmail}`);
+            if (compensation) enrichmentParts.push(`Compensation: ${compensation}`);
 
             const fullJdText = jdText
               ? `${jdText}\n\n--- Clay Enrichment ---\n${enrichmentParts.join("\n")}`
@@ -157,11 +172,11 @@ export function getJobSourceRoutes() {
                RETURNING job_id`,
               [
                 "clay",
-                lead.clay_row_id || `clay-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                lead.clayRowId || `clay-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                 company,
                 title,
                 location,
-                lead.remote_hybrid || "Unknown",
+                lead.remoteHybrid || "Unknown",
                 level,
                 postingUrl,
                 new Date().toISOString().split("T")[0],
@@ -178,17 +193,17 @@ export function getJobSourceRoutes() {
             logger?.info(`[sources/clay] New lead: ${company} - ${title} (ID: ${insertResult.rows[0].job_id})`);
 
             // Also store contact info if provided
-            if (lead.contact_name) {
+            if (lead.contactName) {
               try {
                 await query(
                   `INSERT INTO contacts (job_id, person_name, title, linkedin_url, email, rank, rationale)
                    VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                   [
                     insertResult.rows[0].job_id,
-                    lead.contact_name,
-                    lead.contact_title || "",
-                    lead.contact_linkedin || "",
-                    lead.contact_email || "",
+                    lead.contactName,
+                    lead.contactTitle || "",
+                    lead.contactLinkedin || "",
+                    lead.contactEmail || "",
                     1,
                     "Contact provided by Clay enrichment",
                   ],
