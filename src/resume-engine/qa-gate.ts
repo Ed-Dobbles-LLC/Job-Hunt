@@ -346,13 +346,22 @@ function checkSpelling(resume: TailoredResume): SpellcheckResult {
       const word = raw.replace(/[^a-zA-Z'-]/g, "");
       if (word.length < 3) continue;
 
-      // Check for impossible consonant clusters at word start
-      if (/^[bcdfghjklmnpqrstvwxyz]{4,}/i.test(word)) {
+      // Check for impossible consonant clusters at word edges.
+      // NOTE: y is excluded from the consonant class (vowel-like in cycles,
+      // rhythm, analytics) and the threshold is 5+ with a legal-cluster
+      // allowlist — English legitimately ends words with 4-consonant runs
+      // (insights, attempts, strengths) that a 4+ rule falsely flags.
+      const LEGAL_END_RUNS = new Set(["ngths", "lfths", "xths"]);
+      const lowerWord = word.toLowerCase();
+      // Word start: legal English onsets max out at 3 consonants; the only
+      // legitimate 4-consonant starts are sch- loanwords/proper nouns
+      // (Schwab, Schmidt, Schneider), which resumes do contain.
+      const startRun = (lowerWord.match(/^[bcdfghjklmnpqrstvwxz]+/) || [""])[0];
+      if ((startRun.length >= 4 && !startRun.startsWith("sch")) || startRun.length >= 6) {
         suspicious.push({ location, token: raw, reason: "impossible consonant cluster at start" });
       }
-
-      // Check for impossible consonant clusters at word end
-      if (/[bcdfghjklmnpqrstvwxyz]{4,}$/i.test(word)) {
+      const endRun = (lowerWord.match(/[bcdfghjklmnpqrstvwxz]+$/) || [""])[0];
+      if (endRun.length >= 5 && !LEGAL_END_RUNS.has(endRun)) {
         suspicious.push({ location, token: raw, reason: "impossible consonant cluster at end" });
       }
 

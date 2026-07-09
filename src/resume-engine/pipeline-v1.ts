@@ -824,10 +824,17 @@ async function runPipelineV1Inner(input: PipelineInput): Promise<PipelineResult>
 
   let clarificationQuestions: ClarificationQuestion[] = [];
   try {
+    // JDRequirements is an object of categorized arrays; the clarification
+    // builder expects a flat string[]. Flatten (was: "jdRequirements is not iterable").
+    const jdReqStrings: string[] = Object.values((requirements as any) || {})
+      .filter(Array.isArray)
+      .flat()
+      .map((r: any) => (typeof r === "string" ? r : r?.text || r?.requirement || ""))
+      .filter(Boolean);
     clarificationQuestions = buildClarificationQuestions(
       finalResume.gap_notes || [],
       bulletPlan.mandate_gaps,
-      requirements as any,
+      jdReqStrings,
     );
   } catch (err: any) {
     logger?.warn(`⚠️ [Pipeline] Clarification questions failed: ${err.message}`);

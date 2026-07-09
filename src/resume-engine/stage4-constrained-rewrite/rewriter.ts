@@ -707,7 +707,7 @@ RULES:
       { pattern: /\bcatalyzed\b/gi, replacement: "initiated" },
       { pattern: /\bcatalyze\b/gi, replacement: "initiate" },
       { pattern: /\bcatalyst\b/gi, replacement: "driver" },
-      { pattern: /\bpowerhouse\b/gi, replacement: "high-performing" },
+      { pattern: /\bpowerhouse\b/gi, replacement: "team" }, // noun-for-noun: adjective swap corrupted sentences
       { pattern: /\bmarket-dominating\b/gi, replacement: "market-leading" },
       { pattern: /\bgame-changing\b/gi, replacement: "significant" },
       { pattern: /\bgame changer\b/gi, replacement: "significant improvement" },

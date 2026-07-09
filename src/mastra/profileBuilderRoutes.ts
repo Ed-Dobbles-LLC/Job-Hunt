@@ -412,6 +412,49 @@ export function getProfileBuilderRoutes() {
     },
 
     /* ── Get current experience_inventory.json ──────────────────── */
+    /* ── Sync inventory from repo file into DB ─────────────────────
+       The inventory loader resolves DB-first (app_settings), so a stale
+       DB row silently shadows the version-controlled golden file. This
+       route pushes WORKSPACE_ROOT/experience_inventory.json into the DB
+       row, making the repo file authoritative after each commit. */
+    {
+      path: "/api/profile/sync-from-file",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra?.getLogger();
+        try {
+          const body = await c.req.json().catch(() => ({}));
+          if (body.confirm !== true) {
+            return c.json({ error: "Pass { \"confirm\": true } to overwrite the DB inventory with the repo file." }, 400);
+          }
+          const inventoryPath = workspacePath("experience_inventory.json");
+          if (!fs.existsSync(inventoryPath)) {
+            return c.json({ error: `Inventory file not found at ${inventoryPath}` }, 404);
+          }
+          const raw = fs.readFileSync(inventoryPath, "utf-8");
+          const inventory = JSON.parse(raw);
+          if (!inventory?.profile?.name || !Array.isArray(inventory?.experience) || inventory.experience.length === 0) {
+            return c.json({ error: "File failed validation: needs profile.name and non-empty experience[]" }, 422);
+          }
+          await query(
+            `INSERT INTO app_settings (key, value, updated_at) VALUES ('experience_inventory', $1, NOW())
+             ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+            [raw],
+          );
+          logger?.info(`[profileBuilder] Synced inventory file -> DB for ${inventory.profile.name} (${inventory.experience.length} entries)`);
+          return c.json({
+            success: true,
+            candidate: inventory.profile.name,
+            current_title: inventory.profile.current_title || null,
+            experience_entries: inventory.experience.length,
+            entry_ids: inventory.experience.map((e: any) => e.id),
+          });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+
     {
       path: "/api/profile/current",
       method: "GET" as const,
