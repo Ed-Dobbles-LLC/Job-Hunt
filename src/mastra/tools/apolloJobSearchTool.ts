@@ -11,6 +11,81 @@ import {
 
 const APOLLO_API_BASE = "https://api.apollo.io/api/v1";
 
+/** Max organizations to fetch job postings for per run.
+ *  Each org postings fetch costs 1 Apollo credit; company search costs 1.
+ *  Cap keeps a single run at ~11 credits. */
+const MAX_ORGS_PER_RUN = 10;
+
+/* ── Title matching ──────────────────────────────────────────────── */
+
+const SENIORITY_GROUPS: string[][] = [
+  ["vp", "svp", "evp", "vice president", "senior vice president", "executive vice president"],
+  ["chief", "officer", "cdo", "cao", "caio"],
+  ["head of", "head,", "head "],
+  ["director", "senior director", "executive director"],
+];
+
+const DOMAIN_TOKENS = [
+  "analytic", "analytics", "data", "insight", "insights",
+  "intelligence", "science", "decision", "ai", "machine learning", "ml",
+];
+
+function norm(s: string): string {
+  return ` ${s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+}
+
+function seniorityGroupsIn(s: string): Set<number> {
+  const n = norm(s);
+  const groups = new Set<number>();
+  SENIORITY_GROUPS.forEach((syns, i) => {
+    if (syns.some((syn) => n.includes(` ${syn.trim()} `) || n.includes(` ${syn.trim()}`))) {
+      groups.add(i);
+    }
+  });
+  return groups;
+}
+
+function domainTokensIn(s: string): Set<string> {
+  const n = norm(s);
+  return new Set(DOMAIN_TOKENS.filter((t) => n.includes(t)));
+}
+
+/** A posting matches if it contains a target title verbatim, OR carries
+ *  leadership seniority (VP/chief/head/director) plus an analytics-domain
+ *  token. Recall-oriented by design: the downstream matchScorer handles
+ *  precision. */
+export function postingMatchesTargets(postingTitle: string, targets: string[]): boolean {
+  const pNorm = norm(postingTitle);
+  const verbatim = targets.some((t) => {
+    const tNorm = norm(t).trim();
+    return tNorm.length > 0 && pNorm.includes(` ${tNorm} `);
+  });
+  if (verbatim) return true;
+  return seniorityGroupsIn(postingTitle).size > 0 && domainTokensIn(postingTitle).size > 0;
+}
+
+/* ── Apollo API calls ────────────────────────────────────────────── */
+
+async function apolloFetch(
+  path: string,
+  apiKey: string,
+  init?: { method?: string; body?: Record<string, any> },
+): Promise<any> {
+  const response = await fetch(`${APOLLO_API_BASE}${path}`, {
+    method: init?.method || "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Api-Key": apiKey,
+    },
+    body: init?.body ? JSON.stringify(init.body) : undefined,
+  });
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`Apollo ${path} returned ${response.status}: ${errorText.slice(0, 300)}`);
+  }
+  return response.json();
+}
+
 /* ── Standalone function for use outside Mastra tool context ────── */
 
 export async function searchApolloJobs(options: {
@@ -28,143 +103,90 @@ export async function searchApolloJobs(options: {
   const apiKey = process.env.APOLLO_API_KEY;
 
   if (!apiKey) {
-    logger?.info("[apolloSearch] APOLLO_API_KEY not configured, skipping");
+    logger?.warn("[apolloSearch] APOLLO_API_KEY not configured; skipping Apollo search");
+    return { newJobIds: [], duplicateCount: 0, totalFound: 0 };
+  }
+  if (titles.length === 0) {
     return { newJobIds: [], duplicateCount: 0, totalFound: 0 };
   }
 
-  logger?.info(`[apolloSearch] Searching Apollo for: ${titles.join(", ")}`);
+  const postedSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0];
 
+  /* Step 1: find companies with ACTIVE postings matching the target titles */
+  let orgs: Record<string, any>[] = [];
+  try {
+    const body: Record<string, any> = {
+      q_organization_job_titles: titles,
+      organization_job_posted_at_range: { min: postedSince },
+      page: 1,
+      per_page: 25,
+    };
+    if (locations && locations.length > 0) {
+      body.organization_locations = locations;
+    }
+    const data = await apolloFetch("/mixed_companies/search", apiKey, {
+      method: "POST",
+      body,
+    });
+    orgs = data.organizations || data.accounts || [];
+    logger?.info(
+      `[apolloSearch] ${orgs.length} companies actively posting target titles since ${postedSince}`,
+    );
+  } catch (err: any) {
+    logger?.error(`[apolloSearch] Company search failed: ${err.message}`);
+    return { newJobIds: [], duplicateCount: 0, totalFound: 0 };
+  }
+
+  /* Step 2: pull REAL job postings from the top orgs */
   const allJobs: Array<{
     company: string;
     title: string;
     location: string;
     posting_url: string;
     jd_text: string;
+    date_posted: string | null;
     source: string;
   }> = [];
 
-  // Apollo People Search API - find hiring managers/companies with open roles
-  // We search for people with titles that suggest they'd be hiring for our target roles
-  for (const targetTitle of titles) {
+  const orgsToFetch = orgs.filter((o) => o.id).slice(0, MAX_ORGS_PER_RUN);
+  for (const org of orgsToFetch) {
+    if (allJobs.length >= limit) break;
     try {
-      // Use Apollo's mixed company/people search to find relevant job openings
-      const searchPayload: Record<string, any> = {
-        api_key: apiKey,
-        q_organization_keyword_tags: keywords || [],
-        page: 1,
-        per_page: Math.min(limit, 100),
-        person_titles: [targetTitle],
-        // Look for people who might be hiring managers
-        person_seniorities: ["vp", "director", "c_suite", "senior", "manager"],
-      };
+      const data = await apolloFetch(
+        `/organizations/${org.id}/job_postings?page=1&per_page=100`,
+        apiKey,
+      );
+      const postings: Record<string, any>[] =
+        data.organization_job_postings || data.job_postings || [];
 
-      if (locations && locations.length > 0) {
-        searchPayload.person_locations = locations;
-      }
+      const matched = postings.filter((p) => p.title && postingMatchesTargets(p.title, titles));
+      logger?.info(
+        `[apolloSearch] ${org.name}: ${postings.length} open postings, ${matched.length} match targets`,
+      );
 
-      const response = await fetch(`${APOLLO_API_BASE}/mixed_people/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(searchPayload),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        logger?.warn(`[apolloSearch] Apollo API returned ${response.status}: ${errorText}`);
-        continue;
-      }
-
-      const data = await response.json();
-      const people = data.people || [];
-
-      logger?.info(`[apolloSearch] Found ${people.length} results for "${targetTitle}"`);
-
-      // Extract company + role context from Apollo results
-      for (const person of people) {
-        const org = person.organization || {};
-        const companyName = org.name || person.organization_name || "";
-        if (!companyName) continue;
-
-        // Build a job lead from the Apollo data
+      for (const p of matched) {
+        if (allJobs.length >= limit) break;
+        const location = [p.city, p.state].filter(Boolean).join(", ") || p.country || "";
         allJobs.push({
-          company: companyName,
-          title: targetTitle,
-          location: person.city
-            ? `${person.city}${person.state ? ", " + person.state : ""}`
-            : org.primary_domain ? "" : "Unknown",
-          posting_url: org.linkedin_url
-            ? `${org.linkedin_url}/jobs`
-            : org.website_url || "",
-          jd_text: buildJobContext(org, person, targetTitle),
+          company: org.name || "",
+          title: p.title,
+          location,
+          posting_url: p.url || "",
+          jd_text: buildPostingContext(org, p, keywords),
+          date_posted: p.posted_at ? String(p.posted_at).split("T")[0] : null,
           source: "apollo",
         });
       }
     } catch (err: any) {
-      logger?.error(`[apolloSearch] Error searching for "${targetTitle}": ${err.message}`);
+      logger?.warn(`[apolloSearch] Postings fetch failed for ${org.name}: ${err.message}`);
     }
   }
 
-  // Also try Apollo's Job Postings endpoint if available
-  for (const targetTitle of titles) {
-    try {
-      const jobSearchPayload: Record<string, any> = {
-        api_key: apiKey,
-        q_keywords: targetTitle,
-        page: 1,
-        per_page: Math.min(limit, 25),
-      };
+  logger?.info(`[apolloSearch] Total real postings matched: ${allJobs.length}`);
 
-      if (locations && locations.length > 0) {
-        jobSearchPayload.location_names = locations;
-      }
-
-      const response = await fetch(`${APOLLO_API_BASE}/mixed_companies/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          api_key: apiKey,
-          q_keywords: targetTitle,
-          page: 1,
-          per_page: Math.min(limit, 25),
-          organization_num_employees_ranges: ["51,200", "201,1000", "1001,5000", "5001,10000", "10001,"],
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const orgs = data.organizations || [];
-        logger?.info(`[apolloSearch] Found ${orgs.length} companies for "${targetTitle}"`);
-
-        for (const org of orgs) {
-          if (!org.name) continue;
-          // Avoid duplicates from the people search
-          const alreadyHave = allJobs.some(
-            (j) => normalizeText(j.company) === normalizeText(org.name)
-          );
-          if (alreadyHave) continue;
-
-          allJobs.push({
-            company: org.name,
-            title: targetTitle,
-            location: org.city
-              ? `${org.city}${org.state ? ", " + org.state : ""}`
-              : "",
-            posting_url: org.linkedin_url
-              ? `${org.linkedin_url}/jobs`
-              : org.website_url || "",
-            jd_text: buildOrgContext(org, targetTitle),
-            source: "apollo",
-          });
-        }
-      }
-    } catch (err: any) {
-      logger?.error(`[apolloSearch] Company search error: ${err.message}`);
-    }
-  }
-
-  logger?.info(`[apolloSearch] Total leads found: ${allJobs.length}`);
-
-  // Deduplicate and insert into jobs table
+  /* Step 3: deduplicate and insert into jobs table */
   const newJobIds: number[] = [];
   let duplicateCount = 0;
 
@@ -175,7 +197,6 @@ export async function searchApolloJobs(options: {
     const level = classifyLevel(job.title);
     const jobKeywords = extractKeywords(job.jd_text);
 
-    // Check for existing
     const existingByHash = await query(
       "SELECT job_id FROM jobs WHERE jd_hash = $1",
       [jdHash],
@@ -185,7 +206,6 @@ export async function searchApolloJobs(options: {
       continue;
     }
 
-    // Check by company/title similarity
     const normalizedCompany = normalizeText(job.company);
     const normalizedTitle = normalizeText(job.title);
     const existingBySimilar = await query(
@@ -216,7 +236,7 @@ export async function searchApolloJobs(options: {
         "Unknown",
         level,
         job.posting_url,
-        new Date().toISOString().split("T")[0],
+        job.date_posted || new Date().toISOString().split("T")[0],
         job.jd_text,
         jdHash,
         simhash,
@@ -238,12 +258,12 @@ export async function searchApolloJobs(options: {
 export const apolloJobSearchTool = createTool({
   id: "apollo-job-search",
   description:
-    "Searches Apollo.io for companies and people related to target job titles. Finds potential job opportunities by identifying companies hiring for similar roles. Requires APOLLO_API_KEY environment variable.",
+    "Searches Apollo.io for REAL open job postings matching target titles. Finds companies actively hiring for the titles, then pulls their live job postings with real URLs and posted dates. Requires APOLLO_API_KEY environment variable. Costs ~1 Apollo credit per company inspected (capped at 10 per run).",
   inputSchema: z.object({
     titles: z.array(z.string()).describe("Target job titles to search for, e.g. ['VP of Data', 'Chief Data Officer']"),
-    locations: z.array(z.string()).optional().describe("Preferred locations, e.g. ['Chicago, IL', 'Remote']"),
+    locations: z.array(z.string()).optional().describe("Company HQ locations to filter, e.g. ['Chicago, IL', 'United States']"),
     keywords: z.array(z.string()).optional().describe("Industry/domain keywords, e.g. ['fintech', 'healthcare', 'AI']"),
-    limit: z.number().optional().describe("Max results per title search (default 25)"),
+    limit: z.number().optional().describe("Max postings to ingest per run (default 25)"),
   }),
   outputSchema: z.object({
     newJobIds: z.array(z.number()),
@@ -277,43 +297,31 @@ export const apolloJobSearchTool = createTool({
     return {
       ...result,
       apolloConfigured: true,
-      message: `Found ${result.totalFound} leads from Apollo. ${result.newJobIds.length} new, ${result.duplicateCount} duplicates.`,
+      message: `Found ${result.totalFound} real postings from Apollo. ${result.newJobIds.length} new, ${result.duplicateCount} duplicates.`,
     };
   },
 });
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
 
-function buildJobContext(
+function buildPostingContext(
   org: Record<string, any>,
-  person: Record<string, any>,
-  targetTitle: string,
+  posting: Record<string, any>,
+  keywords?: string[],
 ): string {
   const parts: string[] = [];
+  parts.push(`Job Title: ${posting.title}`);
   if (org.name) parts.push(`Company: ${org.name}`);
+  if (posting.city || posting.state) {
+    parts.push(`Location: ${[posting.city, posting.state].filter(Boolean).join(", ")}`);
+  }
+  if (posting.posted_at) parts.push(`Posted: ${String(posting.posted_at).split("T")[0]}`);
+  if (posting.url) parts.push(`Posting URL: ${posting.url}`);
   if (org.short_description) parts.push(`About: ${org.short_description}`);
   if (org.industry) parts.push(`Industry: ${org.industry}`);
   if (org.estimated_num_employees) parts.push(`Company Size: ~${org.estimated_num_employees} employees`);
-  if (org.founded_year) parts.push(`Founded: ${org.founded_year}`);
-  if (person.name) parts.push(`Contact: ${person.name} (${person.title || ""})`);
-  if (person.linkedin_url) parts.push(`Contact LinkedIn: ${person.linkedin_url}`);
-  parts.push(`Target Role: ${targetTitle}`);
-  parts.push(`Source: Apollo.io people/company search`);
-  return parts.join("\n");
-}
-
-function buildOrgContext(
-  org: Record<string, any>,
-  targetTitle: string,
-): string {
-  const parts: string[] = [];
-  if (org.name) parts.push(`Company: ${org.name}`);
-  if (org.short_description) parts.push(`About: ${org.short_description}`);
-  if (org.industry) parts.push(`Industry: ${org.industry}`);
-  if (org.estimated_num_employees) parts.push(`Company Size: ~${org.estimated_num_employees} employees`);
-  if (org.founded_year) parts.push(`Founded: ${org.founded_year}`);
   if (org.website_url) parts.push(`Website: ${org.website_url}`);
-  parts.push(`Target Role: ${targetTitle}`);
-  parts.push(`Source: Apollo.io company search`);
+  if (keywords && keywords.length > 0) parts.push(`Search Keywords: ${keywords.join(", ")}`);
+  parts.push(`Source: Apollo.io live job postings`);
   return parts.join("\n");
 }
