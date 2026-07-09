@@ -50,69 +50,195 @@
   },
   "experience": [
     {
+      "id": "exp-dbl-001",
+      "employer": "Dobbles.AI",
+      "title": "Founder & Principal",
+      "start_date": "2026",
+      "end_date": "present",
+      "location": "Minneapolis, MN",
+      "scope": "AI-native market-intelligence data products for the cannabis and beverage-alcohol markets | Solo founder, fully automated AI workforce",
+      "bullets": [
+        {
+          "id": "exp-dbl-001-b1",
+          "text": "Founded and run an AI-native data-products company with no employees and a fully automated AI workforce — agentic pipelines handle collection, extraction, and product delivery end to end.",
+          "metrics": [
+            "fully automated AI workforce"
+          ],
+          "tools": [
+            "Agentic AI"
+          ],
+          "tags": [
+            "founder",
+            "ai",
+            "agentic",
+            "operations"
+          ]
+        },
+        {
+          "id": "exp-dbl-001-b2",
+          "text": "Building Dispensary Intelligence and Menu Intelligence, collecting and extracting data from 200,000 bars and restaurants and 15,000 dispensaries.",
+          "metrics": [
+            "200,000 bars and restaurants",
+            "15,000 dispensaries"
+          ],
+          "tools": [],
+          "tags": [
+            "product",
+            "data",
+            "scale"
+          ]
+        },
+        {
+          "id": "exp-dbl-001-b3",
+          "text": "Designed and operate the agentic AI data pipeline that powers the products — ingestion, extraction, and structuring of unstructured menu and dispensary data at scale.",
+          "metrics": [],
+          "tools": [
+            "Python",
+            "PostgreSQL",
+            "LLM pipelines"
+          ],
+          "tags": [
+            "ai",
+            "engineering",
+            "pipeline"
+          ]
+        },
+        {
+          "id": "exp-dbl-001-b4",
+          "text": "Applies 25 years of consumer-goods analytics leadership to a solo, AI-leveraged operating model that produces enterprise-grade market intelligence.",
+          "metrics": [
+            "25 years"
+          ],
+          "tools": [],
+          "tags": [
+            "leadership",
+            "ai",
+            "operating-model"
+          ]
+        }
+      ]
+    },
+    {
       "id": "exp-001",
       "employer": "Overproof",
       "title": "Chief Analytics Officer",
       "start_date": "2025-01",
-      "end_date": "present",
+      "end_date": "2026",
       "location": "Miami, FL",
       "scope": "C-suite member | Emerging beverage intelligence platform | Startup environment",
       "bullets": [
         {
           "id": "exp-001-b1",
           "text": "Recruited to build and scale analytics capabilities for emerging beverage intelligence platform, serving as core C-suite member shaping business strategy, culture, and enterprise growth trajectory.",
-          "metrics": ["C-suite member"],
+          "metrics": [
+            "C-suite member"
+          ],
           "tools": [],
-          "tags": ["leadership", "strategy", "startup"]
+          "tags": [
+            "leadership",
+            "strategy",
+            "startup"
+          ]
         },
         {
           "id": "exp-001-b2",
           "text": "Accelerated enterprise growth from single client to $120K in active pilots with $1.5M+ in committed full-rollout revenue and robust pipeline of 2-5 additional enterprise opportunities.",
-          "metrics": ["$120K active pilots", "$1.5M+ committed revenue", "2-5 enterprise pipeline"],
+          "metrics": [
+            "$120K active pilots",
+            "$1.5M+ committed revenue",
+            "2-5 enterprise pipeline"
+          ],
           "tools": [],
-          "tags": ["revenue", "growth", "enterprise-sales"]
+          "tags": [
+            "revenue",
+            "growth",
+            "enterprise-sales"
+          ]
         },
         {
           "id": "exp-001-b3",
           "text": "Built practical AI toolkit out of operational necessity — moving from a 20-person enterprise team at Diageo to a 2-person startup, pioneered AI-powered chat-to-Snowflake platform that compressed analysis cycles from days to minutes, then recognized the approach could address operational bottlenecks that have consumed analyst capacity at every organization for 25 years.",
-          "metrics": ["20-person to 2-person transition", "analysis cycles from days to minutes"],
-          "tools": ["Snowflake", "Generative AI", "Natural Language Processing"],
-          "tags": ["ai-innovation", "platform", "efficiency"]
+          "metrics": [
+            "20-person to 2-person transition",
+            "analysis cycles from days to minutes"
+          ],
+          "tools": [
+            "Snowflake",
+            "Generative AI",
+            "Natural Language Processing"
+          ],
+          "tags": [
+            "ai-innovation",
+            "platform",
+            "efficiency"
+          ]
         },
         {
           "id": "exp-001-b4",
           "text": "Pioneered AI-powered analytics platform integrating chat-to-Snowflake capabilities, compressing analysis cycles from days to minutes and establishing market-leading competitive differentiation.",
-          "metrics": ["analysis cycles from days to minutes"],
-          "tools": ["Snowflake", "Generative AI", "NLP"],
-          "tags": ["ai-innovation", "platform", "competitive-advantage"]
+          "metrics": [
+            "analysis cycles from days to minutes"
+          ],
+          "tools": [
+            "Snowflake",
+            "Generative AI",
+            "NLP"
+          ],
+          "tags": [
+            "ai-innovation",
+            "platform",
+            "competitive-advantage"
+          ]
         },
         {
           "id": "exp-001-b5",
           "text": "Architected industry-first automated content platform leveraging AI across the full production lifecycle — from news curation and script generation to recording and publishing — eliminating manual intervention and scaling thought leadership.",
           "metrics": [],
-          "tools": ["Generative AI", "AI Automation"],
-          "tags": ["ai-innovation", "content-automation", "thought-leadership"]
+          "tools": [
+            "Generative AI",
+            "AI Automation"
+          ],
+          "tags": [
+            "ai-innovation",
+            "content-automation",
+            "thought-leadership"
+          ]
         },
         {
           "id": "exp-001-b6",
           "text": "Expanded into purpose-built tools spanning core analytics functions — data foundation, demand management, analysis acceleration, insight delivery, and governance — with select components in daily production use and others architected for rapid customization in new environments.",
           "metrics": [],
-          "tools": ["AI", "Low-Code/No-Code"],
-          "tags": ["ai-toolkit", "portability", "analytics-operations"]
+          "tools": [
+            "AI",
+            "Low-Code/No-Code"
+          ],
+          "tags": [
+            "ai-toolkit",
+            "portability",
+            "analytics-operations"
+          ]
         },
         {
           "id": "exp-001-b7",
           "text": "Designed entire toolkit for portability — tools travel with the leader, not the organization, enabling Day 1 acceleration when entering any new analytics environment.",
           "metrics": [],
           "tools": [],
-          "tags": ["portability", "leadership-asset", "day-one-impact"]
+          "tags": [
+            "portability",
+            "leadership-asset",
+            "day-one-impact"
+          ]
         },
         {
           "id": "exp-001-b8",
           "text": "Positioned analytics as strategic growth engine, transforming from cost center to revenue driver and market differentiator while guiding company through financial restructuring and scaling challenges.",
           "metrics": [],
           "tools": [],
-          "tags": ["transformation", "cost-center-to-revenue", "restructuring"]
+          "tags": [
+            "transformation",
+            "cost-center-to-revenue",
+            "restructuring"
+          ]
         }
       ]
     },
@@ -128,37 +254,84 @@
         {
           "id": "exp-002-b1",
           "text": "Led analytics transformation for world's largest premium spirits portfolio, overseeing $17M budget and 20-person team delivering data-driven market execution across North America.",
-          "metrics": ["$17M budget", "20-person team", "world's largest premium spirits portfolio"],
+          "metrics": [
+            "$17M budget",
+            "20-person team",
+            "world's largest premium spirits portfolio"
+          ],
           "tools": [],
-          "tags": ["leadership", "transformation", "beverage", "cpg"]
+          "tags": [
+            "leadership",
+            "transformation",
+            "beverage",
+            "cpg"
+          ]
         },
         {
           "id": "exp-002-b2",
           "text": "Scaled analytically-driven distribution program enterprise-wide, generating 115,000 net-new distribution points and $64M-$120M in incremental annual revenue — representing 10% of total US growth for $4B+ business unit.",
-          "metrics": ["115,000 net-new distribution points", "$64M-$120M incremental annual revenue", "10% of total US growth", "$4B+ business unit"],
-          "tools": ["Predictive Modeling", "Statistical Analysis"],
-          "tags": ["revenue", "distribution", "enterprise-scale", "proof-anchor-1"]
+          "metrics": [
+            "115,000 net-new distribution points",
+            "$64M-$120M incremental annual revenue",
+            "10% of total US growth",
+            "$4B+ business unit"
+          ],
+          "tools": [
+            "Predictive Modeling",
+            "Statistical Analysis"
+          ],
+          "tags": [
+            "revenue",
+            "distribution",
+            "enterprise-scale",
+            "proof-anchor-1"
+          ]
         },
         {
           "id": "exp-002-b3",
           "text": "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 60 hours monthly, plus deployed generative AI business intelligence solution with natural language query capabilities.",
-          "metrics": ["5% accuracy improvement", "60 hours monthly reduction"],
-          "tools": ["Machine Learning", "Generative AI", "NLP", "Forecasting"],
-          "tags": ["ai-innovation", "forecasting", "efficiency"]
+          "metrics": [
+            "5% accuracy improvement",
+            "60 hours monthly reduction"
+          ],
+          "tools": [
+            "Machine Learning",
+            "Generative AI",
+            "NLP",
+            "Forecasting"
+          ],
+          "tags": [
+            "ai-innovation",
+            "forecasting",
+            "efficiency"
+          ]
         },
         {
           "id": "exp-002-b4",
           "text": "Transformed analytics operating model through low-code platform adoption, accelerating project delivery 5X and democratizing data access across commercial organization.",
-          "metrics": ["5X project delivery acceleration"],
-          "tools": ["Low-Code/No-Code"],
-          "tags": ["operating-model", "democratization", "efficiency"]
+          "metrics": [
+            "5X project delivery acceleration"
+          ],
+          "tools": [
+            "Low-Code/No-Code"
+          ],
+          "tags": [
+            "operating-model",
+            "democratization",
+            "efficiency"
+          ]
         },
         {
           "id": "exp-002-b5",
           "text": "Established enterprise analytics culture as 'Geek that can Speak,' bridging technical capabilities with business strategy to drive adoption and measurable ROI across sales, marketing, and supply chain functions.",
           "metrics": [],
           "tools": [],
-          "tags": ["culture", "geek-that-can-speak", "adoption", "cross-functional"]
+          "tags": [
+            "culture",
+            "geek-that-can-speak",
+            "adoption",
+            "cross-functional"
+          ]
         }
       ]
     },
@@ -174,44 +347,97 @@
         {
           "id": "exp-003-b1",
           "text": "Directed analytics, pricing strategy, and client intelligence for $3B+ tax services leader, partnering with C-suite on long-term strategic planning and enterprise transformation initiatives.",
-          "metrics": ["$3B+ company"],
+          "metrics": [
+            "$3B+ company"
+          ],
           "tools": [],
-          "tags": ["leadership", "c-suite-advisory", "financial-services"]
+          "tags": [
+            "leadership",
+            "c-suite-advisory",
+            "financial-services"
+          ]
         },
         {
           "id": "exp-003-b2",
           "text": "Championed simplified pricing architecture that increased higher-margin client mix 8% in test markets, with projected 4% volume growth and 9% customer satisfaction improvement at national scale.",
-          "metrics": ["8% higher-margin client mix increase", "4% projected volume growth", "9% customer satisfaction improvement"],
-          "tools": ["Pricing Models", "Statistical Analysis"],
-          "tags": ["pricing", "revenue-optimization", "testing"]
+          "metrics": [
+            "8% higher-margin client mix increase",
+            "4% projected volume growth",
+            "9% customer satisfaction improvement"
+          ],
+          "tools": [
+            "Pricing Models",
+            "Statistical Analysis"
+          ],
+          "tags": [
+            "pricing",
+            "revenue-optimization",
+            "testing"
+          ]
         },
         {
           "id": "exp-003-b3",
           "text": "Architected and launched New Client Acquisition program generating 220,000 incremental clients and $100M+ in projected lifetime revenue, establishing sustainable competitive advantage in mature market.",
-          "metrics": ["220,000 incremental clients", "$100M+ projected lifetime revenue"],
-          "tools": ["Predictive Modeling", "Customer Analytics"],
-          "tags": ["acquisition", "revenue", "competitive-advantage"]
+          "metrics": [
+            "220,000 incremental clients",
+            "$100M+ projected lifetime revenue"
+          ],
+          "tools": [
+            "Predictive Modeling",
+            "Customer Analytics"
+          ],
+          "tags": [
+            "acquisition",
+            "revenue",
+            "competitive-advantage"
+          ]
         },
         {
           "id": "exp-003-b4",
           "text": "Prevented revenue erosion of $180M-$360M annually by declining widespread price reduction pressure; instead implemented strategic pricing increases yielding $50M in annual incremental revenue.",
-          "metrics": ["$180M-$360M prevented erosion", "$50M annual incremental revenue"],
-          "tools": ["Pricing Strategy", "Econometric Modeling"],
-          "tags": ["value-protection", "pricing", "proof-anchor-2"]
+          "metrics": [
+            "$180M-$360M prevented erosion",
+            "$50M annual incremental revenue"
+          ],
+          "tools": [
+            "Pricing Strategy",
+            "Econometric Modeling"
+          ],
+          "tags": [
+            "value-protection",
+            "pricing",
+            "proof-anchor-2"
+          ]
         },
         {
           "id": "exp-003-b5",
           "text": "Led International Expansion analytics supporting India market entry, acquiring 100,000 new customers and establishing blueprint for future geographic growth.",
-          "metrics": ["100,000 new customers", "India market entry"],
+          "metrics": [
+            "100,000 new customers",
+            "India market entry"
+          ],
           "tools": [],
-          "tags": ["international", "expansion", "market-entry"]
+          "tags": [
+            "international",
+            "expansion",
+            "market-entry"
+          ]
         },
         {
           "id": "exp-003-b6",
           "text": "Transformed team culture and performance, doubling employee engagement from 40% to 80% within one year and sustaining 70-80% engagement through tenure.",
-          "metrics": ["40% to 80% employee engagement", "doubled in one year", "sustained 70-80%"],
+          "metrics": [
+            "40% to 80% employee engagement",
+            "doubled in one year",
+            "sustained 70-80%"
+          ],
           "tools": [],
-          "tags": ["culture", "engagement", "team-transformation", "proof-anchor-3"]
+          "tags": [
+            "culture",
+            "engagement",
+            "team-transformation",
+            "proof-anchor-3"
+          ]
         }
       ]
     },
@@ -227,30 +453,70 @@
         {
           "id": "exp-004-b1",
           "text": "Established global analytics capability for $40B+ grocery retailer, managing 60 FTEs, 20 contractors, and $15M annual budget while presenting strategic insights to Board of Directors and executive leadership.",
-          "metrics": ["$40B+ company", "60 FTEs", "20 contractors", "$15M annual budget", "Board presentations"],
+          "metrics": [
+            "$40B+ company",
+            "60 FTEs",
+            "20 contractors",
+            "$15M annual budget",
+            "Board presentations"
+          ],
           "tools": [],
-          "tags": ["leadership", "board-advisory", "retail", "grocery"]
+          "tags": [
+            "leadership",
+            "board-advisory",
+            "retail",
+            "grocery"
+          ]
         },
         {
           "id": "exp-004-b2",
           "text": "Built offshore analytics center from concept to full operation in 12 months, establishing 30-person international team and reducing annual labor costs $4M while enabling 24/7 measurement capabilities.",
-          "metrics": ["12-month build", "30-person international team", "$4M annual labor cost reduction", "24/7 measurement"],
+          "metrics": [
+            "12-month build",
+            "30-person international team",
+            "$4M annual labor cost reduction",
+            "24/7 measurement"
+          ],
           "tools": [],
-          "tags": ["offshore", "org-building", "cost-reduction"]
+          "tags": [
+            "offshore",
+            "org-building",
+            "cost-reduction"
+          ]
         },
         {
           "id": "exp-004-b3",
           "text": "Increased promotional effectiveness one-third through advanced modeling and optimization, delivering 6:1 ROI and $30M annual improvement in marketing efficiency.",
-          "metrics": ["33% promotional effectiveness increase", "6:1 ROI", "$30M annual marketing efficiency improvement"],
-          "tools": ["Predictive Modeling", "Marketing Mix Modeling"],
-          "tags": ["marketing", "optimization", "roi"]
+          "metrics": [
+            "33% promotional effectiveness increase",
+            "6:1 ROI",
+            "$30M annual marketing efficiency improvement"
+          ],
+          "tools": [
+            "Predictive Modeling",
+            "Marketing Mix Modeling"
+          ],
+          "tags": [
+            "marketing",
+            "optimization",
+            "roi"
+          ]
         },
         {
           "id": "exp-004-b4",
           "text": "Led Big Relief Price Cut Program generating $60M+ in annual sales gains and reversing decade-long volume decline — first positive unit volume growth in 10 years.",
-          "metrics": ["$60M+ annual sales gains", "first positive unit volume growth in 10 years"],
-          "tools": ["Pricing Analytics"],
-          "tags": ["pricing", "turnaround", "volume-growth"]
+          "metrics": [
+            "$60M+ annual sales gains",
+            "first positive unit volume growth in 10 years"
+          ],
+          "tools": [
+            "Pricing Analytics"
+          ],
+          "tags": [
+            "pricing",
+            "turnaround",
+            "volume-growth"
+          ]
         }
       ]
     },
@@ -266,23 +532,45 @@
         {
           "id": "exp-005-b1",
           "text": "Led 10-person insights team achieving Top 25% corporate engagement ranking while identifying and developing high-impact growth opportunities.",
-          "metrics": ["10-person team", "Top 25% engagement ranking"],
+          "metrics": [
+            "10-person team",
+            "Top 25% engagement ranking"
+          ],
           "tools": [],
-          "tags": ["leadership", "retail", "consumer-electronics"]
+          "tags": [
+            "leadership",
+            "retail",
+            "consumer-electronics"
+          ]
         },
         {
           "id": "exp-005-b2",
           "text": "Identified and developed 6 new product/service pipelines representing $9B in addressable growth potential.",
-          "metrics": ["6 new pipelines", "$9B addressable growth potential"],
+          "metrics": [
+            "6 new pipelines",
+            "$9B addressable growth potential"
+          ],
           "tools": [],
-          "tags": ["growth", "strategy", "new-business"]
+          "tags": [
+            "growth",
+            "strategy",
+            "new-business"
+          ]
         },
         {
           "id": "exp-005-b3",
           "text": "Improved in-store customer conversion rate 50% through behavioral analytics and merchandising optimization.",
-          "metrics": ["50% conversion rate improvement"],
-          "tools": ["Behavioral Analytics"],
-          "tags": ["conversion", "customer-experience", "retail"]
+          "metrics": [
+            "50% conversion rate improvement"
+          ],
+          "tools": [
+            "Behavioral Analytics"
+          ],
+          "tags": [
+            "conversion",
+            "customer-experience",
+            "retail"
+          ]
         }
       ]
     },
