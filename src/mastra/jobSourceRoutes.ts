@@ -154,6 +154,7 @@ export function getJobSourceRoutes() {
             // Build enrichment context from Clay fields
             const enrichmentParts: string[] = [];
             if (lead.companyDescription) enrichmentParts.push(`Company: ${lead.companyDescription}`);
+            if (lead.companyDomain) enrichmentParts.push(`Company Domain: ${lead.companyDomain}`);
             if (lead.industry) enrichmentParts.push(`Industry: ${lead.industry}`);
             if (lead.companySize) enrichmentParts.push(`Size: ${lead.companySize}`);
             if (lead.funding) enrichmentParts.push(`Funding: ${lead.funding}`);
@@ -179,7 +180,7 @@ export function getJobSourceRoutes() {
                 lead.remoteHybrid || "Unknown",
                 level,
                 postingUrl,
-                new Date().toISOString().split("T")[0],
+                (() => { const d = new Date(lead.postedOn); return isNaN(d.getTime()) ? new Date().toISOString().split("T")[0] : d.toISOString().split("T")[0]; })(),
                 fullJdText,
                 jdHash,
                 simhash,

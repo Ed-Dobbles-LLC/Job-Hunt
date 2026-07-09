@@ -79,3 +79,22 @@ describe("clayLeadMapper", () => {
     expect(mapClayLead(42).title).toBe("");
   });
 });
+
+describe("clayLeadMapper — Ed's actual Clay table headers (verified 2026-07-09 screenshot)", () => {
+  it("maps the exact production column set", () => {
+    const lead = mapClayLead({
+      "Company Name": "Lockton",
+      "Job Title": "VP, Business Intelligence and Analytics",
+      "Location": "Dallas, TX",
+      "Company Domain": "lockton.com",
+      "Job LinkedIn URL": "https://www.linkedin.com/jobs/view/123",
+      "Posted On": "February 6, 2026 at 6:00 AM",
+    });
+    expect(lead.company).toBe("Lockton");
+    expect(lead.title).toBe("VP, Business Intelligence and Analytics");
+    expect(lead.location).toBe("Dallas, TX");
+    expect(lead.postingUrl).toBe("https://www.linkedin.com/jobs/view/123");
+    expect(lead.companyDomain).toBe("lockton.com");
+    expect(lead.postedOn).toBe("February 6, 2026 at 6:00 AM");
+  });
+});

@@ -30,6 +30,8 @@ export interface MappedClayLead {
   contactTitle: string;
   contactLinkedin: string;
   contactEmail: string;
+  companyDomain: string;
+  postedOn: string;
   /** Original (pre-normalization) key names — for diagnostics on failure. */
   rawKeys: string[];
 }
@@ -86,7 +88,7 @@ const K = {
   company: ["companyname", "company", "organization", "organizationname", "employer", "employername", "org", "hiringcompany", "companycleaned"],
   title: ["jobtitle", "title", "role", "position", "positiontitle", "jobname", "roletitle", "job"],
   location: ["location", "joblocation", "city", "locationname", "jobcity"],
-  postingUrl: ["joburl", "postingurl", "url", "linkedinurl", "jobposturl", "link", "applyurl", "jobposting", "jobpostingurl", "joblink"],
+  postingUrl: ["joburl", "postingurl", "url", "linkedinurl", "joblinkedinurl", "jobposturl", "link", "applyurl", "jobposting", "jobpostingurl", "joblink"],
   jdText: ["jobdescription", "description", "jdtext", "jobdetails", "descriptiontext", "fulldescription", "jd"],
   compensation: ["compensation", "salary", "salaryrange", "pay", "payrange", "comp"],
   remoteHybrid: ["remotehybrid", "remote", "workmodel", "worktype", "workarrangement", "locationtype"],
@@ -99,6 +101,8 @@ const K = {
   contactTitle: ["contacttitle", "hiringcontacttitle", "recruitertitle"],
   contactLinkedin: ["contactlinkedin", "contactlinkedinurl", "recruiterlinkedin", "hiringmanagerlinkedin"],
   contactEmail: ["contactemail", "recruiteremail", "hiringmanageremail", "email"],
+  companyDomain: ["companydomain", "domain", "website", "companywebsite"],
+  postedOn: ["postedon", "dateposted", "postdate", "posteddate", "jobposteddate"],
 };
 
 export function mapClayLead(raw: any): MappedClayLead {
@@ -121,6 +125,8 @@ export function mapClayLead(raw: any): MappedClayLead {
     contactTitle: pick(idx, K.contactTitle),
     contactLinkedin: pick(idx, K.contactLinkedin),
     contactEmail: pick(idx, K.contactEmail),
+    companyDomain: pick(idx, K.companyDomain),
+    postedOn: pick(idx, K.postedOn),
     rawKeys: raw && typeof raw === "object" && !Array.isArray(raw) ? Object.keys(raw) : [],
   };
 }
