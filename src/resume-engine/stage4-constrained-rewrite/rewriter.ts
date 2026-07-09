@@ -332,6 +332,13 @@ ${bulletRanking}
 
 ### First 2 bullets per role must align with top 3 archetypes.
 
+### BULLET COUNT TARGETS (2 FULL PAGES REQUIRED)
+The rendered resume must fill 2 full pages. Per-role bullet targets:
+- Role 1 (most recent): 4 bullets
+- Roles 2-3: 4 bullets each
+- Roles 4+: 3-4 bullets each
+Select from the ranked inventory bullets above — include as many as the inventory supports, up to the target. If a role's inventory has fewer bullets than the target, use ALL of them. NEVER fabricate a bullet to reach a count.
+
 ${bulletPlan.mandate_gaps.length > 0 ? `### MANDATE GAPS — DO NOT FABRICATE
 ${gapLines}` : "### No mandate gaps."}
 
@@ -353,7 +360,12 @@ The resume will be scored on 5 positioning dimensions post-generation. Optimize 
 2. IMPACT DENSITY: At least 2 bullets per major role (top 3) MUST contain quantified outcomes ($X, N%). The outcome clause is the most valuable part — never truncate it.
 3. AUTHORITY TONE: No "managed day-to-day", "responsible for", "played a key role", "helped", "supported". Every opener must be a concrete executive action verb.
 4. NO CLICHÉS: Ban "leveraged", "actionable insights", "unlocking value", "thought leader", "fostering a culture". Use precise, fact-anchored language.
-5. OUTCOME PRESERVATION: Every bullet with a quantified result must end with the result intact. Pattern: Action → Context → Outcome (e.g., "Architected governance framework across 6 BUs — reducing compliance gaps 40%").`;
+5. OUTCOME PRESERVATION: Every bullet with a quantified result must end with the result intact. Pattern: Action → Context → Outcome (e.g., "Architected governance framework across 6 BUs — reducing compliance gaps 40%").
+
+### METRIC INTEGRITY (HARD RULES — violations are auto-rejected)
+6. NEVER invent aggregate or rolled-up figures. "$300M+ in enterprise impact" style totals that do not appear verbatim in the Claims Ledger are fabrications. Only dollar amounts, percentages, and counts that trace to a specific claim ID may appear.
+7. ONE ROLE PER SENTENCE: All metrics in a single sentence must trace to the SAME role. Pairing one role's team size with another role's budget (e.g., "teams of 60+ FTEs with $17M budgets") misrepresents scope even when each number is individually true.
+8. NO THIRD PERSON: The summary and bullets use implied-first-person executive voice. Never write the candidate's name or "he/she/they has led" constructions in the summary body.`;
 }
 
 // ── Correction Prompt Builder ────────────────────────────────────

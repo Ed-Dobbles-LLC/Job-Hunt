@@ -238,12 +238,28 @@ export async function renderResumeDocx(
     renderedSections.add("EXPERIENCE");
     children.push(sectionHeading("Professional Experience"));
 
+    // Page-2 anchor: force a page break before this employer so the role
+    // opens page 2 cleanly instead of splitting across the page boundary.
+    const page2Anchor = (process.env.RESUME_PAGE2_ANCHOR ?? "H&R Block").toLowerCase();
+    let page2BreakUsed = false;
+
     for (let roleIdx = 0; roleIdx < resume.experience.length; roleIdx++) {
       const exp = resume.experience[roleIdx];
+
+      if (
+        !page2BreakUsed &&
+        roleIdx > 0 &&
+        page2Anchor.length > 0 &&
+        safePrimitive(exp.employer).toLowerCase().includes(page2Anchor)
+      ) {
+        children.push(new Paragraph({ children: [new PageBreak()] }));
+        page2BreakUsed = true;
+      }
 
       // Role Title | Company (clear separation, bold)
       children.push(
         new Paragraph({
+          keepNext: true,
           children: [
             new TextRun({
               text: safePrimitive(exp.title),
@@ -271,6 +287,7 @@ export async function renderResumeDocx(
       // Location | Date Range (distinct line)
       children.push(
         new Paragraph({
+          keepNext: true,
           children: [
             new TextRun({
               text: `${safePrimitive(exp.location)}  |  ${formatDateRange(exp.start_date, exp.end_date)}`,
