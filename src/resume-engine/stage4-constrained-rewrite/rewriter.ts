@@ -808,6 +808,8 @@ function backfillBullets(
     const candidates = byExp.get(expId) ?? [];
     const usedHashes = new Set(exp.bullets.map(b => (typeof b === "string" ? "" : b.source_hash)));
     const usedTexts = new Set(exp.bullets.map(b => (typeof b === "string" ? b : b.text).toLowerCase().slice(0, 60)));
+    const noClaims = candidates.filter(c => !c.claim_ids?.length).length;
+    logger?.info(`📏 [Stage 4] Backfill scan ${exp.employer}: has ${exp.bullets.length}/${target}, candidates=${candidates.length} (no-claim-ids=${noClaims})`);
 
     for (const cand of candidates) {
       if (exp.bullets.length >= target) break;

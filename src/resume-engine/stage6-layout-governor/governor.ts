@@ -15,6 +15,7 @@
  */
 
 import { compressResume, type CompressionReport } from "../../mastra/tools/resumeCompressor";
+import { bulletCapForRole, TOTAL_BULLET_CAP, PAGE_BAND_MIN_POLICY } from "../layout-policy.js";
 import type { TailoredResume } from "../../mastra/tools/tailoredResumePrompt";
 import type { MandateProfile } from "../stage2-mandate-classifier/classifier";
 
@@ -266,17 +267,8 @@ function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
     originalCount += bulletsBefore;
 
     // Determine max bullets based on recency — generous caps, compression handles overflow
-    let maxBullets: number;
-    if (i === 0) {
-      maxBullets = 5; // Most recent role — needs depth for executive presence
-    } else if (i <= 2) {
-      maxBullets = 4; // 2nd and 3rd roles
-    } else {
-      // Older roles: 4 bullets; 15+ years old still gets 3 so page 2 fills.
-      // (The old cap of 2 starved page 2 — resumes rendered at 1.5 pages.)
-      const startYear = parseInt(exp.start_date?.match(/\d{4}/)?.[0] || "0");
-      maxBullets = (currentYear - startYear > 15) ? 3 : 4;
-    }
+    const startYear = parseInt(exp.start_date?.match(/\d{4}/)?.[0] || "0");
+    const maxBullets = bulletCapForRole(i, startYear > 0 ? currentYear - startYear : 0);
 
     if (exp.bullets.length > maxBullets) {
       // IMPACT RESTORATION: Sort to preserve impact bullets, trim non-impact first
@@ -291,8 +283,8 @@ function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
   }
 
   // Total cap: 20-24 bullets — a full 2-page executive resume needs ~22
-  if (finalCount > 24) {
-    let excess = finalCount - 24;
+  if (finalCount > TOTAL_BULLET_CAP) {
+    let excess = finalCount - TOTAL_BULLET_CAP;
     for (let i = resume.experience.length - 1; i >= 0 && excess > 0; i--) {
       const exp = resume.experience[i];
       // Sort so non-impact bullets are at the end, then pop from end
@@ -938,7 +930,7 @@ function estimatePages(resume: TailoredResume): PageEstimate {
 // Target: 1.6–2.0 pages. Under 1.6 = too thin (lacks executive depth).
 // Over 2.0 = too long (fails ATS page limits and looks unfocused).
 
-const PAGE_BAND_MIN = 1.85; // full 2 pages required — expansion signals fire below this
+const PAGE_BAND_MIN = PAGE_BAND_MIN_POLICY;
 const PAGE_BAND_MAX = 2.0;
 const MIN_ROLES = 3; // Minimum enterprise roles for career progression signal
 

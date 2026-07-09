@@ -19,6 +19,7 @@
  */
 
 import type { TailoredResume } from "./tailoredResumePrompt";
+import { bulletCapForRole, TOTAL_BULLET_CAP } from "../../resume-engine/layout-policy.js";
 import type { MandateProfile } from "./mandateClassifier";
 
 export interface CompressionReport {
@@ -132,12 +133,8 @@ function getBulletCaps(experience: { start_date: string; end_date: string }[]): 
     const endDate = exp.end_date?.toLowerCase() === "present"
       ? currentYear
       : parseInt(exp.end_date?.substring(0, 4) || "0", 10);
-    const isOlderThan15Years = endDate > 0 && (currentYear - endDate) > 15;
-
-    if (isOlderThan15Years) return 2;
-    if (idx === 0) return 5;       // Most recent role — needs depth for executive presence
-    if (idx <= 2) return 4;        // Second and third roles
-    return 3;                      // Fourth+ role
+    const yearsOld = endDate > 0 ? currentYear - endDate : 0;
+    return bulletCapForRole(idx, yearsOld);
   });
 }
 
@@ -532,7 +529,7 @@ export function compressResume(resume: TailoredResume, mandate?: MandateProfile)
   // ── Phase 7: Visual density auto-compression ──
   // If total bullets exceed 15, drop lowest-mandate-score bullets from oldest roles first
   const totalBulletsNow = resume.experience.reduce((s, exp) => s + exp.bullets.length, 0);
-  const MAX_TOTAL_BULLETS = 15;
+  const MAX_TOTAL_BULLETS = TOTAL_BULLET_CAP; // was 15 — silently starved page 2 on every resume
   if (totalBulletsNow > MAX_TOTAL_BULLETS && mandate) {
     let bulletsToRemove = totalBulletsNow - MAX_TOTAL_BULLETS;
     // Work backwards from oldest role
