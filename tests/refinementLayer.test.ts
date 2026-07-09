@@ -258,7 +258,9 @@ describe("checkAuthorityWithoutHype", () => {
     expect(resume.professional_summary).not.toContain("unprecedented");
     expect(resume.professional_summary).not.toContain("powerhouse");
     expect(resume.professional_summary).toContain("notable");
-    expect(resume.professional_summary).toContain("high-performing");
+    // powerhouse is a noun — replacement must be noun-for-noun ("team");
+    // the old adjective swap ("high-performing") corrupted sentences.
+    expect(resume.professional_summary).toContain("team");
   });
 
   it("flags ungrounded board attribution", () => {
