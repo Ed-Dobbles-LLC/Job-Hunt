@@ -263,8 +263,16 @@ if (Object.keys(mastra.getAgents()).length > 1) {
 }
 
 // Simple in-process scheduler — supports multiple daily runs
+// DISABLED unless SCHEDULER_ENABLED=true (Ed, 2026-07-09: digest email
+// misbehaving; keep off until the pipeline passes a supervised run).
 // SCHEDULE_CRON_EXPRESSION: morning run (default 12:30 UTC / ~7:30 AM ET)
 // SCHEDULE_CRON_EXPRESSION_2: evening run (default 00:00 UTC / ~7:00 PM ET)
+const schedulerEnabled = process.env.SCHEDULER_ENABLED === "true";
+if (!schedulerEnabled) {
+  console.log(
+    "⏸️  [Scheduler] Disabled (set SCHEDULER_ENABLED=true to resume scheduled runs and digest emails)",
+  );
+}
 const schedules = [
   process.env.SCHEDULE_CRON_EXPRESSION || "30 12 * * *",
   process.env.SCHEDULE_CRON_EXPRESSION_2 || "0 0 * * *",
@@ -273,25 +281,27 @@ const schedules = [
   return { expr, min, hour, lastRunDate: "" };
 });
 
-setInterval(() => {
-  const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  for (const sched of schedules) {
-    if (
-      now.getUTCHours() === sched.hour &&
-      now.getUTCMinutes() === sched.min &&
-      sched.lastRunDate !== today
-    ) {
-      sched.lastRunDate = today;
-      console.log(`🕐 [Scheduler] Starting workflow (${sched.expr})`);
-      runWorkflowDirectly(mastra)
-        .then((result) => {
-          console.log(`✅ [Scheduler] Workflow completed: ${result.summary}`);
-        })
-        .catch((err) => {
-          console.error(`❌ [Scheduler] Workflow failed: ${err.message}`);
-        });
-      break; // Only run one schedule per tick
+if (schedulerEnabled) {
+  setInterval(() => {
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+    for (const sched of schedules) {
+      if (
+        now.getUTCHours() === sched.hour &&
+        now.getUTCMinutes() === sched.min &&
+        sched.lastRunDate !== today
+      ) {
+        sched.lastRunDate = today;
+        console.log(`🕐 [Scheduler] Starting workflow (${sched.expr})`);
+        runWorkflowDirectly(mastra)
+          .then((result) => {
+            console.log(`✅ [Scheduler] Workflow completed: ${result.summary}`);
+          })
+          .catch((err) => {
+            console.error(`❌ [Scheduler] Workflow failed: ${err.message}`);
+          });
+        break; // Only run one schedule per tick
+      }
     }
-  }
-}, 60_000);
+  }, 60_000);
+}
