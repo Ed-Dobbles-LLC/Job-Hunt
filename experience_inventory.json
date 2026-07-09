@@ -289,10 +289,10 @@
         },
         {
           "id": "exp-002-b3",
-          "text": "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 60 hours monthly, plus deployed generative AI business intelligence solution with natural language query capabilities.",
+          "text": "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 100 hours monthly, plus deployed generative AI business intelligence solution with natural language query capabilities.",
           "metrics": [
             "5% accuracy improvement",
-            "60 hours monthly reduction"
+            "100 hours monthly reduction"
           ],
           "tools": [
             "Machine Learning",
@@ -683,6 +683,39 @@
   "resume_variants": {
     "analytics_forward": "Ed_Dobbles_Resume_Executive_Oct_2025.docx",
     "ai_forward": "Ed_Dobbles_Resume_Executive_Feb2026.docx",
-    "key_differences": "AI-forward variant includes toolkit portability narrative at Overproof (exp-001-b3, exp-001-b6, exp-001-b7) and automated content platform (exp-001-b5). Analytics variant uses shorter Overproof section focused on platform and competitive differentiation (exp-001-b4)."
+    "key_differences": "AI-forward variant includes toolkit portability narrative at Overproof (exp-001-b3, exp-001-b6, exp-001-b7) and automated content platform (exp-001-b5). Analytics variant uses shorter Overproof section focused on platform and competitive differentiation (exp-001-b4).",
+    "master_2page": {
+      "description": "Curated 2-page master render. Drops intro bullets that duplicate scope lines (exp-001-b1, exp-003-b1, exp-004-b1, exp-005-b1, exp-dbl-001-b4) and Overproof toolkit-portability narrative (exp-001-b3/b6/b7, AI-forward variant only).",
+      "include_bullets": {
+        "exp-dbl-001": [
+          "exp-dbl-001-b1",
+          "exp-dbl-001-b2",
+          "exp-dbl-001-b3"
+        ],
+        "exp-001": [
+          "exp-001-b2",
+          "exp-001-b4",
+          "exp-001-b5",
+          "exp-001-b8"
+        ],
+        "exp-002": "all",
+        "exp-003": [
+          "exp-003-b2",
+          "exp-003-b3",
+          "exp-003-b4",
+          "exp-003-b5",
+          "exp-003-b6"
+        ],
+        "exp-004": [
+          "exp-004-b2",
+          "exp-004-b3",
+          "exp-004-b4"
+        ],
+        "exp-005": [
+          "exp-005-b2",
+          "exp-005-b3"
+        ]
+      }
+    }
   }
 }
