@@ -1019,6 +1019,23 @@ export function getDashboardRoutes() {
             }
           })();
 
+          // Duplicate-application warning: same normalized company|title
+          // already applied under a different job_id. Warn, don't block —
+          // generating a packet is cheap; applying twice is the real error.
+          let duplicateWarning: any = null;
+          try {
+            const dup = await query(
+              `SELECT j2.job_id, j2.company, j2.title, ap.applied_at
+               FROM jobs j
+               JOIN jobs j2 ON j2.job_id <> j.job_id
+                 AND ${FP_SQL("j2")} = ${FP_SQL("j")}
+               JOIN applications ap ON ap.job_id = j2.job_id
+               WHERE j.job_id = $1 LIMIT 1`,
+              [jobId],
+            );
+            duplicateWarning = dup.rows[0] ?? null;
+          } catch { /* applications table may predate this deploy */ }
+
           // Return 202 Accepted immediately — frontend will poll for status
           return c.json({
             success: true,
@@ -1026,7 +1043,10 @@ export function getDashboardRoutes() {
             async: true,
             status: "queued",
             phase: "init",
-            message: "Packet generation started. Poll /api/dashboard/generate-packet/" + jobId + "/status for progress.",
+            duplicate_warning: duplicateWarning,
+            message: (duplicateWarning
+              ? `⚠️ ALREADY APPLIED to ${duplicateWarning.company} — "${duplicateWarning.title}" (job #${duplicateWarning.job_id}) on ${duplicateWarning.applied_at}. `
+              : "") + "Packet generation started. Poll /api/dashboard/generate-packet/" + jobId + "/status for progress.",
           }, 202);
         } catch (err: any) {
           const errMsg = err?.message || String(err);
@@ -2063,5 +2083,131 @@ CRITICAL INSTRUCTIONS:
         }
       },
     },
+    // ── Application Log & Dedupe ─────────────────────────────────
+    // Fingerprint = normalized company|title. Computed in SQL so the log,
+    // the dedupe guard, and the packet-fire warning all share one definition.
+    {
+      path: "/api/dashboard/job-log",
+      method: "GET" as const,
+      createHandler: async () => async (c: any) => {
+        try {
+          const rows = await query(`
+            SELECT j.job_id, j.company, j.title, j.location, j.posting_url,
+                   j.date_ingested, j.status AS job_status, j.user_action,
+                   s.total_score,
+                   (a2.id IS NOT NULL) AS has_packet,
+                   a2.created_ts AS packet_created_at,
+                   a2.truth_pass,
+                   ap.applied_at, ap.applied_via, ap.response_status,
+                   ap.response_at, ap.response_notes,
+                   dup.job_id AS duplicate_of_applied_job
+            FROM jobs j
+            LEFT JOIN scores s ON s.job_id = j.job_id
+            LEFT JOIN LATERAL (
+              SELECT id, created_ts, truth_pass FROM artifacts
+              WHERE job_id = j.job_id AND resume_docx IS NOT NULL
+              ORDER BY created_ts DESC LIMIT 1
+            ) a2 ON TRUE
+            LEFT JOIN applications ap ON ap.job_id = j.job_id
+            LEFT JOIN LATERAL (
+              SELECT j2.job_id FROM jobs j2
+              JOIN applications ap2 ON ap2.job_id = j2.job_id
+              WHERE j2.job_id <> j.job_id
+                AND ${FP_SQL("j2")} = ${FP_SQL("j")}
+              LIMIT 1
+            ) dup ON TRUE
+            ORDER BY j.job_id DESC
+          `);
+          const summary = {
+            total_evaluated: rows.rows.length,
+            with_packet: rows.rows.filter((r: any) => r.has_packet).length,
+            applied: rows.rows.filter((r: any) => r.applied_at).length,
+            responses: rows.rows.filter((r: any) => r.response_status && r.response_status !== "none").length,
+          };
+          return c.json({ summary, jobs: rows.rows });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/dashboard/jobs/:id/mark-applied",
+      method: "POST" as const,
+      createHandler: async () => async (c: any) => {
+        try {
+          const jobId = parseInt(c.req.param("id"));
+          if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
+          const body = await c.req.json().catch(() => ({}));
+
+          // Dedupe guard: refuse if another job with the same normalized
+          // company|title fingerprint already has an application.
+          const dup = await query(
+            `SELECT j2.job_id, j2.company, j2.title, ap.applied_at
+             FROM jobs j
+             JOIN jobs j2 ON j2.job_id <> j.job_id
+               AND ${FP_SQL("j2")} = ${FP_SQL("j")}
+             JOIN applications ap ON ap.job_id = j2.job_id
+             WHERE j.job_id = $1 LIMIT 1`,
+            [jobId],
+          );
+          if (dup.rows.length > 0 && !body.force) {
+            return c.json({
+              error: "duplicate_application",
+              message: `Already applied to ${dup.rows[0].company} — "${dup.rows[0].title}" (job #${dup.rows[0].job_id}) on ${dup.rows[0].applied_at}. Pass force:true to record anyway.`,
+              duplicate_of: dup.rows[0],
+            }, 409);
+          }
+
+          await query(
+            `INSERT INTO applications (job_id, applied_at, applied_via, confirmation_ref)
+             VALUES ($1, COALESCE($2::timestamptz, NOW()), $3, $4)
+             ON CONFLICT (job_id) DO UPDATE SET
+               applied_at = COALESCE($2::timestamptz, applications.applied_at),
+               applied_via = COALESCE(NULLIF($3, ''), applications.applied_via),
+               confirmation_ref = COALESCE(NULLIF($4, ''), applications.confirmation_ref),
+               updated_at = NOW()`,
+            [jobId, body.applied_at ?? null, body.applied_via ?? "", body.confirmation_ref ?? ""],
+          );
+          await query(`UPDATE jobs SET status = 'applied' WHERE job_id = $1`, [jobId]);
+          return c.json({ ok: true, job_id: jobId, duplicate_warning: dup.rows[0] ?? null });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/dashboard/jobs/:id/record-response",
+      method: "POST" as const,
+      createHandler: async () => async (c: any) => {
+        try {
+          const jobId = parseInt(c.req.param("id"));
+          if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
+          const body = await c.req.json().catch(() => ({}));
+          const allowed = ["none", "auto_ack", "rejected", "recruiter_screen", "interview", "offer", "ghosted", "withdrawn"];
+          if (!allowed.includes(body.response_status)) {
+            return c.json({ error: `response_status must be one of: ${allowed.join(", ")}` }, 400);
+          }
+          const r = await query(
+            `UPDATE applications SET
+               response_status = $2,
+               response_at = COALESCE($3::timestamptz, NOW()),
+               response_notes = CASE WHEN $4 <> '' THEN
+                 TRIM(BOTH E'\n' FROM response_notes || E'\n' || $4) ELSE response_notes END,
+               updated_at = NOW()
+             WHERE job_id = $1 RETURNING job_id`,
+            [jobId, body.response_status, body.response_at ?? null, body.notes ?? ""],
+          );
+          if (r.rows.length === 0) return c.json({ error: "No application recorded for this job — mark-applied first" }, 404);
+          return c.json({ ok: true, job_id: jobId, response_status: body.response_status });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
   ];
+}
+
+// Normalized company|title fingerprint, shared across log/guard/warning.
+function FP_SQL(alias: string): string {
+  return `regexp_replace(regexp_replace(lower(coalesce(${alias}.company,'') || '|' || coalesce(${alias}.title,'')), '[^a-z0-9| ]', '', 'g'), '\\s+', ' ', 'g')`;
 }

@@ -126,6 +126,17 @@ export async function initDatabase(): Promise<void> {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS compensation TEXT DEFAULT '';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_action TEXT DEFAULT '';
 
+      CREATE TABLE IF NOT EXISTS applications (
+        job_id BIGINT PRIMARY KEY REFERENCES jobs(job_id),
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        applied_via TEXT DEFAULT '',
+        confirmation_ref TEXT DEFAULT '',
+        response_status TEXT NOT NULL DEFAULT 'none',
+        response_at TIMESTAMPTZ,
+        response_notes TEXT DEFAULT '',
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS imported_emails (
         id SERIAL PRIMARY KEY,
         subject TEXT,
