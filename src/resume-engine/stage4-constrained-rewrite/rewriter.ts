@@ -759,6 +759,13 @@ RULES:
     );
   }
 
+  // ── Deterministic Role Restoration (2-full-page requirement) ──
+  // The LLM sometimes drops entire older roles (schema allows 1-7 entries)
+  // — one run emits 6 roles, the next emits 3 and page 2 collapses.
+  // Restore every inventory role that has bullets; bullet backfill below
+  // then fills them from the ranked scored-bullet plan.
+  restoreDroppedRoles(resume, input.inventory, input.logger);
+
   // ── Deterministic Bullet Backfill (2-full-page requirement) ──
   // LLMs under-select bullets for older roles regardless of prompt targets.
   // Backfill from the ranked, unused inventory bullets — verbatim text with
@@ -822,7 +829,10 @@ function backfillBullets(
     for (const [id, emp] of idToEmployer) {
       if (employerLower.includes(emp) || emp.includes(employerLower)) { expId = id; break; }
     }
-    if (!expId) continue;
+    if (!expId) {
+      logger?.warn(`📏 [Stage 4] Backfill: no inventory match for employer "${exp.employer}" — skipped`);
+      continue;
+    }
 
     const candidates = byExp.get(expId) ?? [];
     const usedHashes = new Set(exp.bullets.map(b => (typeof b === "string" ? "" : b.source_hash)));
@@ -845,4 +855,46 @@ function backfillBullets(
       logger?.info(`📏 [Stage 4] Backfilled bullet ${cand.bullet_id} into ${exp.employer} (${exp.bullets.length}/${target})`);
     }
   }
+}
+
+
+// ── Deterministic Role Restoration ────────────────────────────────
+// Ensure every inventory role with bullets appears in the resume, in
+// inventory (reverse-chronological) order. Restored roles start with an
+// empty bullet list; backfillBullets fills them from the scored plan.
+function restoreDroppedRoles(resume: TailoredResume, inventory: any, logger?: any): void {
+  const invRoles: any[] = (inventory?.experience ?? []).filter(
+    (e: any) => Array.isArray(e?.bullets) && e.bullets.length > 0,
+  );
+  if (invRoles.length === 0) return;
+
+  const matchesInv = (resumeEmployer: string, invEmployer: string): boolean => {
+    const a = resumeEmployer.toLowerCase();
+    const b = invEmployer.toLowerCase();
+    return a.includes(b) || b.includes(a);
+  };
+
+  for (const inv of invRoles) {
+    const present = resume.experience.some((e) => matchesInv(String(e.employer ?? ""), String(inv.employer ?? "")));
+    if (present) continue;
+    const restored: any = {
+      employer: inv.employer,
+      title: inv.title,
+      start_date: inv.start_date,
+      end_date: inv.end_date,
+      location: inv.location ?? "",
+      bullets: [],
+    };
+    if (inv.scope) restored.scope_line = inv.scope;
+    resume.experience.push(restored);
+    logger?.info(`📏 [Stage 4] Restored dropped role: ${inv.employer}`);
+  }
+
+  // Re-order to inventory order (reverse chronological). Unmatched resume
+  // entries (shouldn't exist) keep relative order at the end.
+  const orderOf = (e: any): number => {
+    const idx = invRoles.findIndex((inv) => matchesInv(String(e.employer ?? ""), String(inv.employer ?? "")));
+    return idx === -1 ? 999 : idx;
+  };
+  resume.experience.sort((a, b) => orderOf(a) - orderOf(b));
 }
