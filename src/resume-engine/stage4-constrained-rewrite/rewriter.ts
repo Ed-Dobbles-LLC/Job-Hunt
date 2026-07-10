@@ -746,6 +746,19 @@ RULES:
     }
   }
 
+  // ── Deterministic Summary Conflation Repair ──
+  // The LLM persistently pairs one role's headcount with another role's
+  // budget in the summary ("teams of 60+ FTEs with $17M budgets") despite
+  // three rounds of prompt rules. Rewrite the pairing into the career-span
+  // "up to" form: each maximum is individually true and the plural framing
+  // removes the single-role implication.
+  if (resume.professional_summary) {
+    resume.professional_summary = resume.professional_summary.replace(
+      /teams of (\d+)\+?\s*FTEs?\s+(?:with|and|managing|overseeing)\s+\$(\d+)M(?:\+)?\s*(?:annual\s+)?budgets?/gi,
+      "teams of up to $1 FTEs and budgets of up to \$$2M",
+    );
+  }
+
   // ── Deterministic Bullet Backfill (2-full-page requirement) ──
   // LLMs under-select bullets for older roles regardless of prompt targets.
   // Backfill from the ranked, unused inventory bullets — verbatim text with
