@@ -716,29 +716,35 @@ RULES:
       coverLetter.word_count = countCoverLetterWords(coverLetter);
     }
 
-    // ── Post-LLM Cover Letter: Hype Word Suppression (deterministic) ──
-    const COVER_LETTER_HYPE: { pattern: RegExp; replacement: string }[] = [
-      { pattern: /\bcatalyzed\b/gi, replacement: "initiated" },
-      { pattern: /\bcatalyze\b/gi, replacement: "initiate" },
-      { pattern: /\bcatalyst\b/gi, replacement: "driver" },
-      { pattern: /\bpowerhouse\b/gi, replacement: "team" }, // noun-for-noun: adjective swap corrupted sentences
-      { pattern: /\bmarket-dominating\b/gi, replacement: "market-leading" },
-      { pattern: /\bgame-changing\b/gi, replacement: "significant" },
-      { pattern: /\bgame changer\b/gi, replacement: "significant improvement" },
-      { pattern: /\bgroundbreaking\b/gi, replacement: "first-of-its-kind" },
-      { pattern: /\brevolutionized\b/gi, replacement: "redesigned" },
-      { pattern: /\bworld-class\b/gi, replacement: "enterprise-grade" },
-      { pattern: /\bbest-in-class\b/gi, replacement: "competitive" },
-      { pattern: /\bcutting-edge\b/gi, replacement: "modern" },
-      { pattern: /\bstate-of-the-art\b/gi, replacement: "advanced" },
-      { pattern: /\btransformative\b/gi, replacement: "impactful" },
-      { pattern: /\bunprecedented\b/gi, replacement: "notable" },
-      { pattern: /\bskyrocketed\b/gi, replacement: "increased significantly" },
-      { pattern: /\bseismic\b/gi, replacement: "significant" },
-      { pattern: /\bdisruptive\b/gi, replacement: "innovative" },
-      { pattern: /\bdrove\s+(?:the\s+)?board\s+to\b/gi, replacement: "presented to the board" },
-      ...BANNED_AI_ISMS,
-    ];
+  }
+
+  // ── Post-LLM Cover Letter: Hype Word Suppression (deterministic) ──
+  // Function-level so it applies to BOTH the initial-generation and the
+  // attempt-2 correction paths (it previously lived inside the initial
+  // branch only — correction-path covers shipped with "leveraging").
+  const COVER_LETTER_HYPE: { pattern: RegExp; replacement: string }[] = [
+    { pattern: /\bcatalyzed\b/gi, replacement: "initiated" },
+    { pattern: /\bcatalyze\b/gi, replacement: "initiate" },
+    { pattern: /\bcatalyst\b/gi, replacement: "driver" },
+    { pattern: /\bpowerhouse\b/gi, replacement: "team" }, // noun-for-noun: adjective swap corrupted sentences
+    { pattern: /\bmarket-dominating\b/gi, replacement: "market-leading" },
+    { pattern: /\bgame-changing\b/gi, replacement: "significant" },
+    { pattern: /\bgame changer\b/gi, replacement: "significant improvement" },
+    { pattern: /\bgroundbreaking\b/gi, replacement: "first-of-its-kind" },
+    { pattern: /\brevolutionized\b/gi, replacement: "redesigned" },
+    { pattern: /\bworld-class\b/gi, replacement: "enterprise-grade" },
+    { pattern: /\bbest-in-class\b/gi, replacement: "competitive" },
+    { pattern: /\bcutting-edge\b/gi, replacement: "modern" },
+    { pattern: /\bstate-of-the-art\b/gi, replacement: "advanced" },
+    { pattern: /\btransformative\b/gi, replacement: "impactful" },
+    { pattern: /\bunprecedented\b/gi, replacement: "notable" },
+    { pattern: /\bskyrocketed\b/gi, replacement: "increased significantly" },
+    { pattern: /\bseismic\b/gi, replacement: "significant" },
+    { pattern: /\bdisruptive\b/gi, replacement: "innovative" },
+    { pattern: /\bdrove\s+(?:the\s+)?board\s+to\b/gi, replacement: "presented to the board" },
+    ...BANNED_AI_ISMS,
+  ];
+  if (coverLetter) {
     for (const hw of COVER_LETTER_HYPE) {
       coverLetter.opening_paragraph = coverLetter.opening_paragraph.replace(hw.pattern, hw.replacement);
       coverLetter.body_paragraphs = coverLetter.body_paragraphs.map(p => p.replace(hw.pattern, hw.replacement));
