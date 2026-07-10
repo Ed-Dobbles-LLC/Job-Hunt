@@ -126,6 +126,8 @@ export async function initDatabase(): Promise<void> {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS compensation TEXT DEFAULT '';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_action TEXT DEFAULT '';
 
+      CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
       CREATE TABLE IF NOT EXISTS applications (
         job_id BIGINT PRIMARY KEY REFERENCES jobs(job_id),
         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

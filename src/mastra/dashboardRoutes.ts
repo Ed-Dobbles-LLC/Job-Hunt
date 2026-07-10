@@ -2147,12 +2147,28 @@ CRITICAL INSTRUCTIONS:
 
           // Fingerprint match against existing jobs (prefer one already applied,
           // then one with a packet, then newest).
+          // Fuzzy fingerprint match: exact, OR trigram-similar title (>=0.9,
+          // catches "Insight" vs "Insights") + trigram-similar company
+          // (>=0.55, catches "Goodyear" vs "The Goodyear Tire & Rubber
+          // Company", "KEEN" vs "KEEN Footwear").
           const match = await query(
-            `SELECT j.job_id FROM jobs j
-             LEFT JOIN applications ap ON ap.job_id = j.job_id
-             LEFT JOIN artifacts ar ON ar.job_id = j.job_id AND ar.resume_docx IS NOT NULL
-             WHERE ${FP_SQL("j")} = regexp_replace(regexp_replace(lower($1 || '|' || $2), '[^a-z0-9| ]', '', 'g'), '\\s+', ' ', 'g')
-             ORDER BY (ap.job_id IS NOT NULL) DESC, (ar.id IS NOT NULL) DESC, j.job_id DESC LIMIT 1`,
+            `WITH probe AS (
+               SELECT regexp_replace(regexp_replace(lower($1), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS c_fp,
+                      regexp_replace(regexp_replace(lower($2), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS t_fp
+             )
+             SELECT j.job_id FROM jobs j
+             CROSS JOIN probe p
+             CROSS JOIN LATERAL (SELECT
+                 regexp_replace(regexp_replace(lower(coalesce(j.company,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS jc,
+                 regexp_replace(regexp_replace(lower(coalesce(j.title,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS jt
+               ) f
+             WHERE (f.jc = p.c_fp AND f.jt = p.t_fp)
+                OR (similarity(f.jt, p.t_fp) >= 0.9 AND similarity(f.jc, p.c_fp) >= 0.55)
+             ORDER BY (EXISTS (SELECT 1 FROM applications a2 WHERE a2.job_id = j.job_id)) DESC,
+                      (EXISTS (SELECT 1 FROM artifacts r2 WHERE r2.job_id = j.job_id AND r2.resume_docx IS NOT NULL)) DESC,
+                      similarity(f.jt, p.t_fp) + similarity(f.jc, p.c_fp) DESC,
+                      j.job_id DESC
+             LIMIT 1`,
             [company, title],
           );
           let jobId: number;
@@ -2192,6 +2208,60 @@ CRITICAL INSTRUCTIONS:
             );
           }
           return c.json({ ok: true, job_id: jobId, created_new_job: created });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      // Merge a duplicate application record into the canonical job row.
+      // Moves the applications row from -> into (preserving earliest
+      // applied_at and any response), then deletes the orphan jobs row if
+      // it was an email_import shell with no artifacts.
+      path: "/api/dashboard/applications/merge",
+      method: "POST" as const,
+      createHandler: async () => async (c: any) => {
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+          const body = await c.req.json().catch(() => ({}));
+          const from = parseInt(body.from_job_id), into = parseInt(body.into_job_id);
+          if (isNaN(from) || isNaN(into) || from === into) return c.json({ error: "valid distinct from_job_id and into_job_id required" }, 400);
+
+          const src = await query(`SELECT * FROM applications WHERE job_id = $1`, [from]);
+          if (src.rows.length === 0) return c.json({ error: `No application on job #${from}` }, 404);
+          const a = src.rows[0];
+
+          await query(
+            `INSERT INTO applications (job_id, applied_at, applied_via, confirmation_ref, response_status, response_at, response_notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (job_id) DO UPDATE SET
+               applied_at = LEAST(applications.applied_at, EXCLUDED.applied_at),
+               applied_via = COALESCE(NULLIF(EXCLUDED.applied_via, ''), applications.applied_via),
+               confirmation_ref = COALESCE(NULLIF(EXCLUDED.confirmation_ref, ''), applications.confirmation_ref),
+               response_status = CASE WHEN applications.response_status = 'none' THEN EXCLUDED.response_status ELSE applications.response_status END,
+               response_at = COALESCE(applications.response_at, EXCLUDED.response_at),
+               response_notes = TRIM(BOTH E'\n' FROM applications.response_notes || E'\n' || EXCLUDED.response_notes),
+               updated_at = NOW()`,
+            [into, a.applied_at, a.applied_via, a.confirmation_ref, a.response_status, a.response_at, a.response_notes],
+          );
+          await query(`UPDATE jobs SET status = 'applied' WHERE job_id = $1`, [into]);
+          await query(`DELETE FROM applications WHERE job_id = $1`, [from]);
+
+          // Remove the orphan shell only if it was an import with nothing else attached.
+          const shell = await query(
+            `SELECT 1 FROM jobs j WHERE j.job_id = $1 AND j.source = 'email_import'
+               AND NOT EXISTS (SELECT 1 FROM artifacts WHERE job_id = $1)
+               AND NOT EXISTS (SELECT 1 FROM scores WHERE job_id = $1)`,
+            [from],
+          );
+          let deletedShell = false;
+          if (shell.rows.length > 0) {
+            await query(`DELETE FROM evidence_map WHERE job_id = $1`, [from]);
+            await query(`DELETE FROM contacts WHERE job_id = $1`, [from]);
+            await query(`DELETE FROM jobs WHERE job_id = $1`, [from]);
+            deletedShell = true;
+          }
+          return c.json({ ok: true, merged_into: into, deleted_shell: deletedShell });
         } catch (err: any) {
           return c.json({ error: err.message }, 500);
         }
