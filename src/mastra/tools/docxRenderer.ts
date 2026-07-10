@@ -106,7 +106,9 @@ export async function renderResumeDocx(
     location?: string;
     linkedin?: string;
   },
+  inventory?: any,
 ): Promise<Buffer> {
+  if (inventory) enrichResumeFromInventory(resume, inventory);
   const children: Paragraph[] = [];
   const renderedSections = new Set<string>();
 
@@ -524,9 +526,25 @@ export async function renderResumeDocx(
               color: "666666",
             }),
           ],
-          spacing: { after: BULLET_SPACING_AFTER },
+          spacing: { after: (edu as any).detail ? 20 : BULLET_SPACING_AFTER },
         }),
       );
+      if ((edu as any).detail) {
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: safePrimitive((edu as any).detail),
+                italics: true,
+                size: BODY_SIZE - 2,
+                font: FONT,
+                color: "444444",
+              }),
+            ],
+            spacing: { after: BULLET_SPACING_AFTER },
+          }),
+        );
+      }
     }
   }
 
@@ -551,6 +569,16 @@ export async function renderResumeDocx(
               size: BODY_SIZE,
               font: FONT,
             }),
+            ...(((cert as any)?.institution)
+              ? [
+                  new TextRun({
+                    text: ` — ${safePrimitive((cert as any).institution)}`,
+                    size: BODY_SIZE,
+                    font: FONT,
+                    color: "444444",
+                  }),
+                ]
+              : []),
             ...(certYear
               ? [
                   new TextRun({
@@ -816,4 +844,47 @@ export function checkPagination(
   }
 
   return { pageCount, withinLimit, maxPages, warning };
+}
+
+
+// ── Inventory Enrichment (deterministic, render-time) ────────────
+// The tailored-resume schema strips education `detail` and certification
+// `institution`, and the LLM often omits tools. Overlay them verbatim
+// from the inventory at render time — factual by construction, and it
+// applies to already-generated artifacts on the next render.
+function enrichResumeFromInventory(resume: TailoredResume, inventory: any): void {
+  try {
+    const invEdu: any[] = inventory?.education ?? [];
+    for (const edu of resume.education ?? []) {
+      if ((edu as any).detail) continue;
+      const m = invEdu.find(
+        (ie) =>
+          (ie.degree && edu.degree && String(edu.degree).toLowerCase().includes(String(ie.degree).toLowerCase().slice(0, 20))) ||
+          (ie.institution && edu.institution && String(edu.institution).toLowerCase().includes(String(ie.institution).toLowerCase())),
+      );
+      if (m?.detail) (edu as any).detail = m.detail;
+    }
+
+    const invCerts: any[] = inventory?.certifications ?? [];
+    for (const cert of (resume.certifications ?? []) as any[]) {
+      if (typeof cert === "string" || cert.institution) continue;
+      const m = invCerts.find(
+        (ic) => ic.name && cert.name && String(cert.name).toLowerCase().includes(String(ic.name).toLowerCase().slice(0, 15)),
+      );
+      if (m?.institution) cert.institution = m.institution;
+    }
+
+    // Tools & Platforms: if the tailored resume omitted them, fill from
+    // inventory technical + data_science skills (verbatim).
+    const skills: any = (resume as any).skills ?? ((resume as any).skills = {});
+    const existingTools: string[] = skills.tools_and_platforms ?? [];
+    if (existingTools.length === 0) {
+      const tech: string[] = inventory?.skills?.technical ?? [];
+      const ds: string[] = inventory?.skills?.data_science ?? [];
+      const merged = [...tech, ...ds].filter(Boolean);
+      if (merged.length > 0) skills.tools_and_platforms = merged;
+    }
+  } catch {
+    // Enrichment is best-effort — never fail a render over it.
+  }
 }

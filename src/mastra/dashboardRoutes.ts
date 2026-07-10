@@ -902,7 +902,7 @@ export function getDashboardRoutes() {
               try {
                 const inventory = await loadInventoryProfile();
                 const profile = { ...(inventory.profile || {}), email: inventory.profile?.email || DEFAULT_CANDIDATE_EMAIL };
-                resumeBuffer = await renderResumeDocx(packetResult.resume, profile);
+                resumeBuffer = await renderResumeDocx(packetResult.resume, profile, inventory);
                 coverBuffer = await renderCoverLetterDocx(packetResult.cover_letter, profile);
                 logger?.info(`✅ [generate-packet] DOCX rendered: resume=${resumeBuffer.length}B, cover=${coverBuffer.length}B`);
               } catch (renderErr: any) {
@@ -1350,7 +1350,7 @@ export function getDashboardRoutes() {
                 try {
                   const inv = await loadInventoryProfile();
                   const prof = { ...(inv.profile || {}), email: inv.profile?.email || DEFAULT_CANDIDATE_EMAIL };
-                  resumeBuf = await renderResumeDocx(packetResult.resume, prof);
+                  resumeBuf = await renderResumeDocx(packetResult.resume, prof, inv);
                   coverBuf = await renderCoverLetterDocx(packetResult.cover_letter, prof);
                 } catch (e: any) {
                   logger?.warn(`⚠️ [auto-generate] DOCX render failed: ${e.message}`);

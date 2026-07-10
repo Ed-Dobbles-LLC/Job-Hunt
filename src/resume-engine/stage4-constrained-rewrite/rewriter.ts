@@ -9,6 +9,7 @@
  */
 
 import { resilientGenerateObject } from "../llm-retry";
+import { bulletCapForRole } from "../layout-policy.js";
 import { BANNED_AI_ISMS } from "../token-heuristics.js";
 import {
   TailoredResumeSchema,
@@ -776,7 +777,12 @@ function backfillBullets(
 ): void {
   if (!bulletPlan?.scored_bullets?.length) return;
 
-  const targetFor = (i: number): number => (i === 0 ? 4 : i <= 2 ? 4 : 3);
+  const currentYear = new Date().getFullYear();
+  const targetFor = (i: number): number => {
+    const end = String(resume.experience[i]?.end_date ?? "").toLowerCase();
+    const endYear = end.includes("present") ? currentYear : parseInt(end.match(/\d{4}/)?.[0] || "0", 10);
+    return bulletCapForRole(i, endYear > 0 ? currentYear - endYear : 0);
+  };
 
   // Map experience_id -> employer via inventory for role matching
   const idToEmployer = new Map<string, string>();

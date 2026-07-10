@@ -267,8 +267,9 @@ function enforceBulletCaps(resume: TailoredResume): BulletCapResult {
     originalCount += bulletsBefore;
 
     // Determine max bullets based on recency — generous caps, compression handles overflow
-    const startYear = parseInt(exp.start_date?.match(/\d{4}/)?.[0] || "0");
-    const maxBullets = bulletCapForRole(i, startYear > 0 ? currentYear - startYear : 0);
+    const endStr = String(exp.end_date ?? "").toLowerCase();
+    const endYear = endStr.includes("present") ? currentYear : parseInt(endStr.match(/\d{4}/)?.[0] || "0", 10);
+    const maxBullets = bulletCapForRole(i, endYear > 0 ? currentYear - endYear : 0);
 
     if (exp.bullets.length > maxBullets) {
       // IMPACT RESTORATION: Sort to preserve impact bullets, trim non-impact first
