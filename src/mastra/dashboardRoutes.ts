@@ -1028,9 +1028,18 @@ export function getDashboardRoutes() {
               `SELECT j2.job_id, j2.company, j2.title, ap.applied_at
                FROM jobs j
                JOIN jobs j2 ON j2.job_id <> j.job_id
-                 AND ${FP_SQL("j2")} = ${FP_SQL("j")}
                JOIN applications ap ON ap.job_id = j2.job_id
-               WHERE j.job_id = $1 LIMIT 1`,
+               CROSS JOIN LATERAL (SELECT
+                   regexp_replace(regexp_replace(lower(coalesce(j.company,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS c1,
+                   regexp_replace(regexp_replace(lower(coalesce(j.title,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS t1,
+                   regexp_replace(regexp_replace(lower(coalesce(j2.company,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS c2,
+                   regexp_replace(regexp_replace(lower(coalesce(j2.title,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS t2
+                 ) f
+               WHERE j.job_id = $1
+                 AND ((f.c1 = f.c2 AND f.t1 = f.t2)
+                   OR (similarity(f.t1, f.t2) >= 0.9
+                       AND GREATEST(word_similarity(f.c1, f.c2), word_similarity(f.c2, f.c1)) >= 0.75))
+               LIMIT 1`,
               [jobId],
             );
             duplicateWarning = dup.rows[0] ?? null;
@@ -2163,7 +2172,8 @@ CRITICAL INSTRUCTIONS:
                  regexp_replace(regexp_replace(lower(coalesce(j.title,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS jt
                ) f
              WHERE (f.jc = p.c_fp AND f.jt = p.t_fp)
-                OR (similarity(f.jt, p.t_fp) >= 0.9 AND similarity(f.jc, p.c_fp) >= 0.55)
+                OR (similarity(f.jt, p.t_fp) >= 0.9
+                    AND GREATEST(word_similarity(f.jc, p.c_fp), word_similarity(p.c_fp, f.jc)) >= 0.75)
              ORDER BY (EXISTS (SELECT 1 FROM applications a2 WHERE a2.job_id = j.job_id)) DESC,
                       (EXISTS (SELECT 1 FROM artifacts r2 WHERE r2.job_id = j.job_id AND r2.resume_docx IS NOT NULL)) DESC,
                       similarity(f.jt, p.t_fp) + similarity(f.jc, p.c_fp) DESC,
@@ -2283,9 +2293,18 @@ CRITICAL INSTRUCTIONS:
             `SELECT j2.job_id, j2.company, j2.title, ap.applied_at
              FROM jobs j
              JOIN jobs j2 ON j2.job_id <> j.job_id
-               AND ${FP_SQL("j2")} = ${FP_SQL("j")}
              JOIN applications ap ON ap.job_id = j2.job_id
-             WHERE j.job_id = $1 LIMIT 1`,
+             CROSS JOIN LATERAL (SELECT
+                 regexp_replace(regexp_replace(lower(coalesce(j.company,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS c1,
+                 regexp_replace(regexp_replace(lower(coalesce(j.title,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS t1,
+                 regexp_replace(regexp_replace(lower(coalesce(j2.company,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS c2,
+                 regexp_replace(regexp_replace(lower(coalesce(j2.title,'')), '[^a-z0-9 ]', '', 'g'), '\\s+', ' ', 'g') AS t2
+               ) f
+             WHERE j.job_id = $1
+               AND ((f.c1 = f.c2 AND f.t1 = f.t2)
+                 OR (similarity(f.t1, f.t2) >= 0.9
+                     AND GREATEST(word_similarity(f.c1, f.c2), word_similarity(f.c2, f.c1)) >= 0.75))
+             LIMIT 1`,
             [jobId],
           );
           if (dup.rows.length > 0 && !body.force) {
@@ -2308,6 +2327,23 @@ CRITICAL INSTRUCTIONS:
           );
           await query(`UPDATE jobs SET status = 'applied' WHERE job_id = $1`, [jobId]);
           return c.json({ ok: true, job_id: jobId, duplicate_warning: dup.rows[0] ?? null });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
+      path: "/api/dashboard/jobs/:id/unmark-applied",
+      method: "POST" as const,
+      createHandler: async () => async (c: any) => {
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+          const jobId = parseInt(c.req.param("id"));
+          if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
+          const r = await query(`DELETE FROM applications WHERE job_id = $1 RETURNING job_id`, [jobId]);
+          if (r.rows.length === 0) return c.json({ error: "No application recorded for this job" }, 404);
+          await query(`UPDATE jobs SET status = 'new' WHERE job_id = $1 AND status = 'applied'`, [jobId]);
+          return c.json({ ok: true, job_id: jobId, unmarked: true });
         } catch (err: any) {
           return c.json({ error: err.message }, 500);
         }
