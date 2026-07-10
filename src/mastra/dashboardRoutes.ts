@@ -2091,6 +2091,7 @@ CRITICAL INSTRUCTIONS:
       method: "GET" as const,
       createHandler: async () => async (c: any) => {
         try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
           const rows = await query(`
             SELECT j.job_id, j.company, j.title, j.location, j.posting_url,
                    j.date_ingested, j.status AS job_status, j.user_action,
@@ -2135,6 +2136,7 @@ CRITICAL INSTRUCTIONS:
       method: "POST" as const,
       createHandler: async () => async (c: any) => {
         try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
           const jobId = parseInt(c.req.param("id"));
           if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
           const body = await c.req.json().catch(() => ({}));
@@ -2180,6 +2182,7 @@ CRITICAL INSTRUCTIONS:
       method: "POST" as const,
       createHandler: async () => async (c: any) => {
         try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
           const jobId = parseInt(c.req.param("id"));
           if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
           const body = await c.req.json().catch(() => ({}));
