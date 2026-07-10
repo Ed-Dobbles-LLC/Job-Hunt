@@ -356,7 +356,10 @@ export async function renderResumeDocx(
     const leadership = skills.leadership || [];
     const dataScience = skills.data_science || [];
 
-    const hasNewFormat = skills.enterprise_capabilities !== undefined;
+    // Non-empty tools_and_platforms also qualifies as new-format: the legacy
+    // path only reads technical/leadership/data_science and silently drops
+    // tools_and_platforms (which render-time inventory enrichment populates).
+    const hasNewFormat = skills.enterprise_capabilities !== undefined || toolsAndPlatforms.length > 0;
     const hasCoreCompetencies = renderedSections.has("COMPETENCIES");
 
     if (hasNewFormat) {
