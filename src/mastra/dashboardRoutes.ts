@@ -2132,6 +2132,72 @@ CRITICAL INSTRUCTIONS:
       },
     },
     {
+      // Import an application made OUTSIDE the agent (e.g. LinkedIn Easy
+      // Apply, direct ATS). Attaches to an existing job by fingerprint
+      // match, or creates a jobs row (source='email_import') so the
+      // dedupe guard can see every application Ed has ever made.
+      path: "/api/dashboard/applications/import",
+      method: "POST" as const,
+      createHandler: async () => async (c: any) => {
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+          const body = await c.req.json().catch(() => ({}));
+          const { company, title } = body;
+          if (!company || !title) return c.json({ error: "company and title required" }, 400);
+
+          // Fingerprint match against existing jobs (prefer one already applied,
+          // then one with a packet, then newest).
+          const match = await query(
+            `SELECT j.job_id FROM jobs j
+             LEFT JOIN applications ap ON ap.job_id = j.job_id
+             LEFT JOIN artifacts ar ON ar.job_id = j.job_id AND ar.resume_docx IS NOT NULL
+             WHERE ${FP_SQL("j")} = regexp_replace(regexp_replace(lower($1 || '|' || $2), '[^a-z0-9| ]', '', 'g'), '\\s+', ' ', 'g')
+             ORDER BY (ap.job_id IS NOT NULL) DESC, (ar.id IS NOT NULL) DESC, j.job_id DESC LIMIT 1`,
+            [company, title],
+          );
+          let jobId: number;
+          let created = false;
+          if (match.rows.length > 0) {
+            jobId = Number(match.rows[0].job_id);
+          } else {
+            const ins = await query(
+              `INSERT INTO jobs (source, company, title, location, posting_url, status)
+               VALUES ('email_import', $1, $2, $3, $4, 'applied') RETURNING job_id`,
+              [company, title, body.location ?? "", body.posting_url ?? ""],
+            );
+            jobId = Number(ins.rows[0].job_id);
+            created = true;
+          }
+
+          await query(
+            `INSERT INTO applications (job_id, applied_at, applied_via, confirmation_ref)
+             VALUES ($1, COALESCE($2::timestamptz, NOW()), $3, $4)
+             ON CONFLICT (job_id) DO UPDATE SET
+               applied_at = LEAST(applications.applied_at, COALESCE($2::timestamptz, applications.applied_at)),
+               applied_via = COALESCE(NULLIF($3, ''), applications.applied_via),
+               confirmation_ref = COALESCE(NULLIF($4, ''), applications.confirmation_ref),
+               updated_at = NOW()`,
+            [jobId, body.applied_at ?? null, body.applied_via ?? "", body.confirmation_ref ?? ""],
+          );
+          await query(`UPDATE jobs SET status = 'applied' WHERE job_id = $1`, [jobId]);
+
+          if (body.response_status) {
+            await query(
+              `UPDATE applications SET response_status = $2,
+                 response_at = COALESCE($3::timestamptz, NOW()),
+                 response_notes = CASE WHEN $4 <> '' THEN TRIM(BOTH E'\n' FROM response_notes || E'\n' || $4) ELSE response_notes END,
+                 updated_at = NOW()
+               WHERE job_id = $1`,
+              [jobId, body.response_status, body.response_at ?? null, body.notes ?? ""],
+            );
+          }
+          return c.json({ ok: true, job_id: jobId, created_new_job: created });
+        } catch (err: any) {
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    {
       path: "/api/dashboard/jobs/:id/mark-applied",
       method: "POST" as const,
       createHandler: async () => async (c: any) => {
