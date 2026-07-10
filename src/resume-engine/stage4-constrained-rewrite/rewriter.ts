@@ -754,7 +754,7 @@ RULES:
   // removes the single-role implication.
   if (resume.professional_summary) {
     resume.professional_summary = resume.professional_summary.replace(
-      /teams of (\d+)\+?\s*FTEs?\s+(?:with|and|managing|overseeing)\s+\$(\d+)M(?:\+)?\s*(?:annual\s+)?budgets?/gi,
+      /teams of (\d+)\+?\s*FTEs?\s*,?\s*(?:with|and|while|managing|overseeing)\s+(?:managing\s+|overseeing\s+)?\$(\d+)M(?:\+)?\s*(?:annual\s+)?budgets?/gi,
       "teams of up to $1 FTEs and budgets of up to \$$2M",
     );
   }
