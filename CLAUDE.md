@@ -399,3 +399,6 @@ company_research  — cached company intelligence (30-day TTL)
 ---
 ## VERSION
 Last updated: 2026-02-24
+
+## Application execution
+For application execution sessions (Browser pane form-filling), follow docs/APPLY_EXECUTOR.md.
