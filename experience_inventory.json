@@ -1,12 +1,12 @@
 {
   "profile": {
     "name": "Ed Dobbles",
-    "current_title": "Founder & Principal, Dobbles.AI",
+    "current_title": "Founder & CEO, Dobbles.AI",
     "email": "Ed@Dobbles.AI",
     "phone": "(612) 239-1035",
     "location": "Minneapolis-St. Paul Metro",
     "linkedin": "linkedin.com/in/ed-dobbles",
-    "summary": "C-suite analytics and AI executive with 25+ years architecting analytics functions that transform data into competitive advantage for Fortune 500 companies and high-growth ventures. Track record leading teams of 60+ FTEs, managing $17M+ budgets, and delivering $300M+ in measurable enterprise impact through strategic analytics, AI/ML implementation, and cultural transformation. Translates complex data into board-level insights and executable strategies that drive revenue growth, operational excellence, and market differentiation.",
+    "summary": "C-suite analytics and AI executive with 25+ years architecting analytics functions that transform data into competitive advantage for Fortune 500 companies and high-growth ventures. Track record leading teams of up to 60 FTEs and budgets of up to $17M, and delivering $300M+ in measurable enterprise impact through strategic analytics, AI/ML implementation, and cultural transformation. Translates complex data into board-level insights and executable strategies that drive revenue growth, operational excellence, and market differentiation.",
     "candidate_id": "ed-dobbles"
   },
   "ens": {
@@ -52,7 +52,7 @@
     {
       "id": "exp-dbl-001",
       "employer": "Dobbles.AI",
-      "title": "Founder & Principal",
+      "title": "Founder & CEO",
       "start_date": "2026",
       "end_date": "present",
       "location": "Minneapolis, MN",
@@ -105,7 +105,7 @@
         },
         {
           "id": "exp-dbl-001-b4",
-          "text": "Applies 25 years of consumer-goods analytics leadership to a solo, AI-leveraged operating model that produces enterprise-grade market intelligence.",
+          "text": "Applies 25 years of consumer-goods analytics leadership to a solo, AI-native operating model that produces market intelligence at commercial scale.",
           "metrics": [
             "25 years"
           ],
@@ -192,7 +192,7 @@
         },
         {
           "id": "exp-001-b5",
-          "text": "Architected industry-first automated content platform leveraging AI across the full production lifecycle — from news curation and script generation to recording and publishing — eliminating manual intervention and scaling thought leadership.",
+          "text": "Architected industry-first automated content platform using AI across the full production lifecycle — from news curation and script generation to recording and publishing — eliminating manual intervention and scaling thought leadership.",
           "metrics": [],
           "tools": [
             "Generative AI",
@@ -289,10 +289,10 @@
         },
         {
           "id": "exp-002-b3",
-          "text": "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 100 hours monthly, plus deployed generative AI business intelligence solution with natural language query capabilities.",
+          "text": "Spearheaded AI/ML innovation agenda, implementing machine learning forecasting that improved accuracy 5% while reducing manual effort 60 hours monthly, plus deployed generative AI business intelligence solution with natural language query capabilities.",
           "metrics": [
             "5% accuracy improvement",
-            "100 hours monthly reduction"
+            "60 hours monthly reduction"
           ],
           "tools": [
             "Machine Learning",
@@ -600,7 +600,7 @@
       "id": "edu-001",
       "institution": "Rutgers University",
       "degree": "Doctor of Business Administration",
-      "year": "2019",
+      "year": "2023",
       "location": "Newark, NJ",
       "detail": "Dissertation: 'Driving Adoption of Advanced Analytic Tools within Sales Organizations'"
     },
