@@ -129,7 +129,7 @@ for (const ed of inv.education) {
     spacing: { after: 10 },
     children: [
       new TextRun({ text: ed.degree, bold: true, size: 20, font: FONT }),
-      new TextRun({ text: `  |  ${ed.institution}${ed.location ? ", " + ed.location : ""}`, size: 20, font: FONT }),
+      new TextRun({ text: `  |  ${ed.institution}${ed.location ? ", " + ed.location : ""}${ed.year ? "  |  " + ed.year : ""}`, size: 20, font: FONT }),
     ],
   }));
   if (ed.detail) children.push(body(ed.detail, { after: 60, run: { italics: true, color: GRAY, size: 18 } }));
