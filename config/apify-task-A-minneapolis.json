@@ -1,0 +1,48 @@
+{
+  "keywords": "analytics OR data OR \"business intelligence\" OR insights",
+  "datePosted": "last7d",
+  "experienceLevel": [
+    "director",
+    "executive"
+  ],
+  "jobType": [
+    "fulltime"
+  ],
+  "enrichDetails": true,
+  "scrapeCompany": true,
+  "descriptionFormat": "markdown",
+  "skipReposts": true,
+  "sortBy": "recent",
+  "incrementalMode": true,
+  "outputMode": "new-only",
+  "allowNonIncrementalFallback": true,
+  "excludeCompanies": [
+    "Harnham",
+    "Millman Search",
+    "Morpheus Talent Solutions",
+    "Talener",
+    "Pagos Consultants",
+    "Robert Half",
+    "Michael Page",
+    "Korn Ferry",
+    "Heidrick",
+    "Russell Reynolds",
+    "Spencer Stuart",
+    "Insight Global",
+    "Hill's Pet Nutrition",
+    "PadSplit",
+    "Microsoft",
+    "Lyra Health",
+    "Sprouts Farmers Market",
+    "Goodyear",
+    "Discount Tire",
+    "Perrigo",
+    "Patrick Industries",
+    "TradeStation",
+    "Chevron"
+  ],
+  "location": "Minneapolis, Minnesota, United States",
+  "distance": 60,
+  "stateKey": "ed-mn-metro-analytics-leadership",
+  "maxResults": 200
+}
