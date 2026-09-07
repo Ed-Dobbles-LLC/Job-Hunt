@@ -1996,6 +1996,182 @@ CRITICAL INSTRUCTIONS:
         }
       },
     },
+    /* ── Candidates Import (idempotent job ingest from an external source) ──
+       Accepts a single candidate object or a batch (array, or { candidates: [...] }).
+       Inserts into `jobs` only — applications are never created or modified here.
+       Dedup order: (source, source_job_id) first, then jd_hash. Either hit returns
+       the existing job_id instead of inserting. */
+    {
+      path: "/api/dashboard/candidates/import",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          const body = await c.req.json().catch(() => null);
+          if (!body || typeof body !== "object") {
+            return c.json({ error: "Request body must be a JSON object or array" }, 400);
+          }
+
+          const isBatch = Array.isArray(body) || Array.isArray((body as any).candidates);
+          const rawCandidates: any[] = Array.isArray(body)
+            ? body
+            : Array.isArray((body as any).candidates)
+              ? (body as any).candidates
+              : [body];
+
+          if (rawCandidates.length === 0) {
+            return c.json({ error: "No candidates supplied" }, 400);
+          }
+
+          const str = (v: any) => (v === null || v === undefined ? "" : String(v).trim());
+
+          const results: Array<{
+            job_id: number | null;
+            created: boolean;
+            duplicate: boolean;
+            reason?: string;
+            error?: string;
+            company: string;
+            title: string;
+          }> = [];
+
+          for (const raw of rawCandidates) {
+            const company = str(raw?.company ?? raw?.company_name);
+            const title = str(raw?.title ?? raw?.job_title);
+            const location = str(raw?.location);
+            const postingUrl = str(raw?.posting_url ?? raw?.url);
+            const source = str(raw?.source);
+            const sourceJobId = str(raw?.source_job_id);
+            const jdText = str(raw?.jd_text ?? raw?.jd_raw_text);
+            const remoteHybrid = str(raw?.remote_hybrid);
+            const compensation = str(raw?.compensation);
+            const datePosted = str(raw?.date_posted);
+
+            if (!company || !title) {
+              results.push({
+                job_id: null, created: false, duplicate: false,
+                error: "company and title are required",
+                company, title,
+              });
+              continue;
+            }
+
+            // Hash identity is the posting itself — company|title|location|posting_url.
+            const jdHash = computeHash(`${company}|${title}|${location}|${postingUrl}`);
+
+            try {
+              // Dedup 1: same source + source_job_id already ingested.
+              if (source && sourceJobId) {
+                const bySource = await query(
+                  "SELECT job_id FROM jobs WHERE source = $1 AND source_message_id = $2 LIMIT 1",
+                  [source, sourceJobId],
+                );
+                if (bySource.rows.length > 0) {
+                  results.push({
+                    job_id: Number(bySource.rows[0].job_id), created: false, duplicate: true,
+                    reason: "source_job_id", company, title,
+                  });
+                  continue;
+                }
+              }
+
+              // Dedup 2: same posting fingerprint already ingested.
+              const byHash = await query(
+                "SELECT job_id FROM jobs WHERE jd_hash = $1 LIMIT 1",
+                [jdHash],
+              );
+              if (byHash.rows.length > 0) {
+                results.push({
+                  job_id: Number(byHash.rows[0].job_id), created: false, duplicate: true,
+                  reason: "jd_hash", company, title,
+                });
+                continue;
+              }
+
+              // ON CONFLICT covers the race between the SELECT above and this INSERT —
+              // idx_jobs_jd_hash is a partial unique index, so the predicate is required
+              // for the arbiter to be inferred.
+              const inserted = await query(
+                `INSERT INTO jobs (source, source_message_id, company, title, location, remote_hybrid, level, posting_url, date_posted, jd_raw_text, jd_hash, simhash, keywords, url_canonical, status, compensation)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'new', $15)
+                 ON CONFLICT (jd_hash) WHERE jd_hash IS NOT NULL DO NOTHING
+                 RETURNING job_id`,
+                [
+                  source,
+                  sourceJobId,
+                  company,
+                  title,
+                  location,
+                  remoteHybrid || "Unknown",
+                  classifyLevel(title),
+                  postingUrl,
+                  datePosted || new Date().toISOString().split("T")[0],
+                  jdText,
+                  jdHash,
+                  computeSimhash(jdText).toString(),
+                  JSON.stringify(extractKeywords(jdText)),
+                  postingUrl || null,
+                  compensation,
+                ],
+              );
+
+              if (inserted.rows.length > 0) {
+                const jobId = Number(inserted.rows[0].job_id);
+                logger?.info(`📥 [candidates/import] New job #${jobId}: ${company} — ${title}`);
+                results.push({ job_id: jobId, created: true, duplicate: false, company, title });
+                continue;
+              }
+
+              // Lost the race — another writer inserted this hash first.
+              const raced = await query(
+                "SELECT job_id FROM jobs WHERE jd_hash = $1 LIMIT 1",
+                [jdHash],
+              );
+              results.push({
+                job_id: raced.rows.length > 0 ? Number(raced.rows[0].job_id) : null,
+                created: false,
+                duplicate: true,
+                reason: "jd_hash",
+                company,
+                title,
+              });
+            } catch (err: any) {
+              logger?.error(`❌ [candidates/import] ${company} — ${title}: ${err.message}`);
+              results.push({
+                job_id: null, created: false, duplicate: false,
+                error: err.message, company, title,
+              });
+            }
+          }
+
+          const imported = results.filter(r => r.created).length;
+          const duplicates = results.filter(r => r.duplicate).length;
+          const errors = results.filter(r => r.error).length;
+          logger?.info(`📥 [candidates/import] Done: ${imported} new, ${duplicates} duplicates, ${errors} errors`);
+
+          if (!isBatch) {
+            const only = results[0];
+            if (only.error) {
+              return c.json({ success: false, error: only.error }, only.error.includes("required") ? 400 : 500);
+            }
+            return c.json({
+              success: true,
+              job_id: only.job_id,
+              created: only.created,
+              duplicate: only.duplicate,
+              reason: only.reason,
+            });
+          }
+
+          return c.json({ success: true, imported, duplicates, errors, total: results.length, results });
+        } catch (err: any) {
+          logger?.error(`❌ [candidates/import] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
     // ── Cost Tracking Endpoints ────────────────────────────────────
 
     {
