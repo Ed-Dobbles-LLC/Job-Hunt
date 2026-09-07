@@ -1,4 +1,4 @@
-import { query, initDatabase } from "./tools/db";
+import { query, initDatabase, pool } from "./tools/db";
 import * as fs from "fs";
 import * as path from "path";
 import { workspacePath, findPublicFile } from "./tools/paths";
@@ -2000,6 +2000,242 @@ CRITICAL INSTRUCTIONS:
           });
         } catch (err: any) {
           logger?.error(`❌ [import-excel] Error: ${err.message}`);
+          return c.json({ error: err.message }, 500);
+        }
+      },
+    },
+    /* ── Candidates Import (idempotent job ingest from an external source) ──
+       Accepts a single candidate object or a batch (array, or { candidates: [...] }).
+       Inserts into `jobs` only — applications are never created or modified here.
+       Dedup order: (source, source_job_id) first, then jd_hash. Either hit returns
+       the existing job_id instead of inserting.
+
+       Each candidate is processed in its own transaction holding an advisory lock
+       on its identity key, so two concurrent imports of the same posting cannot
+       both pass the dedup pre-check and both insert. */
+    {
+      path: "/api/dashboard/candidates/import",
+      method: "POST" as const,
+      createHandler: async ({ mastra }: any) => async (c: any) => {
+        const logger = mastra.getLogger();
+        try {
+          // Same gate as /api/import-emails: enforced only when the key is set,
+          // so an unset IMPORT_API_KEY leaves existing callers working.
+          const apiKey = process.env.IMPORT_API_KEY;
+          const authHeader = c.req.header("x-api-key") || c.req.header("authorization")?.replace("Bearer ", "");
+          if (apiKey && authHeader !== apiKey) {
+            return c.json({ success: false, error: "Unauthorized" }, 401);
+          }
+
+          if (!dbReady) { await initDatabase(); dbReady = true; }
+
+          const body = await c.req.json().catch(() => null);
+          if (!body || typeof body !== "object") {
+            return c.json({ error: "Request body must be a JSON object or array" }, 400);
+          }
+
+          const isBatch = Array.isArray(body) || Array.isArray((body as any).candidates);
+          const rawCandidates: any[] = Array.isArray(body)
+            ? body
+            : Array.isArray((body as any).candidates)
+              ? (body as any).candidates
+              : [body];
+
+          if (rawCandidates.length === 0) {
+            return c.json({ error: "No candidates supplied" }, 400);
+          }
+
+          // Scalars only. String(v) on an object yields the literal "[object Object]",
+          // which would otherwise sail through as a valid company/title and land in
+          // jd_raw_text, where it silently becomes the input to simhash, keyword
+          // extraction and packet generation. Reject the shape instead of coercing it.
+          class FieldTypeError extends Error {}
+          const str = (v: any, field: string): string => {
+            if (v === null || v === undefined) return "";
+            if (typeof v === "object") {
+              throw new FieldTypeError(`${field} must be a string, received ${Array.isArray(v) ? "array" : "object"}`);
+            }
+            return String(v).trim();
+          };
+
+          const results: Array<{
+            job_id: number | null;
+            created: boolean;
+            duplicate: boolean;
+            reason?: string;
+            error?: string;
+            company: string;
+            title: string;
+          }> = [];
+
+          for (const raw of rawCandidates) {
+            let company = "", title = "";
+            try {
+              company = str(raw?.company ?? raw?.company_name, "company");
+              title = str(raw?.title ?? raw?.job_title, "title");
+              const location = str(raw?.location, "location");
+              const postingUrl = str(raw?.posting_url ?? raw?.url, "posting_url");
+              const source = str(raw?.source, "source");
+              const sourceJobId = str(raw?.source_job_id, "source_job_id");
+              const jdText = str(raw?.jd_text ?? raw?.jd_raw_text, "jd_text");
+              const remoteHybrid = str(raw?.remote_hybrid, "remote_hybrid");
+              const compensation = str(raw?.compensation, "compensation");
+              const datePosted = str(raw?.date_posted, "date_posted");
+
+              if (!company || !title) {
+                results.push({
+                  job_id: null, created: false, duplicate: false,
+                  error: "company and title are required",
+                  company, title,
+                });
+                continue;
+              }
+
+              // Hash identity is the posting itself — company|title|location|posting_url.
+              const jdHash = computeHash(`${company}|${title}|${location}|${postingUrl}`);
+
+              // Serialize importers sharing an identity key. Without this, two
+              // requests carrying the same (source, source_job_id) but different
+              // posting_url produce different jd_hash values, so neither the dedup
+              // SELECT nor the jd_hash ON CONFLICT arbiter catches them and both
+              // insert — two rows for one external posting.
+              const lockKey = source && sourceJobId ? `src:${source}|${sourceJobId}` : `jd:${jdHash}`;
+
+              const client = await pool.connect();
+              try {
+                await client.query("BEGIN");
+                await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [lockKey]);
+
+                // Dedup 1: same source + source_job_id already ingested.
+                if (source && sourceJobId) {
+                  const bySource = await client.query(
+                    "SELECT job_id FROM jobs WHERE source = $1 AND source_message_id = $2 LIMIT 1",
+                    [source, sourceJobId],
+                  );
+                  if (bySource.rows.length > 0) {
+                    await client.query("COMMIT");
+                    results.push({
+                      job_id: Number(bySource.rows[0].job_id), created: false, duplicate: true,
+                      reason: "source_job_id", company, title,
+                    });
+                    continue;
+                  }
+                }
+
+                // Dedup 2: same posting fingerprint already ingested.
+                const byHash = await client.query(
+                  "SELECT job_id FROM jobs WHERE jd_hash = $1 LIMIT 1",
+                  [jdHash],
+                );
+                if (byHash.rows.length > 0) {
+                  await client.query("COMMIT");
+                  results.push({
+                    job_id: Number(byHash.rows[0].job_id), created: false, duplicate: true,
+                    reason: "jd_hash", company, title,
+                  });
+                  continue;
+                }
+
+                // ON CONFLICT still guards the jd_hash path against an importer
+                // holding a different advisory lock. idx_jobs_jd_hash is a partial
+                // unique index, so the predicate is required to infer the arbiter.
+                const inserted = await client.query(
+                  `INSERT INTO jobs (source, source_message_id, company, title, location, remote_hybrid, level, posting_url, date_posted, jd_raw_text, jd_hash, simhash, keywords, url_canonical, status, compensation)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'new', $15)
+                   ON CONFLICT (jd_hash) WHERE jd_hash IS NOT NULL DO NOTHING
+                   RETURNING job_id`,
+                  [
+                    source,
+                    sourceJobId,
+                    company,
+                    title,
+                    location,
+                    remoteHybrid || "Unknown",
+                    classifyLevel(title),
+                    postingUrl,
+                    datePosted || new Date().toISOString().split("T")[0],
+                    jdText,
+                    jdHash,
+                    computeSimhash(jdText).toString(),
+                    JSON.stringify(extractKeywords(jdText)),
+                    postingUrl || null,
+                    compensation,
+                  ],
+                );
+
+                if (inserted.rows.length > 0) {
+                  await client.query("COMMIT");
+                  const jobId = Number(inserted.rows[0].job_id);
+                  logger?.info(`📥 [candidates/import] New job #${jobId}: ${company} — ${title}`);
+                  results.push({ job_id: jobId, created: true, duplicate: false, company, title });
+                  continue;
+                }
+
+                // Lost the jd_hash race to an importer under a different lock key.
+                const raced = await client.query(
+                  "SELECT job_id FROM jobs WHERE jd_hash = $1 LIMIT 1",
+                  [jdHash],
+                );
+                await client.query("COMMIT");
+                results.push({
+                  job_id: raced.rows.length > 0 ? Number(raced.rows[0].job_id) : null,
+                  created: false,
+                  duplicate: true,
+                  reason: "jd_hash",
+                  company,
+                  title,
+                });
+              } catch (txErr: any) {
+                await client.query("ROLLBACK").catch(() => {});
+                throw txErr;
+              } finally {
+                client.release();
+              }
+            } catch (err: any) {
+              if (err instanceof FieldTypeError) {
+                results.push({
+                  job_id: null, created: false, duplicate: false,
+                  error: err.message, company, title,
+                });
+                continue;
+              }
+              logger?.error(`❌ [candidates/import] ${company} — ${title}: ${err.message}`);
+              results.push({
+                job_id: null, created: false, duplicate: false,
+                error: err.message, company, title,
+              });
+            }
+          }
+
+          const imported = results.filter(r => r.created).length;
+          const duplicates = results.filter(r => r.duplicate).length;
+          const errors = results.filter(r => r.error).length;
+          logger?.info(`📥 [candidates/import] Done: ${imported} new, ${duplicates} duplicates, ${errors} errors`);
+
+          if (!isBatch) {
+            const only = results[0];
+            if (only.error) {
+              const badInput = /required|must be a string/.test(only.error);
+              return c.json({ success: false, error: only.error }, badInput ? 400 : 500);
+            }
+            return c.json({
+              success: true,
+              job_id: only.job_id,
+              created: only.created,
+              duplicate: only.duplicate,
+              reason: only.reason,
+            });
+          }
+
+          // A batch where nothing landed and everything errored is a failed batch,
+          // not a 200 — a caller gating retries on `success` must be able to see it.
+          const nothingLanded = imported === 0 && duplicates === 0 && errors > 0;
+          return c.json(
+            { success: !nothingLanded, imported, duplicates, errors, total: results.length, results },
+            nothingLanded ? 400 : 200,
+          );
+        } catch (err: any) {
+          logger?.error(`❌ [candidates/import] Error: ${err.message}`);
           return c.json({ error: err.message }, 500);
         }
       },
