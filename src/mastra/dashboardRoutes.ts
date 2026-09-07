@@ -2027,7 +2027,7 @@ CRITICAL INSTRUCTIONS:
             return c.json({ success: false, error: "Unauthorized" }, 401);
           }
 
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
 
           const body = await c.req.json().catch(() => null);
           if (!body || typeof body !== "object") {
