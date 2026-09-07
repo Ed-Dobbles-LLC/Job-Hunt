@@ -6,7 +6,22 @@ const pool = new pg.Pool({
   query_timeout: 30000,
 });
 
-export async function initDatabase(): Promise<void> {
+// Cold-start serialization: concurrent callers must not run the DDL below
+// at the same time. Postgres takes an AccessExclusiveLock per CREATE TABLE /
+// ALTER TABLE, and two sessions running these statements concurrently acquire
+// them in interleaved order and deadlock. Every caller awaits one shared
+// promise instead. A failed init is not cached, so a later attempt can retry.
+let initPromise: Promise<void> | null = null;
+
+export function initDatabase(): Promise<void> {
+  initPromise ??= runInitDatabase().catch((err) => {
+    initPromise = null;
+    throw err;
+  });
+  return initPromise;
+}
+
+async function runInitDatabase(): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query(`

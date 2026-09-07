@@ -24,7 +24,19 @@ import { loadInventoryStrict } from "../resume-engine/inventory-loader";
 /** Default candidate email when not specified in inventory profile */
 const DEFAULT_CANDIDATE_EMAIL = "Ed@Dobbles.AI";
 
-let dbReady = false;
+// Cold start is serialized on one shared promise. The previous per-route guard
+// checked a boolean flag and set it only after awaiting initDatabase(), so N
+// concurrent first-requests all saw the flag unset, all entered the guard, and
+// all ran the DDL at once — deadlocking on AccessExclusiveLock as Postgres
+// took table locks in interleaved order. Awaiting one promise runs the DDL once.
+let dbInit: Promise<void> | null = null;
+function ensureDb(): Promise<void> {
+  dbInit ??= initDatabase().catch((err) => {
+    dbInit = null; // don't cache a failure — let the next request retry
+    throw err;
+  });
+  return dbInit;
+}
 
 // In-memory generation log — survives within a single deploy
 interface GenLogEntry { ts: string; jobId: number; company: string; title: string; status: "running" | "success" | "error"; message: string; phase?: string; }
@@ -107,10 +119,7 @@ export function getDashboardRoutes() {
         logger?.info("📊 [dashboard] Fetching dashboard data");
         try {
           // Ensure tables exist on first request
-          if (!dbReady) {
-            await initDatabase();
-            dbReady = true;
-          }
+          await ensureDb();
           const jobCount = await query("SELECT COUNT(*) as count FROM jobs");
           const scoredCount = await query("SELECT COUNT(*) as count FROM scores");
           const artifactCount = await query("SELECT COUNT(*) as count FROM artifacts WHERE truth_pass = true");
@@ -667,10 +676,9 @@ export function getDashboardRoutes() {
         logger?.info(`🔄 [generate-packet] Starting for job_id=${jobId}`);
 
         try {
-          if (!dbReady) {
+          {
             try {
-              await initDatabase();
-              dbReady = true;
+              await ensureDb();
             } catch (dbErr: any) {
               logGen({ jobId, company: "?", title: "?", status: "error", message: `Database init failed: ${dbErr.message}`, phase: "db-init" });
               return c.json({ error: `Database initialization failed: ${dbErr.message}`, phase: "db-init" }, 500);
@@ -1169,7 +1177,7 @@ export function getDashboardRoutes() {
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
 
           // Find artifacts where the resume file doesn't exist on disk AND has no DB blob
           const allArtifacts = await query(`SELECT id, job_id, resume_docx_path, resume_docx IS NOT NULL as has_blob FROM artifacts`);
@@ -1210,7 +1218,7 @@ export function getDashboardRoutes() {
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
 
           const artifactCount = await query("SELECT COUNT(*) as count FROM artifacts");
           const total = parseInt(artifactCount.rows[0].count);
@@ -1240,7 +1248,7 @@ export function getDashboardRoutes() {
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
 
           const url = new URL(c.req.url);
           const all = url.searchParams.get("all") === "true";
@@ -1296,7 +1304,7 @@ export function getDashboardRoutes() {
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
 
           if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && !process.env.OPENAI_API_KEY) {
             return c.json({ error: "OpenAI API key not configured. Set OPENAI_API_KEY in Railway variables.", phase: "preflight" }, 400);
@@ -1445,7 +1453,7 @@ export function getDashboardRoutes() {
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const body = await c.req.json();
           const { company, title, location, posting_url, jd_text } = body;
 
@@ -1526,7 +1534,7 @@ ONLY use webSearch and enrich-jobs tools.`,
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const result = await query(`
             SELECT job_id, company, title, location, posting_url, status,
                    COALESCE(LENGTH(jd_raw_text), 0) as jd_length,
@@ -1550,7 +1558,7 @@ ONLY use webSearch and enrich-jobs tools.`,
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
 
           const body = await c.req.json().catch(() => ({}));
           const requestedIds: number[] | undefined = body.jobIds;
@@ -1704,7 +1712,7 @@ CRITICAL INSTRUCTIONS:
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const { enrichAllByUrl } = await import("./tools/urlScrapeEnricher");
           const result = await enrichAllByUrl(logger as any);
           return c.json({
@@ -1760,7 +1768,7 @@ CRITICAL INSTRUCTIONS:
       createHandler: async ({ mastra }: any) => async (c: any) => {
         const logger = mastra.getLogger();
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const url = new URL(c.req.url);
           const limit = parseInt(url.searchParams.get("limit") || "100");
 
@@ -1801,7 +1809,7 @@ CRITICAL INSTRUCTIONS:
         logger?.info(`📥 [import-excel] Starting file import`);
 
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
 
           const contentType = c.req.header("content-type") || "";
           let rows: Record<string, any>[] = [];
@@ -2100,7 +2108,7 @@ CRITICAL INSTRUCTIONS:
       method: "GET" as const,
       createHandler: async () => async (c: any) => {
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const rows = await query(`
             SELECT j.job_id, j.company, j.title, j.location, j.posting_url,
                    j.date_ingested, j.status AS job_status, j.user_action,
@@ -2149,7 +2157,7 @@ CRITICAL INSTRUCTIONS:
       method: "POST" as const,
       createHandler: async () => async (c: any) => {
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const body = await c.req.json().catch(() => ({}));
           const { company, title } = body;
           if (!company || !title) return c.json({ error: "company and title required" }, 400);
@@ -2232,7 +2240,7 @@ CRITICAL INSTRUCTIONS:
       method: "POST" as const,
       createHandler: async () => async (c: any) => {
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const body = await c.req.json().catch(() => ({}));
           const from = parseInt(body.from_job_id), into = parseInt(body.into_job_id);
           if (isNaN(from) || isNaN(into) || from === into) return c.json({ error: "valid distinct from_job_id and into_job_id required" }, 400);
@@ -2282,7 +2290,7 @@ CRITICAL INSTRUCTIONS:
       method: "POST" as const,
       createHandler: async () => async (c: any) => {
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const jobId = parseInt(c.req.param("id"));
           if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
           const body = await c.req.json().catch(() => ({}));
@@ -2337,7 +2345,7 @@ CRITICAL INSTRUCTIONS:
       method: "POST" as const,
       createHandler: async () => async (c: any) => {
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const jobId = parseInt(c.req.param("id"));
           if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
           const r = await query(`DELETE FROM applications WHERE job_id = $1 RETURNING job_id`, [jobId]);
@@ -2354,7 +2362,7 @@ CRITICAL INSTRUCTIONS:
       method: "POST" as const,
       createHandler: async () => async (c: any) => {
         try {
-          if (!dbReady) { await initDatabase(); dbReady = true; }
+          await ensureDb();
           const jobId = parseInt(c.req.param("id"));
           if (isNaN(jobId)) return c.json({ error: "Invalid job_id" }, 400);
           const body = await c.req.json().catch(() => ({}));
