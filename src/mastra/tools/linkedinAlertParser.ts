@@ -163,6 +163,20 @@ export function parseLinkedInAlert(email: RawEmailLike): ParsedAlertJob[] {
   if (anchors.length === 0) return [];
 
   const fromSubject = parseSubject(email.subject);
+
+  // A subject names exactly ONE posting. Falling back to it is only sound when
+  // the email carries only that posting (Shape A, or an HTML body whose
+  // newlines were collapsed). In a multi-posting digest the subject names one
+  // of N, so an unparsed block would inherit that company and be written under
+  // a real job id with the wrong employer — observed on real inbox mail, where
+  // Gusto and People In AI both came back as "VaynerX".
+  //
+  // A digest block we cannot read is dropped instead. parseLinkedInAlert then
+  // returns fewer rows, and an email we cannot read at all returns [] and goes
+  // to the agent fallback, which is where an unrecognized shape belongs.
+  const subjectDescribesWholeEmail =
+    new Set(anchors.map((a) => a.jobId)).size === 1;
+
   const hasLines = /\n/.test(body);
   const out: ParsedAlertJob[] = [];
   const seen = new Set<string>();
@@ -228,8 +242,10 @@ export function parseLinkedInAlert(email: RawEmailLike): ParsedAlertJob[] {
 
     // Shape A, or an HTML body whose newlines were collapsed: fall back to the
     // subject for title/company and scan the block for a location.
-    if (!title && fromSubject.title) title = fromSubject.title;
-    if (!company && fromSubject.company) company = fromSubject.company;
+    if (subjectDescribesWholeEmail) {
+      if (!title && fromSubject.title) title = fromSubject.title;
+      if (!company && fromSubject.company) company = fromSubject.company;
+    }
     if (!location) {
       const loc = block.match(
         /([A-Z][A-Za-z .'\/-]+,\s*(?:[A-Z]{2}\b|[A-Z][a-z]+))(?:\s*\((Remote|Hybrid|On-site)\))?|United States \(Remote\)/,
@@ -246,7 +262,11 @@ export function parseLinkedInAlert(email: RawEmailLike): ParsedAlertJob[] {
       company,
       location,
       compensation:
-        extractSalary(block) || fromSubject.compensation || extractSalary(email.subject) || "",
+        extractSalary(block) ||
+        (subjectDescribesWholeEmail
+          ? fromSubject.compensation || extractSalary(email.subject)
+          : "") ||
+        "",
       posting_url: a.url,
       source: "linkedin",
       source_message_id: email.id,

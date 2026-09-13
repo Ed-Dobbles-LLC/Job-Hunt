@@ -235,6 +235,133 @@ describe("linkedinAlertParser", () => {
     expect(jobs).toHaveLength(0);
     expect(unmatched.map((e) => e.id)).toEqual(["msg-stranger"]);
   });
+
+  // ── Subject bleed ──────────────────────────────────────────────────────────
+  //
+  // A digest subject names ONE of its N postings. The subject-derived fallback
+  // exists for single-posting mail; applied inside a digest it stamps that one
+  // company onto every block the structural parse could not read. Those blocks
+  // still carry a real, distinct job id, so they survive dedupe and land
+  // downstream as genuine-looking rows under the wrong employer.
+  //
+  // Seen on real inbox mail: a VaynerX-subject digest returned Gusto and
+  // People In AI as "VaynerX".
+
+  /** A digest whose subject names VaynerX; the Gusto and People In AI blocks
+   *  lack the "Company · Location" line, so the structural parse cannot read
+   *  them. */
+  const vaynerxDigest: RawEmailLike = {
+    id: "msg-vaynerx",
+    subject: '"vice president analytics": VaynerX - VP, Data & Analytics posted on 9/12/26',
+    from: "LinkedIn Job Alerts <jobalerts-noreply@linkedin.com>",
+    date: "2026-09-12T12:05:00Z",
+    body: [
+      "3 new jobs match your alert for vice president analytics",
+      "",
+      "VP, Data & Analytics",
+      "VaynerX · New York, NY",
+      "Actively recruiting",
+      "https://www.linkedin.com/comm/jobs/view/4456259001/?trk=eml-x&lipi=urn%3Ali%3Apage%3Aemail",
+      "",
+      "Head of Data",
+      "Gusto",
+      "https://www.linkedin.com/comm/jobs/view/4456259002/?trk=eml-x&lipi=urn%3Ali%3Apage%3Aemail",
+      "",
+      "Director of AI",
+      "People In AI",
+      "https://www.linkedin.com/comm/jobs/view/4456259003/?trk=eml-x&lipi=urn%3Ali%3Apage%3Aemail",
+      "",
+      "See all jobs",
+    ].join("\n"),
+  };
+
+  it("never stamps a digest subject's company onto a posting it could not read", () => {
+    const jobs = parseLinkedInAlert(vaynerxDigest);
+
+    // Only the block that actually named its own company survives.
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      linkedinJobId: "4456259001",
+      company: "VaynerX",
+      title: "VP, Data & Analytics",
+    });
+
+    // The regression itself: no OTHER posting may come back as VaynerX.
+    const bleed = jobs.filter(
+      (j) => j.linkedinJobId !== "4456259001" && /VaynerX/i.test(j.company),
+    );
+    expect(bleed).toEqual([]);
+
+    // And the unreadable ids must not appear at all — dropping them is correct,
+    // relabelling them is the corruption.
+    const ids = jobs.map((j) => j.linkedinJobId);
+    expect(ids).not.toContain("4456259002");
+    expect(ids).not.toContain("4456259003");
+  });
+
+  it("does not lend a digest subject's salary to a posting that states none", () => {
+    const email: RawEmailLike = {
+      ...vaynerxDigest,
+      id: "msg-vaynerx-comp",
+      subject:
+        '"vice president analytics": VaynerX - VP, Data & Analytics posted on 9/12/26 - $315,000/year',
+      body: vaynerxDigest.body.replace(
+        "VaynerX · New York, NY",
+        "VaynerX · New York, NY\nSecond Co · Boston, MA",
+      ),
+    };
+
+    for (const job of parseLinkedInAlert(email)) {
+      // No block here states a salary, so none may carry one.
+      expect(job.compensation, `${job.company} borrowed a salary`).toBe("");
+    }
+  });
+
+  it("hands a digest it cannot read to the agent rather than inventing rows", () => {
+    const unreadable: RawEmailLike = {
+      ...vaynerxDigest,
+      id: "msg-unreadable",
+      body: [
+        "3 new jobs match your alert for vice president analytics",
+        "",
+        "Head of Data",
+        "Gusto",
+        "https://www.linkedin.com/comm/jobs/view/4456259002/?trk=eml-x",
+        "",
+        "Director of AI",
+        "People In AI",
+        "https://www.linkedin.com/comm/jobs/view/4456259003/?trk=eml-x",
+      ].join("\n"),
+    };
+
+    const { jobs, unmatched } = parseAlertEmails([unreadable]);
+    expect(jobs).toEqual([]);
+    expect(unmatched.map((e) => e.id)).toEqual(["msg-unreadable"]);
+  });
+
+  it("still falls back to the subject when the email carries one posting", () => {
+    // The case the fallback was written for: a text/html body whose newlines
+    // the Gmail client collapsed. One posting, so the subject speaks for it.
+    const collapsed: RawEmailLike = {
+      id: "msg-collapsed",
+      subject: "VP, Data & Analytics at Acme Corp: up to $315K/year",
+      from: "LinkedIn <jobs-noreply@linkedin.com>",
+      date: "2026-09-12T12:05:00Z",
+      body:
+        "Your job alert for vice president analytics  Acme Corp  Chicago, IL  " +
+        "Actively recruiting  View job: " +
+        "https://www.linkedin.com/comm/jobs/view/4456259100/?trk=eml-x  Unsubscribe",
+    };
+
+    const jobs = parseLinkedInAlert(collapsed);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      linkedinJobId: "4456259100",
+      title: "VP, Data & Analytics",
+      company: "Acme Corp",
+      compensation: "$315K/year",
+    });
+  });
 });
 
 // ── Token budgeting ──────────────────────────────────────────────────────────
