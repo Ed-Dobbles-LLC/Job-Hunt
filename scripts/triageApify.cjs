@@ -13,6 +13,19 @@ const ENGINEERING = /\bengineer|architect|developer\b/i;
 const GOVERNANCE = /governance|master data/i;
 const COMP_FLOOR = 175000; // employer-stated only; predicted salary is ignored
 
+// --- Ed's hard gates -------------------------------------------------------
+// LOW-LEVEL: anything that is not VP/SVP/EVP/Chief/Head dies.
+// MN-metro rows are EXEMPT from this gate — the Minneapolis Director exception
+// is deliberate (local Director titles are in scope). Do not "fix" it.
+const LEVEL_OK = /\b(VP|SVP|EVP|Chief|Head)\b|\b(?:senior |executive )?vice president\b/i;
+const MN_METRO = /\bMN\b|\bMinnesota\b/i;
+// NON-US: foreign locations die. country is authoritative when present.
+const US_COUNTRY = /^(us|usa|united states(?: of america)?)$/i;
+const US_STATE = /,\s*(A[KLRZ]|C[AOT]|D[CE]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|P[AR]|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])\b/i;
+const US_LOC = /united states|,\s*usa?\b/i;
+const isUS = (r) => (r.country ? US_COUNTRY.test(String(r.country).trim())
+                               : US_STATE.test(r.location || "") || US_LOC.test(r.location || ""));
+
 const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const j = async (u) => (await fetch(u)).json();
 
@@ -48,10 +61,13 @@ const j = async (u) => (await fetch(u)).json();
     const dupKey = `${k}|${norm(r.title)}`;
     if (seen.has(dupKey)) flags.push("DUP-IN-RUN"); else seen.add(dupKey);
     if (!r.salaryIsPredicted && r.salaryMin && r.salaryMin < COMP_FLOOR) flags.push("LOW-COMP");
+    const loc = r.location || "";
+    if (!MN_METRO.test(loc) && !LEVEL_OK.test(r.title || "")) flags.push("LOW-LEVEL");
+    if (!isUS(r)) flags.push("NON-US");
     return { r, flags };
   });
 
-  const hard = (f) => f.some((x) => /^(AGENCY|ENG|GOV|APPLIED|DUP\(|DUP-IN-RUN|LOW-COMP)/.test(x));
+  const hard = (f) => f.some((x) => /^(AGENCY|ENG|GOV|APPLIED|DUP\(|DUP-IN-RUN|LOW-COMP|LOW-LEVEL|NON-US)/.test(x));
   const pad = (s, n) => ((s || "") + " ".repeat(n)).slice(0, n);
   console.log(pad("COMPANY", 26) + pad("TITLE", 42) + pad("SENIOR", 11) + pad("SALARY", 22) + "FLAGS");
   console.log("-".repeat(140));
