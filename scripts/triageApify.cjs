@@ -13,7 +13,7 @@ const ENGINEERING = /\bengineer|architect|developer\b/i;
 const GOVERNANCE = /governance|master data/i;
 const COMP_FLOOR = 175000; // employer-stated only; predicted salary is ignored
 
-// --- Ed's hard gates -------------------------------------------------------
+// --- Ed's hard gates ------------------------------------------------------------
 // LOW-LEVEL: anything that is not VP/SVP/EVP/Chief/Head dies.
 // MN-metro rows are EXEMPT from this gate — the Minneapolis Director exception
 // is deliberate (local Director titles are in scope). Do not "fix" it.

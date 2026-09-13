@@ -85,13 +85,67 @@ const NOISE_LINE =
  * Lines that decorate the posting above them rather than naming it.
  * Remote/hybrid annotations are kept and folded back into the location.
  */
-const MODIFIER_LINE =
-  /^(?:remote(?: ok)?|hybrid|on-?site|actively recruiting|be an early applicant|easy apply|promoted|top applicant|\d+ (?:school )?alum\w*|\d+\+? connections?|viewed|new)$/i;
+const MODIFIER_LINE = new RegExp(
+  "^(?:" +
+    [
+      "remote(?: ok)?",
+      "hybrid",
+      "on-?site",
+      "actively recruiting",
+      "be an early applicant",
+      "easy apply",
+      "promoted",
+      "top applicant",
+      "\\d+ (?:school )?alum\\w*",
+      "\\d+\\+? connections?",
+      "viewed",
+      "new",
+      // Observed on live "Job Alerts" mail and absent from the first cut, which
+      // is why a real message parsed to zero jobs: these lines were never
+      // peeled, so the tail was never Title / Company / Location.
+      "(?:high|good|fair|low) experience match",
+      "experience match",
+      "this company is actively hiring",
+      "actively hiring",
+      "fast growing",
+      "apply with resume (?:&|and) profile",
+      "your profile matches this job",
+      "\\d+ (?:applicants?|people clicked apply)",
+    ].join("|") +
+    ")$",
+  "i",
+);
 
 const WORKPLACE_MODIFIER = /^(?:remote(?: ok)?|hybrid|on-?site)$/i;
 
-const LOCATION_LINE =
-  /^(?:[A-Za-z][A-Za-z .'\/-]*,\s*(?:[A-Z]{2}|[A-Z][a-z]+(?:\s[A-Z][a-z]+)*)|United States|Remote|United States \(Remote\)|[A-Za-z .'\/-]+ \((?:Remote|Hybrid|On-site)\))$/;
+/**
+ * Location lines, in the shapes the live label actually delivers:
+ *   "New York, NY" / "Dublin, Ohio"      — city, state
+ *   "United States", "Remote"            — country / workplace only
+ *   "Chicago, IL (Hybrid)"               — with a workplace suffix
+ *   "San Francisco Bay Area"             — metro area, no comma
+ *   "Austin"                             — bare city, no comma
+ *
+ * The last two are why real postings fell through to the subject fallback. They
+ * are permissive by necessity: a bare capitalised phrase is indistinguishable
+ * from a company name in isolation, so this regex is only ever consulted
+ * positionally (the last line of an already modifier-stripped block).
+ */
+const LOCATION_LINE = new RegExp(
+  "^(?:" +
+    [
+      "[A-Za-z][A-Za-z .'/-]*,\\s*(?:[A-Z]{2}|[A-Z][a-z]+(?:\\s[A-Z][a-z]+)*)",
+      "United States",
+      "Remote",
+      "United States \\(Remote\\)",
+      "[A-Za-z .'/-]+ \\((?:Remote|Hybrid|On-site)\\)",
+      // Metro areas: "San Francisco Bay Area", "Greater Chicago Area".
+      "(?:Greater\\s+)?[A-Z][A-Za-z.'-]*(?:[ -][A-Z][A-Za-z.'-]*){0,3}\\s+(?:Bay\\s+)?(?:Metropolitan\\s+Area|Metro(?:politan)?\\s+Area|Area)",
+      // Bare city: "Austin", "New York City".
+      "[A-Z][A-Za-z.'-]*(?:[ -][A-Z][A-Za-z.'-]*){0,2}",
+    ].join("|") +
+    ")$",
+);
 
 const SALARY =
   /\$\s?\d[\d,.]*\s?[KkMm]?(?:\s*(?:-|–|to)\s*\$?\s?\d[\d,.]*\s?[KkMm]?)?(?:\s*(?:\/|per\s)\s?(?:year|yr|hour|hr))?/;
@@ -163,20 +217,10 @@ export function parseLinkedInAlert(email: RawEmailLike): ParsedAlertJob[] {
   if (anchors.length === 0) return [];
 
   const fromSubject = parseSubject(email.subject);
-
-  // A subject names exactly ONE posting. Falling back to it is only sound when
-  // the email carries only that posting (Shape A, or an HTML body whose
-  // newlines were collapsed). In a multi-posting digest the subject names one
-  // of N, so an unparsed block would inherit that company and be written under
-  // a real job id with the wrong employer — observed on real inbox mail, where
-  // Gusto and People In AI both came back as "VaynerX".
-  //
-  // A digest block we cannot read is dropped instead. parseLinkedInAlert then
-  // returns fewer rows, and an email we cannot read at all returns [] and goes
-  // to the agent fallback, which is where an unrecognized shape belongs.
-  const subjectDescribesWholeEmail =
-    new Set(anchors.map((a) => a.jobId)).size === 1;
-
+  // Count DISTINCT job ids, not anchors: a single-posting alert commonly repeats
+  // its URL (an inline "View job:" link plus a button), which is still one
+  // posting and must keep the fallback.
+  const singlePosting = new Set(anchors.map((a) => a.jobId)).size === 1;
   const hasLines = /\n/.test(body);
   const out: ParsedAlertJob[] = [];
   const seen = new Set<string>();
@@ -242,7 +286,15 @@ export function parseLinkedInAlert(email: RawEmailLike): ParsedAlertJob[] {
 
     // Shape A, or an HTML body whose newlines were collapsed: fall back to the
     // subject for title/company and scan the block for a location.
-    if (subjectDescribesWholeEmail) {
+    //
+    // ONLY legitimate when the email carries exactly one posting. The subject
+    // names one job; in a multi-posting digest it names the FIRST one, so
+    // applying it per-anchor stamped that identity onto every block that failed
+    // to parse. Those rows kept their own valid, distinct job ids, so the
+    // job-id dedupe below could not catch them and three different postings
+    // were written to the tracker as the same role at the same company.
+    // A dropped row is recoverable; a confidently mislabelled one is not.
+    if (singlePosting) {
       if (!title && fromSubject.title) title = fromSubject.title;
       if (!company && fromSubject.company) company = fromSubject.company;
     }
@@ -261,9 +313,11 @@ export function parseLinkedInAlert(email: RawEmailLike): ParsedAlertJob[] {
       title,
       company,
       location,
+      // Same rule as title/company: a salary quoted in the subject belongs to
+      // the subject's posting only, never to its siblings in a digest.
       compensation:
         extractSalary(block) ||
-        (subjectDescribesWholeEmail
+        (singlePosting
           ? fromSubject.compensation || extractSalary(email.subject)
           : "") ||
         "",

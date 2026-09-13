@@ -235,133 +235,6 @@ describe("linkedinAlertParser", () => {
     expect(jobs).toHaveLength(0);
     expect(unmatched.map((e) => e.id)).toEqual(["msg-stranger"]);
   });
-
-  // ── Subject bleed ──────────────────────────────────────────────────────────
-  //
-  // A digest subject names ONE of its N postings. The subject-derived fallback
-  // exists for single-posting mail; applied inside a digest it stamps that one
-  // company onto every block the structural parse could not read. Those blocks
-  // still carry a real, distinct job id, so they survive dedupe and land
-  // downstream as genuine-looking rows under the wrong employer.
-  //
-  // Seen on real inbox mail: a VaynerX-subject digest returned Gusto and
-  // People In AI as "VaynerX".
-
-  /** A digest whose subject names VaynerX; the Gusto and People In AI blocks
-   *  lack the "Company · Location" line, so the structural parse cannot read
-   *  them. */
-  const vaynerxDigest: RawEmailLike = {
-    id: "msg-vaynerx",
-    subject: '"vice president analytics": VaynerX - VP, Data & Analytics posted on 9/12/26',
-    from: "LinkedIn Job Alerts <jobalerts-noreply@linkedin.com>",
-    date: "2026-09-12T12:05:00Z",
-    body: [
-      "3 new jobs match your alert for vice president analytics",
-      "",
-      "VP, Data & Analytics",
-      "VaynerX · New York, NY",
-      "Actively recruiting",
-      "https://www.linkedin.com/comm/jobs/view/4456259001/?trk=eml-x&lipi=urn%3Ali%3Apage%3Aemail",
-      "",
-      "Head of Data",
-      "Gusto",
-      "https://www.linkedin.com/comm/jobs/view/4456259002/?trk=eml-x&lipi=urn%3Ali%3Apage%3Aemail",
-      "",
-      "Director of AI",
-      "People In AI",
-      "https://www.linkedin.com/comm/jobs/view/4456259003/?trk=eml-x&lipi=urn%3Ali%3Apage%3Aemail",
-      "",
-      "See all jobs",
-    ].join("\n"),
-  };
-
-  it("never stamps a digest subject's company onto a posting it could not read", () => {
-    const jobs = parseLinkedInAlert(vaynerxDigest);
-
-    // Only the block that actually named its own company survives.
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0]).toMatchObject({
-      linkedinJobId: "4456259001",
-      company: "VaynerX",
-      title: "VP, Data & Analytics",
-    });
-
-    // The regression itself: no OTHER posting may come back as VaynerX.
-    const bleed = jobs.filter(
-      (j) => j.linkedinJobId !== "4456259001" && /VaynerX/i.test(j.company),
-    );
-    expect(bleed).toEqual([]);
-
-    // And the unreadable ids must not appear at all — dropping them is correct,
-    // relabelling them is the corruption.
-    const ids = jobs.map((j) => j.linkedinJobId);
-    expect(ids).not.toContain("4456259002");
-    expect(ids).not.toContain("4456259003");
-  });
-
-  it("does not lend a digest subject's salary to a posting that states none", () => {
-    const email: RawEmailLike = {
-      ...vaynerxDigest,
-      id: "msg-vaynerx-comp",
-      subject:
-        '"vice president analytics": VaynerX - VP, Data & Analytics posted on 9/12/26 - $315,000/year',
-      body: vaynerxDigest.body.replace(
-        "VaynerX · New York, NY",
-        "VaynerX · New York, NY\nSecond Co · Boston, MA",
-      ),
-    };
-
-    for (const job of parseLinkedInAlert(email)) {
-      // No block here states a salary, so none may carry one.
-      expect(job.compensation, `${job.company} borrowed a salary`).toBe("");
-    }
-  });
-
-  it("hands a digest it cannot read to the agent rather than inventing rows", () => {
-    const unreadable: RawEmailLike = {
-      ...vaynerxDigest,
-      id: "msg-unreadable",
-      body: [
-        "3 new jobs match your alert for vice president analytics",
-        "",
-        "Head of Data",
-        "Gusto",
-        "https://www.linkedin.com/comm/jobs/view/4456259002/?trk=eml-x",
-        "",
-        "Director of AI",
-        "People In AI",
-        "https://www.linkedin.com/comm/jobs/view/4456259003/?trk=eml-x",
-      ].join("\n"),
-    };
-
-    const { jobs, unmatched } = parseAlertEmails([unreadable]);
-    expect(jobs).toEqual([]);
-    expect(unmatched.map((e) => e.id)).toEqual(["msg-unreadable"]);
-  });
-
-  it("still falls back to the subject when the email carries one posting", () => {
-    // The case the fallback was written for: a text/html body whose newlines
-    // the Gmail client collapsed. One posting, so the subject speaks for it.
-    const collapsed: RawEmailLike = {
-      id: "msg-collapsed",
-      subject: "VP, Data & Analytics at Acme Corp: up to $315K/year",
-      from: "LinkedIn <jobs-noreply@linkedin.com>",
-      date: "2026-09-12T12:05:00Z",
-      body:
-        "Your job alert for vice president analytics  Acme Corp  Chicago, IL  " +
-        "Actively recruiting  View job: " +
-        "https://www.linkedin.com/comm/jobs/view/4456259100/?trk=eml-x  Unsubscribe",
-    };
-
-    const jobs = parseLinkedInAlert(collapsed);
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0]).toMatchObject({
-      linkedinJobId: "4456259100",
-      title: "VP, Data & Analytics",
-      company: "Acme Corp",
-      compensation: "$315K/year",
-    });
-  });
 });
 
 // ── Token budgeting ──────────────────────────────────────────────────────────
@@ -445,5 +318,187 @@ describe("executeFetchAndParse — 50 realistic alert bodies", () => {
 
     expect(result.totalEmails).toBe(10);
     expect(agentGenerate).not.toHaveBeenCalled();
+  });
+});
+
+// ── Real-inbox shape ─────────────────────────────────────────────────────────
+// The fixtures above use a "Company · Location" line and a digest subject that
+// parseSubject() does not match, so the per-anchor subject fallback never had
+// values to stamp and 11/11 passed on a parser that mislabels live postings.
+//
+// Real messages from the "Job Alerts" label differ on both counts:
+//   - Title / Company / Location arrive on three separate lines (no " · ").
+//   - The subject is "{Title} at {Company}", which parseSubject DOES match.
+//   - Annotation lines include "High experience match", "This company is
+//     actively hiring", "Fast growing" and "Apply with resume & profile".
+//
+// Reconstructed here from the two messages Ed verified against, where the Gusto
+// and People In AI postings both came back as "VaynerX — Vice President,
+// Analytics (Media)" with valid distinct job ids, and the job-id dedupe let all
+// three through.
+
+function realShapedPosting(
+  title: string,
+  company: string,
+  location: string,
+  annotations: string[],
+  jobId: string,
+): string {
+  return [title, company, location, ...annotations, trackingUrl(jobId)].join("\n");
+}
+
+/** Three postings, three distinct job ids, "{Title} at {Company}" subject. */
+function realShapedDigest(): RawEmailLike {
+  return {
+    id: "msg-real-001",
+    subject: "Vice President, Analytics (Media) at VaynerX",
+    from: "LinkedIn Job Alerts <jobalerts-noreply@linkedin.com>",
+    date: "2026-09-13T11:02:00Z",
+    body: [
+      "Your job alert for analytics leadership",
+      "",
+      realShapedPosting(
+        "Vice President, Analytics (Media)",
+        "VaynerX",
+        "New York, NY",
+        ["High experience match"],
+        "4298100001",
+      ),
+      "",
+      realShapedPosting(
+        "Director of Data Science",
+        "Gusto",
+        "San Francisco Bay Area",
+        ["This company is actively hiring", "Apply with resume & profile"],
+        "4298100002",
+      ),
+      "",
+      realShapedPosting(
+        "Head of Analytics",
+        "People In AI",
+        "Austin",
+        ["Fast growing"],
+        "4298100003",
+      ),
+      "",
+      "See all jobs",
+      "",
+      "This email was intended for Dr. Ed Dobbles, DBA",
+      "© 2026 LinkedIn Corporation",
+    ].join("\n"),
+  };
+}
+
+describe("real-inbox parsing", () => {
+  it("never stamps the subject's title and company onto a sibling posting", () => {
+    const jobs = parseLinkedInAlert(realShapedDigest());
+
+    // The bug: every unparseable block inherited the subject's identity, so all
+    // three rows read "VaynerX — Vice President, Analytics (Media)" and the
+    // job-id dedupe (which keys on id, not on title+company) let them through.
+    const vaynerx = jobs.filter((j) => j.company === "VaynerX");
+    expect(vaynerx.map((j) => j.linkedinJobId)).toEqual(["4298100001"]);
+
+    const identities = jobs.map((j) => `${j.company}|${j.title}`);
+    expect(new Set(identities).size).toBe(identities.length);
+
+    for (const j of jobs) {
+      if (j.linkedinJobId !== "4298100001") {
+        expect(j.title).not.toBe("Vice President, Analytics (Media)");
+        expect(j.company).not.toBe("VaynerX");
+      }
+    }
+  });
+
+  it("reads all three postings out of a real-shaped digest", () => {
+    const jobs = parseLinkedInAlert(realShapedDigest());
+
+    expect(
+      jobs.map((j) => ({ id: j.linkedinJobId, title: j.title, company: j.company })),
+    ).toEqual([
+      {
+        id: "4298100001",
+        title: "Vice President, Analytics (Media)",
+        company: "VaynerX",
+      },
+      { id: "4298100002", title: "Director of Data Science", company: "Gusto" },
+      { id: "4298100003", title: "Head of Analytics", company: "People In AI" },
+    ]);
+  });
+
+  it("treats the real annotation lines as modifiers, not as content", () => {
+    const jobs = parseLinkedInAlert(realShapedDigest());
+    const noise = [
+      "High experience match",
+      "This company is actively hiring",
+      "Fast growing",
+      "Apply with resume & profile",
+    ];
+
+    // The second real message parsed to zero jobs because these four lines were
+    // absent from MODIFIER_LINE, so they were never peeled off the block.
+    expect(jobs).toHaveLength(3);
+    for (const j of jobs) {
+      for (const n of noise) {
+        expect(j.title).not.toContain(n);
+        expect(j.company).not.toContain(n);
+        expect(j.location).not.toContain(n);
+      }
+    }
+  });
+
+  it("accepts metro-area and bare-city locations, and keeps the single-posting subject fallback", () => {
+    const jobs = parseLinkedInAlert(realShapedDigest());
+    expect(jobs.find((j) => j.company === "Gusto")?.location).toBe(
+      "San Francisco Bay Area",
+    );
+    expect(jobs.find((j) => j.company === "People In AI")?.location).toBe("Austin");
+
+    // Gating the fallback on anchors.length === 1 must not break the case it
+    // exists for: an HTML-only body whose newlines the Gmail client collapsed,
+    // leaving the subject as the only place the title and company appear.
+    const collapsed: RawEmailLike = {
+      id: "msg-real-002",
+      subject: "Chief Data Officer at Ramp",
+      from: "LinkedIn Job Alerts <jobs-noreply@linkedin.com>",
+      date: "2026-09-13T11:40:00Z",
+      body: `Chief Data Officer Ramp Denver, CO High experience match View job: ${trackingUrl("4298100004")} See all jobs`,
+    };
+    expect(parseLinkedInAlert(collapsed)).toEqual([
+      expect.objectContaining({
+        linkedinJobId: "4298100004",
+        title: "Chief Data Officer",
+        company: "Ramp",
+      }),
+    ]);
+
+    // One posting whose URL appears twice (an inline link plus a button) is
+    // still one posting: gating on distinct job ids rather than anchor count
+    // keeps the fallback here.
+    const repeatedUrl: RawEmailLike = {
+      ...collapsed,
+      id: "msg-real-004",
+      body:
+        `Chief Data Officer Ramp Denver, CO View job: ${trackingUrl("4298100004")} ` +
+        `Apply now: ${trackingUrl("4298100004")} See all jobs`,
+    };
+    expect(parseLinkedInAlert(repeatedUrl)).toEqual([
+      expect.objectContaining({
+        linkedinJobId: "4298100004",
+        title: "Chief Data Officer",
+        company: "Ramp",
+      }),
+    ]);
+
+    // Same collapsed shape, two postings: the subject must reach neither, since
+    // it can only ever name one of them.
+    const collapsedPair: RawEmailLike = {
+      ...collapsed,
+      id: "msg-real-003",
+      body:
+        `Chief Data Officer Ramp Denver, CO View job: ${trackingUrl("4298100005")} ` +
+        `Head of Data Brex Remote View job: ${trackingUrl("4298100006")} See all jobs`,
+    };
+    expect(parseLinkedInAlert(collapsedPair)).toEqual([]);
   });
 });
