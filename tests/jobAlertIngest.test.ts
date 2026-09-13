@@ -472,6 +472,24 @@ describe("real-inbox parsing", () => {
       }),
     ]);
 
+    // One posting whose URL appears twice (an inline link plus a button) is
+    // still one posting: gating on distinct job ids rather than anchor count
+    // keeps the fallback here.
+    const repeatedUrl: RawEmailLike = {
+      ...collapsed,
+      id: "msg-real-004",
+      body:
+        `Chief Data Officer Ramp Denver, CO View job: ${trackingUrl("4298100004")} ` +
+        `Apply now: ${trackingUrl("4298100004")} See all jobs`,
+    };
+    expect(parseLinkedInAlert(repeatedUrl)).toEqual([
+      expect.objectContaining({
+        linkedinJobId: "4298100004",
+        title: "Chief Data Officer",
+        company: "Ramp",
+      }),
+    ]);
+
     // Same collapsed shape, two postings: the subject must reach neither, since
     // it can only ever name one of them.
     const collapsedPair: RawEmailLike = {

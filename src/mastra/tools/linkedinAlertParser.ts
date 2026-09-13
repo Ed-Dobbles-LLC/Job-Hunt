@@ -217,7 +217,10 @@ export function parseLinkedInAlert(email: RawEmailLike): ParsedAlertJob[] {
   if (anchors.length === 0) return [];
 
   const fromSubject = parseSubject(email.subject);
-  const singlePosting = anchors.length === 1;
+  // Count DISTINCT job ids, not anchors: a single-posting alert commonly repeats
+  // its URL (an inline "View job:" link plus a button), which is still one
+  // posting and must keep the fallback.
+  const singlePosting = new Set(anchors.map((a) => a.jobId)).size === 1;
   const hasLines = /\n/.test(body);
   const out: ParsedAlertJob[] = [];
   const seen = new Set<string>();
