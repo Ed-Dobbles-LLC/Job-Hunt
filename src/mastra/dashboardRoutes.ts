@@ -292,11 +292,17 @@ export function getDashboardRoutes() {
         logger?.info("🚀 [dashboard] Triggering workflow directly (no Inngest)");
 
         // Return immediately, run workflow in background
-        const runPromise = runWorkflowDirectly(mastra).then((result) => {
-          logger?.info(`✅ [dashboard] Workflow completed: ${result.summary}`);
-        }).catch((err) => {
-          logger?.error(`❌ [dashboard] Workflow failed: ${err.message}`);
-        });
+        const runPromise = runWorkflowDirectly(mastra)
+          .then((result) => {
+            if (result.success) {
+              logger?.info(`✅ [dashboard] Workflow completed: ${result.summary}`);
+            } else {
+              logger?.error(`❌ [dashboard] Workflow failed: ${result.summary}`);
+            }
+          })
+          .catch((err) => {
+            logger?.error(`❌ [dashboard] Workflow threw: ${err.message}`);
+          });
 
         // Don't await — let it run in background
         return c.json({ success: true, message: "Workflow started in background" });
