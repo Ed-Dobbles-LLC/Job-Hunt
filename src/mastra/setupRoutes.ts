@@ -338,6 +338,13 @@ function getSetupWizardHtml(): string {
     .oauth-steps a { color:var(--blue); text-decoration:none; }
     .oauth-steps a:hover { text-decoration:underline; }
     .code-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; font-family:monospace; font-size:12px; word-break:break-all; margin:8px 0; }
+    .header-nav { margin-top:14px; }
+    .header-nav a {
+      color:var(--accent, #4a9eff); text-decoration:none; font-size:14px; font-weight:500;
+      border:1px solid currentColor; border-radius:6px; padding:7px 16px;
+      display:inline-block; opacity:.9;
+    }
+    .header-nav a:hover { opacity:1; }
     .finish-section { text-align:center; margin-top:32px; }
     .finish-section .btn { font-size:16px; padding:14px 40px; }
     .spinner { display:inline-block; width:14px; height:14px; border:2px solid transparent; border-top-color:currentColor; border-radius:50%; animation:spin 0.6s linear infinite; vertical-align:middle; margin-right:6px; }
@@ -351,6 +358,16 @@ function getSetupWizardHtml(): string {
     <div class="header">
       <h1>Job Hunt Setup</h1>
       <p>Let's get you configured in a few minutes. Only OpenAI is required to start.</p>
+      <!--
+        Persistent escape hatch to the results. The "Go to Dashboard" button lives in
+        #finish-section, which is display:none until a step completes in THIS page
+        load. Anyone returning to /setup after configuring (i.e. every visit after
+        the first) saw a page with no way out. Nav belongs in the chrome, not behind
+        a completion state.
+      -->
+      <p class="header-nav">
+        <a href="/dashboard">&larr; View results on the dashboard</a>
+      </p>
     </div>
 
     <!-- Step 1: OpenAI -->
