@@ -10,8 +10,22 @@ import { extractJDRequirementsTool } from "../tools/extractJDRequirementsTool";
 import { generateVerifiedPacketTool } from "../tools/generateVerifiedPacketTool";
 import { buildOutputTool } from "../tools/buildOutputTool";
 import { contactDiscoveryTool } from "../tools/contactDiscoveryTool";
+import { parseJobsTool } from "../tools/parseJobsTool";
+import {
+  parseAlertEmails,
+  chunkByTokens,
+  estimateTokens,
+  type RawEmailLike,
+} from "../tools/linkedinAlertParser";
 
-async function executeFetchAndParse({ mastra }: { mastra?: any; inputData?: any }) {
+// How many messages one run pulls from the label.
+const GMAIL_FETCH_LIMIT = Number(process.env.GMAIL_FETCH_LIMIT || 50);
+// Hard ceiling on emails parsed in one run, applied after the processed filter.
+const PARSE_MAX_EMAILS = Number(process.env.PARSE_MAX_EMAILS || 50);
+// Per-agent-call token budget for the fallback path. Model limit is 128K.
+const AGENT_TOKEN_BUDGET = Number(process.env.AGENT_TOKEN_BUDGET || 90000);
+
+export async function executeFetchAndParse({ mastra }: { mastra?: any; inputData?: any }) {
   const logger = mastra?.getLogger();
   logger?.info("🚀 [Step 1] Starting email fetch and parse");
 
@@ -40,7 +54,7 @@ async function executeFetchAndParse({ mastra }: { mastra?: any; inputData?: any 
     logger?.info("📧 [Step 1] Fetching from Gmail");
     const { fetchEmailsFromLabel } = await import("../tools/gmailClient");
     const gmailLabel = process.env.GMAIL_LABEL || "Job Alerts";
-    emailsData = await fetchEmailsFromLabel(gmailLabel, 50);
+    emailsData = await fetchEmailsFromLabel(gmailLabel, GMAIL_FETCH_LIMIT);
   }
 
   if (emailsData.length === 0) {
@@ -70,6 +84,16 @@ async function executeFetchAndParse({ mastra }: { mastra?: any; inputData?: any 
     );
   }
 
+  // Hard cap on how much backlog one run will chew through. On a cold
+  // processed_gmail_ids table the label holds hundreds of messages; without this
+  // the run's cost is whatever has accumulated since the table was last written.
+  if (emailsData.length > PARSE_MAX_EMAILS) {
+    logger?.warn(
+      `📧 [Step 1] Backlog of ${emailsData.length} unprocessed emails exceeds PARSE_MAX_EMAILS=${PARSE_MAX_EMAILS}; taking the newest ${PARSE_MAX_EMAILS}, the rest will be picked up next run`,
+    );
+    emailsData = emailsData.slice(0, PARSE_MAX_EMAILS);
+  }
+
   if (emailsData.length === 0) {
     logger?.info("📧 [Step 1] All fetched emails were already processed");
     return {
@@ -82,21 +106,83 @@ async function executeFetchAndParse({ mastra }: { mastra?: any; inputData?: any 
   }
 
   logger?.info(
-    `📧 [Step 1] Found ${emailsData.length} new emails (${originalCount} total), parsing with agent...`,
+    `📧 [Step 1] Found ${emailsData.length} new emails (${originalCount} total), parsing...`,
   );
 
-  const allEmailBodies = emailsData
-    .map(
-      (e: any, i: number) =>
-        `--- EMAIL ${i + 1} (ID: ${e.id}) ---\nSubject: ${e.subject}\nFrom: ${e.from}\nDate: ${e.date}\n\n${e.body}\n--- END EMAIL ${i + 1} ---`,
-    )
-    .join("\n\n");
+  const newJobIds: number[] = [];
+  let totalParsed = 0;
+  let duplicateCount = 0;
+  // Only emails we actually got through are marked processed. An email whose
+  // batch failed stays unprocessed so the next run retries it.
+  const handledEmailIds = new Set<string>();
 
-  const parseResponse = await jobMatchAgent.generateLegacy(
-    [
-      {
-        role: "user",
-        content: `Parse the following LinkedIn job alert emails and extract EACH individual job listing. These are LinkedIn job alert emails that contain brief listings with ONLY: title, company, location, and a LinkedIn URL. They do NOT contain full job descriptions.
+  // ---- Pass 1: deterministic parse of known LinkedIn alert senders ---------
+  const { jobs: parsedJobs, unmatched, stats } = parseAlertEmails(emailsData as RawEmailLike[]);
+  logger?.info(
+    `🧩 [Step 1] Deterministic parse: ${stats.emailsParsed}/${stats.emailsIn} emails read, ${stats.jobsFound} distinct postings, ${stats.duplicatesInBatch} in-batch duplicates dropped, ${stats.emailsUnmatched} emails left for the agent`,
+  );
+
+  if (parsedJobs.length > 0) {
+    try {
+      const result: any = await parseJobsTool.execute({
+        context: {
+          jobs: parsedJobs.map((j) => ({
+            company: j.company,
+            title: j.title,
+            location: j.location,
+            posting_url: j.posting_url,
+            jd_text: "",
+            compensation: j.compensation,
+            source: j.source,
+            source_message_id: j.source_message_id,
+          })),
+        },
+        mastra,
+      } as any);
+      newJobIds.push(...(result?.newJobIds || []));
+      totalParsed += result?.totalParsed || 0;
+      duplicateCount += result?.duplicateCount || 0;
+      for (const e of emailsData) {
+        if (!unmatched.some((u) => u.id === e.id)) handledEmailIds.add(e.id);
+      }
+    } catch (err: any) {
+      logger?.error(
+        `❌ [Step 1] Deterministic batch failed to persist: ${err?.message}. Those emails stay unprocessed and will retry.`,
+      );
+    }
+  } else {
+    for (const e of emailsData) {
+      if (!unmatched.some((u) => u.id === e.id)) handledEmailIds.add(e.id);
+    }
+  }
+
+  // ---- Pass 2: agent fallback for shapes we do not recognize ---------------
+  // Chunked on measured token cost, not email count. One failing chunk must not
+  // kill the run.
+  if (unmatched.length > 0) {
+    const rendered = unmatched.map((e) => ({
+      email: e,
+      text: `--- EMAIL (ID: ${e.id}) ---\nSubject: ${e.subject}\nFrom: ${e.from}\nDate: ${e.date}\n\n${e.body}\n--- END EMAIL ---`,
+    }));
+    const batches = chunkByTokens(rendered, (r) => estimateTokens(r.text), AGENT_TOKEN_BUDGET);
+    logger?.info(
+      `🤖 [Step 1] Agent fallback for ${unmatched.length} unrecognized emails in ${batches.length} batch(es) (budget ${AGENT_TOKEN_BUDGET} tokens)`,
+    );
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      const batchTokens = batch.reduce((n, r) => n + estimateTokens(r.text), 0);
+      try {
+        if (batchTokens > AGENT_TOKEN_BUDGET) {
+          logger?.warn(
+            `⚠️ [Step 1] Batch ${i + 1}/${batches.length} is a single ${batchTokens}-token email, over budget — sending anyway, failure is contained`,
+          );
+        }
+        const parseResponse = await jobMatchAgent.generateLegacy(
+          [
+            {
+              role: "user",
+              content: `Parse the following job alert emails and extract EACH individual job listing.
 
 For each job found, call the parse-jobs tool with a JSON array of all jobs.
 
@@ -104,8 +190,9 @@ Each job object should have:
 - company: the company name (strip any separator like "·")
 - title: the job title
 - location: the location text
-- posting_url: the LinkedIn URL (https://www.linkedin.com/jobs/view/...)
+- posting_url: the job URL
 - jd_text: leave empty string "" (will be enriched via web search later)
+- compensation: employer-stated salary if the email shows one, else ""
 - source: "linkedin"
 - source_message_id: the email ID
 
@@ -113,32 +200,39 @@ IMPORTANT: Ignore footer text, copyright notices, "See all jobs" links, and "Thi
 
 Here are the emails:
 
-${allEmailBodies}`,
-      },
-    ],
-    { maxSteps: 5 },
-  );
+${batch.map((r) => r.text).join("\n\n")}`,
+            },
+          ],
+          { maxSteps: 5 },
+        );
 
-  const allToolResults = parseResponse.steps?.flatMap(
-    (s: any) => s.toolResults || [],
-  ) || [];
-  logger?.info(`🔍 [Step 1] Tool results count: ${allToolResults.length}`);
+        const allToolResults =
+          parseResponse.steps?.flatMap((s: any) => s.toolResults || []) || [];
+        const allResults = allToolResults.map((r: any) => r.result || r);
+        const parseResult = allResults.find((r: any) => r.newJobIds);
 
-  const allResults = allToolResults.map((r: any) => r.result || r);
-  const parseResult = allResults.find((r: any) => r.newJobIds);
+        if (!parseResult) {
+          logger?.error(
+            `❌ [Step 1] Agent did NOT invoke parseJobsTool on batch ${i + 1}/${batches.length}. Tool results: ${JSON.stringify(allResults.slice(0, 3))}. Agent text: ${(parseResponse.text || "").slice(0, 200)}`,
+          );
+          continue; // leave this batch's emails unprocessed so they retry
+        }
 
-  if (!parseResult) {
-    logger?.error(
-      `❌ [Step 1] Agent did NOT invoke parseJobsTool! Tool results: ${JSON.stringify(allResults.slice(0, 3))}. Agent text: ${(parseResponse.text || "").slice(0, 200)}`,
-    );
+        newJobIds.push(...(parseResult.newJobIds || []));
+        totalParsed += parseResult.totalParsed || 0;
+        duplicateCount += parseResult.duplicateCount || 0;
+        for (const r of batch) handledEmailIds.add(r.email.id);
+      } catch (err: any) {
+        logger?.error(
+          `❌ [Step 1] Agent batch ${i + 1}/${batches.length} failed: ${err?.message}. Continuing with the remaining batches.`,
+        );
+      }
+    }
   }
 
-  const newJobIds = parseResult?.newJobIds || [];
-  const duplicateCount = parseResult?.duplicateCount || 0;
-  const totalParsed = parseResult?.totalParsed || 0;
-
-  // Mark all fetched emails as processed so we don't re-fetch them
+  // Mark only the emails we actually handled
   for (const email of emailsData) {
+    if (!handledEmailIds.has(email.id)) continue;
     try {
       await query(
         `INSERT INTO processed_gmail_ids (gmail_id, jobs_found)
@@ -152,7 +246,7 @@ ${allEmailBodies}`,
   }
 
   logger?.info(
-    `✅ [Step 1] Parsed ${totalParsed} jobs, ${newJobIds.length} new, ${duplicateCount} duplicates`,
+    `✅ [Step 1] Parsed ${totalParsed} jobs, ${newJobIds.length} new, ${duplicateCount} duplicates (${handledEmailIds.size}/${emailsData.length} emails handled)`,
   );
 
   return {
@@ -776,7 +870,9 @@ export const jobMatchWorkflow = createWorkflow({
  * Each step's standalone execute function is called sequentially,
  * passing output from one step as input to the next.
  */
-export async function runWorkflowDirectly(mastra: any): Promise<{ digestSent: boolean; summary: string }> {
+export async function runWorkflowDirectly(
+  mastra: any,
+): Promise<{ success: boolean; digestSent: boolean; summary: string }> {
   const logger = mastra?.getLogger();
   logger?.info("🚀 [DirectRunner] Starting workflow execution (no Inngest)");
 
@@ -821,7 +917,7 @@ export async function runWorkflowDirectly(mastra: any): Promise<{ digestSent: bo
     const step5Result = await executeSendDigest({ inputData: step4Result, mastra });
 
     logger?.info(`✅ [DirectRunner] Workflow complete: ${step5Result.summary}`);
-    return step5Result;
+    return { success: true, ...step5Result };
   } catch (err: any) {
     logger?.error(`❌ [DirectRunner] Workflow failed: ${err.message}\n${err.stack}`);
 
@@ -837,7 +933,11 @@ export async function runWorkflowDirectly(mastra: any): Promise<{ digestSent: bo
       }
     }
 
+    // NOTE: this resolves rather than rejects, so callers MUST branch on
+    // `success` — a .then() that logs unconditionally reports a failed run as a
+    // success, which is exactly how the 225K-token Step 1 blow-up stayed hidden.
     return {
+      success: false,
       digestSent: false,
       summary: `Workflow failed: ${err.message}`,
     };

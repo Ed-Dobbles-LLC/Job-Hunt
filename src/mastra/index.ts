@@ -295,10 +295,14 @@ if (schedulerEnabled) {
         console.log(`🕐 [Scheduler] Starting workflow (${sched.expr})`);
         runWorkflowDirectly(mastra)
           .then((result) => {
-            console.log(`✅ [Scheduler] Workflow completed: ${result.summary}`);
+            if (result.success) {
+              console.log(`✅ [Scheduler] Workflow completed: ${result.summary}`);
+            } else {
+              console.error(`❌ [Scheduler] Workflow failed: ${result.summary}`);
+            }
           })
           .catch((err) => {
-            console.error(`❌ [Scheduler] Workflow failed: ${err.message}`);
+            console.error(`❌ [Scheduler] Workflow threw: ${err.message}`);
           });
         break; // Only run one schedule per tick
       }
